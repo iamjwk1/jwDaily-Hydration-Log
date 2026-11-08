@@ -13,7 +13,7 @@
   "documentation": "https://github.com/iamjwk1/jwDaily-Hydration-Log",
   "integration_type": "service",
   "iot_class": "calculated",
+  "issue_tracker": "https://github.com/iamjwk1/jwDaily-Hydration-Log/issues",
   "requirements": [],
-  "version": "1.0.2",
-  "issue_tracker": "https://github.com/iamjwk1/jwDaily-Hydration-Log/issues"
+  "version": "1.0.2"
 }
