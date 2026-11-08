@@ -13,7 +13,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import slugify
 
-from .const import DOMAIN, EVENT_DRINK, PLATFORMS, UNITS, VERSION
+from .const import DOMAIN, EVENT_DRINK, PLATFORMS, UNITS, LIQUID_TYPES, VERSION
 from .coordinator import HydrationCoordinator
 from .excel import export_xlsx
 from .frontend import async_register_frontend
@@ -24,7 +24,9 @@ CONFIG_SCHEMA=cv.config_entry_only_config_schema(DOMAIN)
 
 _DRINK_SCHEMA=vol.Schema({vol.Required('profile'):cv.string,vol.Required('volume'):vol.Coerce(float),
                            vol.Optional('unit',default='mL'):vol.In(UNITS),
-                           vol.Optional('origin',default='service'):cv.string})
+                           vol.Optional('origin',default='service'):cv.string,
+                           vol.Required('liquid_type'):vol.In(LIQUID_TYPES),
+                           vol.Optional('date'):cv.string,vol.Optional('time'):cv.string})
 _RESET_SCHEMA=vol.Schema({vol.Required('profile'):cv.string})
 _SET_SCHEMA=vol.Schema({vol.Required('profile'):cv.string,vol.Required('volume'):vol.Coerce(float),
                         vol.Optional('unit',default='mL'):vol.In(UNITS)})
@@ -52,7 +54,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def log_drink(call):
         c=_resolve(hass,call.data['profile'])
         try:
-            await c.async_add_drink(call.data['volume'],call.data['unit'],call.data.get('origin','service'))
+            await c.async_add_drink(call.data['volume'],call.data['unit'],call.data.get('origin','service'),
+                                    call.data['liquid_type'],call.data.get('date'),call.data.get('time'))
         except ValueError as exc:
             raise ServiceValidationError(str(exc)) from exc
 
@@ -81,9 +84,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         except (ValueError,KeyError,ServiceValidationError) as exc:
             _LOGGER.warning('Invalid drink event ignored: %s',exc)
             return
-        hass.async_create_task(c.async_add_drink(volume,unit,'event'))
+        liquid_type=event.data.get('liquid_type')
+        if liquid_type not in LIQUID_TYPES:
+            _LOGGER.warning('Drink event ignored: liquid_type is required')
+            return
+        hass.async_create_task(c.async_add_drink(volume,unit,'event',liquid_type))
 
     hass.bus.async_listen(EVENT_DRINK,on_drink_event)
+    websocket_api.async_register_command(hass,ws_add_drink)
+    websocket_api.async_register_command(hass,ws_edit_drink)
+    websocket_api.async_register_command(hass,ws_delete_drink)
     websocket_api.async_register_command(hass,ws_history)
     websocket_api.async_register_command(hass,ws_export)
     return True
@@ -94,6 +104,12 @@ async def async_setup_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     c=HydrationCoordinator(hass,entry)
     await c.async_initialize()
     _profiles(hass)[entry.entry_id]=c
+    # Retire only the old v1.0.2 pace entity for this exact config entry.
+    from homeassistant.helpers import entity_registry as er
+    registry = er.async_get(hass)
+    obsolete = registry.async_get_entity_id('sensor', DOMAIN, f'{entry.entry_id}_hourly_pace')
+    if obsolete:
+        registry.async_remove(obsolete)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
@@ -128,6 +144,60 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'count':len(records),'total_ml':round(sum(x['volume_ml'] for x in records),2),
         'consumed_ml':round(c.consumed_ml,2),'target_ml':c.target_ml,
     })
+
+
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/add_drink',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('volume_ml'):float,
+                                  probatio.Required('liquid_type'):str,
+                                  probatio.Optional('date'):str,
+                                  probatio.Optional('time'):str})
+@websocket_api.async_response
+async def ws_add_drink(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    """Add a new drink and return the saved ID so Undo never guesses."""
+    try:
+        c=_resolve(hass,msg['profile'])
+        saved=await c.async_add_drink(msg['volume_ml'],'mL','dashboard',msg['liquid_type'],
+                                      msg.get('date'),msg.get('time'))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_drink',str(exc))
+        return
+    connection.send_result(msg['id'],{'record_id':saved['id']})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/edit_drink',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('record_id'):str,
+                                  probatio.Required('volume_ml'):float,
+                                  probatio.Required('liquid_type'):str,
+                                  probatio.Required('date'):str,
+                                  probatio.Required('time'):str})
+@websocket_api.async_response
+async def ws_edit_drink(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        c=_resolve(hass,msg['profile'])
+        updated=await c.async_edit_drink(msg['record_id'],msg['volume_ml'],
+                                         msg['liquid_type'],msg['date'],msg['time'])
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_drink',str(exc))
+        return
+    connection.send_result(msg['id'],{'id':updated['id'],'saved':True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/delete_drink',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('record_id'):str})
+@websocket_api.async_response
+async def ws_delete_drink(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        c=_resolve(hass,msg['profile'])
+        await c.async_delete_drink(msg['record_id'])
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_drink',str(exc))
+        return
+    connection.send_result(msg['id'],{'deleted':True})
 
 
 @websocket_api.require_admin

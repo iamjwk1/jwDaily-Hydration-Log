@@ -1,8 +1,9 @@
-"""Per-profile state, immutable drink ledger and source sample history."""
+"""Per-profile editable drink records and durable source sample history."""
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import math
 from uuid import uuid4
 from typing import Any
@@ -15,14 +16,33 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN, SIGNAL, DEFAULT_START, DEFAULT_END, SOURCE_MODES, to_ml, target_ml, safe_amount
+from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount
 
 
-def _parse_clock(text: str, fallback: str) -> time:
+def _local_timestamp(hass: HomeAssistant, day: str | None, clock: str | None) -> str:
+    """Validate dd-mm-yyyy and 24-hour HH:MM in the HA local timezone."""
+    if day is None and clock is None:
+        return dt_util.now().isoformat(timespec='microseconds')
+    if not day or not clock:
+        raise ValueError('Date and time must both be supplied')
     try:
-        return time.fromisoformat((text or fallback))
-    except (TypeError, ValueError):
-        return time.fromisoformat(fallback)
+        local_day = datetime.strptime(day, '%d-%m-%Y')
+        clock_format = '%H:%M:%S' if len(clock) == 8 else '%H:%M'
+        local_clock = datetime.strptime(clock, clock_format)
+        if local_day.strftime('%d-%m-%Y') != day or local_clock.strftime(clock_format) != clock:
+            raise ValueError('Incorrect date or 24-hour time format')
+        tz = ZoneInfo(hass.config.time_zone)
+        value = datetime(local_day.year, local_day.month, local_day.day,
+                         local_clock.hour, local_clock.minute, local_clock.second, tzinfo=tz)
+    except (ValueError, KeyError, AttributeError) as exc:
+        raise ValueError('Use DD-MM-YYYY and HH:MM or HH:MM:SS (24-hour local time)') from exc
+    # Reject spring-forward wall times that never happened in this timezone.
+    if value.astimezone(timezone.utc).astimezone(tz).replace(tzinfo=None) != value.replace(tzinfo=None):
+        raise ValueError('This time does not exist because of daylight saving time')
+    if value > dt_util.now().astimezone(tz) + timedelta(minutes=5):
+        raise ValueError('Drink time cannot be in the future')
+    return value.isoformat(timespec='seconds')
+
 
 
 class HydrationCoordinator:
@@ -33,7 +53,7 @@ class HydrationCoordinator:
         self.entry_id = entry.entry_id
         self._store = Store(hass, 1, f'{DOMAIN}.{entry.entry_id}')
         self._lock = asyncio.Lock()
-        self._unsub_reset = self._unsub_source = self._unsub_pace = None
+        self._unsub_reset = self._unsub_source = None
         cfg = {**entry.data, **entry.options}
         self.name = cfg.get('name', 'Hydration')
         self.slug = slugify(self.name)
@@ -41,8 +61,6 @@ class HydrationCoordinator:
         self.gender = cfg.get('gender', 'male')
         self.pregnancy = bool(cfg.get('pregnancy', False))
         self.lactation = bool(cfg.get('lactation', False))
-        self.day_start = _parse_clock(cfg.get('day_start'), DEFAULT_START)
-        self.day_end = _parse_clock(cfg.get('day_end'), DEFAULT_END)
         self.source_sensor = cfg.get('source_sensor') or None
         self.source_mode = cfg.get('source_mode', 'absolute')
         self.unit = cfg.get('unit', 'mL')
@@ -80,17 +98,6 @@ class HydrationCoordinator:
     @property
     def progress_percent(self) -> float:
         return min(100.0, round(100*self.consumed_ml/max(1,self.target_ml),1))
-
-    @property
-    def hourly_pace_ml(self) -> float:
-        now = self._now()
-        start = now.replace(hour=self.day_start.hour,minute=self.day_start.minute,second=self.day_start.second,microsecond=0)
-        end = now.replace(hour=self.day_end.hour,minute=self.day_end.minute,second=self.day_end.second,microsecond=0)
-        if end <= start or now >= end:
-            return round(self.remaining_ml,1)
-        if now < start:
-            return round(self.remaining_ml / max(0.25, (end-start).total_seconds()/3600),1)
-        return round(self.remaining_ml / max(0.25, (end-now).total_seconds()/3600),1)
 
     @property
     def source_contribution_ml(self) -> float:
@@ -142,19 +149,21 @@ class HydrationCoordinator:
             self._last_source_value = saved.get('last_source_value')
             self._source_baseline_ml = float(saved.get('source_baseline',0.0))
             self.records = list(saved.get('records',[]))
+            for item in self.records:
+                if item.get('kind') == 'drink':
+                    item.setdefault('liquid_type', 'unknown')  # Historical v1.0.2, never assume water.
             self.source_readings = list(saved.get('source_readings',[]))
             self.daily_archive = dict(saved.get('daily_archive',{}))
         if self.last_reset_date != self._today():
             self._rolled()
             await self._save()
         self._unsub_reset = async_track_time_change(self.hass,self._scheduled_reset,hour=0,minute=0,second=0)
-        self._unsub_pace = async_track_time_change(self.hass,self._tick,second=0)
         if self.source_sensor:
             self._unsub_source = self.hass.bus.async_listen(EVENT_STATE_CHANGED,self._handle_source_change)
         self._dispatch()
 
     async def async_shutdown(self) -> None:
-        for func in (self._unsub_reset,self._unsub_pace,self._unsub_source):
+        for func in (self._unsub_reset,self._unsub_source):
             if func:
                 func()
         async with self._lock:
@@ -164,10 +173,6 @@ class HydrationCoordinator:
     def _scheduled_reset(self, _now: datetime) -> None:
         self.hass.async_create_task(self.async_maybe_reset())
 
-    @callback
-    def _tick(self, _now: datetime) -> None:
-        self._dispatch()
-
     async def async_maybe_reset(self) -> None:
         async with self._lock:
             if self.last_reset_date == self._today():
@@ -176,21 +181,105 @@ class HydrationCoordinator:
             await self._save()
             self._dispatch()
 
-    async def async_add_drink(self, amount: float, unit: str = 'mL', origin: str = 'service') -> dict:
+    async def async_add_drink(self, amount: float, unit: str = 'mL', origin: str = 'service',
+                              liquid_type: str | None = None, day: str | None = None,
+                              clock: str | None = None) -> dict:
         amount_ml = safe_amount(amount, unit)
+        if liquid_type not in LIQUID_TYPES:
+            raise ValueError('Choose a liquid type explicitly')
+        timestamp = _local_timestamp(self.hass, day, clock)
         async with self._lock:
             self._rolled()
             before = self.consumed_ml
-            self.manual_consumed_ml += amount_ml
-            if self.source_mode == 'sum':
-                self.consumed_ml = self.manual_consumed_ml + self.source_contribution_ml
-            else:
-                self.consumed_ml += amount_ml
+            is_today = timestamp[:10] == self.last_reset_date
+            if is_today:
+                self.manual_consumed_ml += amount_ml
+                if self.source_mode == 'sum':
+                    self.consumed_ml = self.manual_consumed_ml + self.source_contribution_ml
+                else:
+                    self.consumed_ml += amount_ml
             record = self._entry('drink',origin,before,amount_ml,float(amount),unit)
+            record['timestamp'] = timestamp
+            record['liquid_type'] = liquid_type
             self.records.append(record)
+            if not is_today:
+                self._adjust_archive(timestamp[:10], amount_ml)
             await self._save()
             self._dispatch()
             return record
+
+    def _adjust_archive(self, day: str, delta_ml: float) -> None:
+        """Correct historical snapshots in place; no separate edit/delete ledger."""
+        snapshot = self.daily_archive.get(day)
+        if snapshot is None:
+            # A backdated day that was not yet in storage. It has no external sensor history.
+            snapshot = dict(manual_ml=0.0, source_ml=0.0, consumed_ml=0.0,
+                            target_ml=self.target_ml, drink_count=0, closed_at=None)
+            self.daily_archive[day] = snapshot
+        snapshot['manual_ml'] = round(max(0.0, float(snapshot.get('manual_ml', 0)) + delta_ml), 4)
+        snapshot['consumed_ml'] = round(max(0.0, float(snapshot.get('consumed_ml', 0)) + delta_ml), 4)
+        snapshot['drink_count'] = sum(1 for r in self.records if r.get('kind') == 'drink'
+                                      and r.get('timestamp', '')[:10] == day)
+
+    def _adjust_current(self, delta_ml: float) -> None:
+        self.manual_consumed_ml = round(max(0.0, self.manual_consumed_ml + delta_ml), 4)
+        if self.source_mode == 'sum':
+            self.consumed_ml = self.manual_consumed_ml + self.source_contribution_ml
+        else:
+            self.consumed_ml = max(0.0, self.consumed_ml + delta_ml)
+
+    async def async_edit_drink(self, record_id: str, amount: float, liquid_type: str,
+                               day: str, clock: str) -> dict:
+        """Replace a drink in place, keeping its stable ID but no old values."""
+        if liquid_type not in LIQUID_TYPES:
+            raise ValueError('Choose a liquid type explicitly')
+        amount_ml = safe_amount(amount, 'mL')
+        timestamp = _local_timestamp(self.hass, day, clock)
+        async with self._lock:
+            self._rolled()
+            record = next((r for r in self.records if r.get('id') == record_id
+                           and r.get('kind') == 'drink'), None)
+            if record is None:
+                raise ValueError('Drink moment not found')
+            previous_day = record['timestamp'][:10]
+            previous_ml = float(record['volume_ml'])
+            next_day = timestamp[:10]
+            # Replace first so archive counts reflect the new timestamp/date.
+            record.update(timestamp=timestamp, volume_ml=round(amount_ml, 4),
+                          liquid_type=liquid_type, input_volume=float(amount), input_unit='mL')
+            if previous_day == self.last_reset_date:
+                self._adjust_current(-previous_ml)
+            else:
+                self._adjust_archive(previous_day, -previous_ml)
+            if next_day == self.last_reset_date:
+                self._adjust_current(amount_ml)
+            else:
+                self._adjust_archive(next_day, amount_ml)
+            # Remove stale event-relative snapshots; they are no longer historic truth.
+            record.pop('before_ml', None)
+            record.pop('after_ml', None)
+            record.pop('manual_after_ml', None)
+            await self._save()
+            self._dispatch()
+            return dict(record)
+
+    async def async_delete_drink(self, record_id: str) -> None:
+        """Permanently delete a drink and correct its day's totals."""
+        async with self._lock:
+            self._rolled()
+            record = next((r for r in self.records if r.get('id') == record_id
+                           and r.get('kind') == 'drink'), None)
+            if record is None:
+                raise ValueError('Drink moment not found')
+            old_day = record['timestamp'][:10]
+            delta = -float(record['volume_ml'])
+            self.records.remove(record)
+            if old_day == self.last_reset_date:
+                self._adjust_current(delta)
+            else:
+                self._adjust_archive(old_day, delta)
+            await self._save()
+            self._dispatch()
 
     async def async_set_consumed(self, amount: float, unit: str = 'mL', origin: str = 'service') -> dict:
         requested = float(amount)
@@ -293,13 +382,13 @@ class HydrationCoordinator:
 
     def get_history(self, date: str | None = None) -> list[dict]:
         day = date or self._today()
-        return [dict(id=r['id'],timestamp=r['timestamp'],volume_ml=r['volume_ml'],origin=r['origin'])
-                for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
+        values = [dict(id=r['id'], timestamp=r['timestamp'], volume_ml=r['volume_ml'],
+                       liquid_type=r.get('liquid_type', 'unknown'), origin=r.get('origin', ''))
+                  for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
+        return sorted(values, key=lambda r: (r['timestamp'],r['id']))
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
-        cfg['day_start']=self.day_start.isoformat()
-        cfg['day_end']=self.day_end.isoformat()
         return dict(entry_id=self.entry_id,slug=self.slug,config=cfg,date=self.last_reset_date,
                     consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
                     target_ml=self.target_ml,source_contribution_ml=self.source_contribution_ml,

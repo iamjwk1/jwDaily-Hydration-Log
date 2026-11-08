@@ -2,7 +2,7 @@ blueprint:
   name: jwDaily Hydration Log - TTS reminder
   description: >-
     Speak current hydration progress using an existing TTS service and speaker.
-    Quiet hours can differ from the profile's pace window.
+    Quiet hours are configured in the automation; no hydration pace is calculated.
   domain: automation
   input:
     name:

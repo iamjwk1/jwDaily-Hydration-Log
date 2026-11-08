@@ -1,241 +1,314 @@
-/* jwDaily Hydration Log v1.0.2. Independent Lovelace card.
- * Derived from the MIT-licensed Personal Hydration Manager by Loryan Strant.
- * Copyright (c) 2026 Loryan Strant (upstream); 2026 jwDaily Hydration Log contributors.
+/* jwDaily Hydration Log v1.1.0 - independent Home Assistant Lovelace card.
+ * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
+ * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
-const DHL_TAG = 'jwdaily-hydration-log-card';
-const DHL_EDITOR = 'jwdaily-hydration-log-card-editor';
-const DHL_DEFAULTS = {profile:'', title:'', show_title:true, show_cup:true,show_countdown:true,
-  show_manual:true,show_history:true,show_export:true,unit:'mL',quick_add:[200,300,500]};
-const DHL_OZ=29.5735;
-const dhlEscape=(s)=>String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const dhlNum=(value)=>Number.isFinite(Number(value))?Number(value):0;
-const dhlFmt=(value,unit='mL')=>unit==='fl_oz'?`${(value/DHL_OZ).toFixed(1)} fl oz`:value>=1000?`${(value/1000).toFixed(2)} L`:`${Math.round(value)} mL`;
-const dhlQuick=(input)=>{const a=(Array.isArray(input)?input:[]).map(x=>Number(x)).filter(x=>Number.isFinite(x)&&x>0&&x<=100000);return a.length?a:[200,300,500];};
+const JDHL_TAG='jwdaily-hydration-log-card';
+const JDHL_EDITOR=`${JDHL_TAG}-editor`;
+const JDHL_TYPES=[['water','Water','💧'],['coffee','Coffee','☕'],['tea','Tea','🍵'],['milk','Milk','🥛'],['soup','Soup','🍲'],['other','Other','◯']];
+const JDHL_LABEL=Object.fromEntries(JDHL_TYPES.map(([k,n])=>[k,n]));
+const JDHL_DEFAULTS={profile:'',title:'',show_title:true,show_cup:true,show_manual:true,
+ show_history:true,show_export:true,unit:'mL',quick_add:[120,150,300,500]};
+const jdhlEscape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const jdhlNum=v=>Number.isFinite(Number(v))?Number(v):0;
+const jdhlQuick=a=>{const n=(Array.isArray(a)?a:[]).map(Number).filter(v=>Number.isFinite(v)&&v>0&&v<=100000);return n.length?n:[120,150,300,500];};
+const jdhlOz=29.5735;
+const jdhlFmt=(n,u='mL')=>u==='fl_oz'?`${(n/jdhlOz).toFixed(1)} fl oz`:n>=1000?`${(n/1000).toFixed(2)} L`:`${Number(n.toFixed(1))} mL`;
+const jdhlDate=d=>`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+const jdhlIsoDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const jdhlDateToIso=v=>/^\d{2}-\d{2}-\d{4}$/.test(v)?`${v.slice(6)}-${v.slice(3,5)}-${v.slice(0,2)}`:null;
+const jdhlIsoToDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?`${v.slice(8)}-${v.slice(5,7)}-${v.slice(0,4)}`:null;
 
-class DailyHydrationLogCard extends HTMLElement {
-  constructor(){
-    super();this.attachShadow({mode:'open'});this._hass=null;this._config=null;this._customOpen=false;
-    this._customValue='';this._error='';this._status='';this._history=null;this._historyKey='';
-    this._pendingHistory=false;this._refreshAgain=false;this._busy=false;this._lastRenderKey='';this._lastSensorKey='';this._refreshTimer=null;
-    this.shadowRoot.addEventListener('click',e=>this._onClick(e));
-    this.shadowRoot.addEventListener('input',e=>{if(e.target?.id==='dhl-custom-value')this._customValue=e.target.value;});
-    this.shadowRoot.addEventListener('keydown',e=>{
-      if(e.target?.id!=='dhl-custom-value')return;
-      if(e.key==='Enter'){e.preventDefault();this._confirmCustom();}
-      if(e.key==='Escape'){e.preventDefault();this._closeCustom();}
-    });
+class JwDailyHydrationLogCard extends HTMLElement {
+ constructor(){
+  super();this.attachShadow({mode:'open'});
+  this._hass=null;this._config=null;this._history=null;this._viewDate=null;
+  this._selectedType=null;this._selectedVolume=null;this._undoId=null;this._modal=null;this._confirmDelete=false;
+  this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
+  this._fetching=false;this._fetchAgain=false;this._tickTimer=null;
+  this.shadowRoot.addEventListener('click',e=>this._click(e));
+  this.shadowRoot.addEventListener('input',e=>this._field(e));
+  this.shadowRoot.addEventListener('change',e=>this._field(e));
+  this.shadowRoot.addEventListener('keydown',e=>{
+   if(e.key==='Escape'&&this._modal){this._modal=null;this._confirmDelete=false;this._render(true);}
+   if(e.key==='Enter'&&e.target?.dataset?.action==='edit'){e.preventDefault();this._openEdit(e.target.dataset.id);}
+  });
+ }
+ static getStubConfig(hass){
+  const p=Object.keys(hass?.states||{}).find(x=>x.startsWith('sensor.jwdhl_')&&x.endsWith('_daily_target'));
+  return {type:`custom:${JDHL_TAG}`,profile:p?p.slice('sensor.jwdhl_'.length,-'_daily_target'.length):'',
+   title:'Vocht intake',show_title:true,show_cup:true,show_manual:true,show_history:true,show_export:true,unit:'mL',quick_add:[120,150,300,500]};
+ }
+ static async getConfigElement(){return document.createElement(JDHL_EDITOR);}
+ setConfig(config){if(!config)throw Error('Missing card configuration');
+  this._config={...JDHL_DEFAULTS,...config,quick_add:jdhlQuick(config.quick_add)};
+  this._selectedType=null;this._selectedVolume=null;this._undoId=null;this._modal=null;this._viewDate=null;
+  this._history=null;this._lastState='';this._lastRender='';this._render(true);this._fetchHistory();
+ }
+ set hass(h){this._hass=h;
+  const p=this._config?.profile;
+  if(p){const manual=h?.states?.[`sensor.jwdhl_${p}_manual_consumed`];const count=h?.states?.[`sensor.jwdhl_${p}_drink_count_today`];
+   const key=JSON.stringify([manual?.attributes?.manual_consumed_ml,count?.state,this._todayISO()]);
+   if(key!==this._lastState){this._lastState=key;this._fetchHistory();}}
+  this._render();
+  if(!this._tickTimer){this._tickTimer=setInterval(()=>{if(this._hass&&this._config){
+   const key=this._todayISO();if(this._lastDateKey!==key){this._lastDateKey=key;this._fetchHistory();}
+  }},30000);}
+ }
+ disconnectedCallback(){if(this._tickTimer){clearInterval(this._tickTimer);this._tickTimer=null;}}
+ getCardSize(){return 7;}
+ _nowLocal(){
+  const tz=this._hass?.config?.time_zone;
+  const date=new Date();
+  if(!tz)return date;
+  try{
+   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date);
+   const v=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+   return new Date(Number(v.year),Number(v.month)-1,Number(v.day),Number(v.hour),Number(v.minute),Number(v.second));
+  }catch{return date;}
+ }
+ _todayISO(){return jdhlIsoDate(this._nowLocal());}
+ _todayPretty(){return jdhlDate(this._nowLocal());}
+ _nowTime(){const d=this._nowLocal();return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;}
+ _state(k){return this._hass?.states?.[`sensor.jwdhl_${this._config.profile}_${k}`];}
+ _millilitres(k,attr){const e=this._state(k);if(!e)return 0;
+  const exact=e.attributes?.[attr];if(exact!==null&&exact!==undefined&&Number.isFinite(Number(exact)))return Number(exact);
+  const val=jdhlNum(e.state),unit=e.attributes?.unit_of_measurement;
+  return unit==='L'?val*1000:unit==='fl oz'?val*jdhlOz:val;
+ }
+ _alert(e){this._error=String(e?.message||e||'Unknown error');this._status='';this._render(true);}
+ async _fetchHistory(){
+  if(!this._hass||!this._config?.profile||this._config?.show_history===false)return;
+  if(this._fetching){this._fetchAgain=true;return;}
+  this._fetching=true;const profile=this._config.profile;const date=this._viewDate||this._todayISO();
+  try{const res=await this._hass.callWS({type:'jw_daily_hydration_log/history',profile,date});
+   if(this._config?.profile===profile&&(this._viewDate||this._todayISO())===date){this._history=res;this._render();}
+  }catch(e){this._alert(e);}finally{this._fetching=false;if(this._fetchAgain){this._fetchAgain=false;this._fetchHistory();}}
+ }
+ _field(e){const field=e.target?.dataset?.field;if(!field)return;
+  if(this._modal){this._modal[field]=e.target.value;return;}
+  if(field==='history_date'){this._typedHistoryDate=e.target.value;}
+ }
+ _selectedRecord(id){return (this._history?.entries||[]).find(r=>String(r.id)===id);}
+ _openEdit(id){const r=this._selectedRecord(id);if(!r)return;
+  const d=new Date(r.timestamp);const parts=this._timeParts(d);this._modal={mode:'edit',id:r.id,liquid_type:r.liquid_type==='unknown'?'':r.liquid_type,
+   volume_ml:String(r.volume_ml),date:parts.date,time:parts.time};
+  this._confirmDelete=false;this._render(true);
+ }
+ _timeParts(d){
+  const tz=this._hass?.config?.time_zone||'Europe/Amsterdam';
+  const pts=new Intl.DateTimeFormat('en-GB',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(d);
+  const p=Object.fromEntries(pts.map(x=>[x.type,x.value]));
+  return {date:`${p.day}-${p.month}-${p.year}`,time:`${p.hour}:${p.minute}:${p.second}`};
+ }
+ _openNew(){this._modal={mode:'new',id:'',liquid_type:'',volume_ml:'',date:this._todayPretty(),time:this._nowTime()};this._confirmDelete=false;this._render(true);}
+ _payload(){const m=this._modal,volume=Number(m?.volume_ml),date=m?.date?.trim(),time=m?.time?.trim();
+  if(!JDHL_TYPES.some(([k])=>k===m?.liquid_type))throw Error('Select a liquid type.');
+  if(!Number.isFinite(volume)||volume<=0||volume>100000)throw Error('Enter a volume between 0 and 100,000 mL.');
+  if(!/^\d{2}-\d{2}-\d{4}$/.test(date)||!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw Error('Use DD-MM-YYYY and a 24-hour time HH:MM or HH:MM:SS.');
+  return {volume,liquid_type:m.liquid_type,date,time};
+ }
+ async _click(e){const el=e.target?.closest?.('[data-action]');if(!el||this._busy)return;
+  const action=el.dataset.action;
+  if(action==='type'){this._selectedType=el.dataset.value;this._error='';this._status='';this._render(true);return;}
+  if(action==='amount'){this._selectedVolume=Number(el.dataset.value);this._error='';this._status='';this._render(true);return;}
+  if(action==='new'){this._openNew();return;}
+  if(action==='edit'){this._openEdit(el.dataset.id);return;}
+  if(action==='cancel'){this._modal=null;this._confirmDelete=false;this._error='';this._render(true);return;}
+  if(action==='delete'){this._confirmDelete=true;this._render(true);return;}
+  if(action==='delete-back'){this._confirmDelete=false;this._render(true);return;}
+  if(action==='delete-confirm'){await this._delete();return;}
+  if(action==='save'){await this._saveModal();return;}
+  if(action==='register'){await this._register();return;}
+  if(action==='undo'){await this._undo();return;}
+  if(action==='prev'||action==='next'){
+   const iso=this._viewDate||this._todayISO(),d=new Date(`${iso}T12:00:00`);
+   d.setDate(d.getDate()+(action==='prev'?-1:1));this._viewDate=jdhlIsoDate(d);
+   if(this._viewDate===this._todayISO())this._viewDate=null;
+   this._history=null;this._render(true);this._fetchHistory();return;
   }
-  static getStubConfig(hass){
-    const profiles=Object.keys(hass?.states||{}).filter(x=>x.startsWith('sensor.jwdhl_')&&x.endsWith('_daily_target'));
-    return {type:`custom:${DHL_TAG}`,profile:profiles[0]?.slice(11,-13)||'',title:'Vocht intake',
-      show_title:true,show_cup:true,show_countdown:true,show_manual:true,
-      show_history:true,show_export:true,unit:'mL',quick_add:[120,150,300,500]};
+  if(action==='date-go'){
+   const date=jdhlDateToIso(this._typedHistoryDate||'');
+   if(!date||!Number.isFinite(Date.parse(`${date}T12:00:00`))||jdhlIsoDate(new Date(`${date}T12:00:00`))!==date){this._alert('Use a real date in DD-MM-YYYY format.');return;}
+   if(date>this._todayISO()){this._alert('You cannot view a future date.');return;}
+   this._viewDate=date===this._todayISO()?null:date;this._history=null;this._error='';this._render(true);this._fetchHistory();return;
   }
-  static async getConfigElement(){return document.createElement(DHL_EDITOR);}
-  setConfig(config){if(!config)throw new Error('Missing configuration');
-    this._config={...DHL_DEFAULTS,...config,quick_add:dhlQuick(config.quick_add)};
-    this._history=null;this._historyKey='';this._lastRenderKey='';this._lastSensorKey='';this._render();this._fetchHistory();
-  }
-  set hass(hass){
-    this._hass=hass;
-    const p=this._config?.profile;
-    if(p){
-      const state=hass?.states?.[`sensor.jwdhl_${p}_manual_consumed`];
-      const count=hass?.states?.[`sensor.jwdhl_${p}_drink_count_today`];
-      const key=JSON.stringify([state?.attributes?.manual_consumed_ml,count?.state,new Date().toDateString()]);
-      if(key!==this._lastSensorKey){this._lastSensorKey=key;this._fetchHistory();}
-    }
-    this._render();
-    if(!this._refreshTimer){this._refreshTimer=setInterval(()=>{
-      if(this._config&&this._hass){
-        const key=new Date().toDateString();
-        if(this._lastLocalDate!==key){this._lastLocalDate=key;this._fetchHistory();}
-        this._render();
-      }
-    },30000);}
-  }
-  disconnectedCallback(){if(this._refreshTimer){clearInterval(this._refreshTimer);this._refreshTimer=null;}}
-  getCardSize(){return 4+(this._config?.show_history!==false?3:0);}
-  _state(key){return this._hass?.states?.[`sensor.jwdhl_${this._config.profile}_${key}`];}
-  _millilitres(key,attr){const entity=this._state(key);if(!entity)return 0;
-    const exact=entity.attributes?.[attr];if(exact!==undefined&&exact!==null&&Number.isFinite(Number(exact)))return Number(exact);
-    const value=dhlNum(entity.state),unit=entity.attributes?.unit_of_measurement;
-    return unit==='L'?value*1000:unit==='fl oz'?value*DHL_OZ:value;}
-  _showError(message){this._error=String(message?.message||message||'Unknown error');this._status='';this._render(true);}
-  async _fetchHistory(){
-    if(!this._hass||!this._config?.profile||!this._config.show_history)return;
-    if(this._pendingHistory){this._refreshAgain=true;return;}
-    this._pendingHistory=true;
-    const profile=this._config.profile;
-    try{
-      const result=await this._hass.callWS({type:'jw_daily_hydration_log/history',profile});
-      if(this._config?.profile===profile){this._history=result;this._historyKey=result.date;this._render();}
-    }catch(err){if(this._config?.profile===profile)this._showError(err);}
-    finally{
-      this._pendingHistory=false;
-      if(this._refreshAgain){this._refreshAgain=false;this._fetchHistory();}
-    }
-  }
-  async _onClick(e){const btn=e.target?.closest?.('button[data-action]');if(!btn||this._busy)return;
-    const action=btn.dataset.action;
-    if(action==='custom'){this._customOpen=true;this._customValue='';this._error='';this._render(true);
-      requestAnimationFrame(()=>this.shadowRoot.querySelector('#dhl-custom-value')?.focus());return;}
-    if(action==='cancel'){this._closeCustom();return;}
-    if(action==='confirm'){await this._confirmCustom();return;}
-    if(action==='quick'){await this._add(Number(btn.dataset.amount));return;}
-    if(action==='export'){await this._export();return;}
-  }
-  _closeCustom(){this._customOpen=false;this._customValue='';this._error='';this._render(true);}
-  async _confirmCustom(){const value=Number(this._customValue);
-    if(!Number.isFinite(value)||value<=0){this._showError('Enter a number greater than zero.');return;}
-    const inMl=this._config.unit==='fl_oz'?value*DHL_OZ:value;
-    if(inMl>100000){this._showError('Maximum volume is 100,000 mL.');return;}
-    await this._add(inMl);
-    if(!this._error)this._closeCustom();
-  }
-  async _add(ml){
-    if(!Number.isFinite(ml)||ml<=0){this._showError('Invalid drink volume');return;}
-    this._busy=true;this._error='';this._status='Recording drink…';this._render(true);
-    try{
-      await this._hass.callService('jw_daily_hydration_log','log_drink',{
-        profile:this._config.profile,volume:ml,unit:'mL',origin:'dashboard'});
-      this._status=`Added ${dhlFmt(ml,'mL')}`;
-      this._history=null;
-      await this._fetchHistory();
-    }catch(err){this._showError(err);}
-    finally{this._busy=false;this._render(true);}
-  }
-  async _export(){
-    this._busy=true;this._status='Preparing Excel export…';this._error='';this._render(true);
-    try{
-      const result=await this._hass.callWS({type:'jw_daily_hydration_log/export'});
-      const raw=atob(result.base64);
-      const data=new Uint8Array(raw.length);
-      for(let i=0;i<raw.length;i++)data[i]=raw.charCodeAt(i);
-      const blob=new Blob([data],{type:result.mime_type});
-      const url=URL.createObjectURL(blob);
-      const link=document.createElement('a');link.href=url;
-      link.download=result.filename||'jwDaily Hydration Log - All Data.xlsx';
-      this.shadowRoot.appendChild(link);link.click();link.remove();
-      // Release the object URL after the browser has initiated the download.
-      setTimeout(()=>URL.revokeObjectURL(url),15000);
-      this._status='Excel export started';
-    }catch(err){this._showError(err);}
-    finally{this._busy=false;this._render(true);}
-  }
-  _cup(pct){
-    const progress=Math.min(100,Math.max(0,pct));
-    const y=192-Math.max(0,(progress/100)*173);
-    const has=progress>=0.5;
-    return `<div class="dhl-cup-wrap"><svg class="dhl-cup" viewBox="0 0 180 215" role="img" aria-label="${progress.toFixed(0)} percent of daily target">
-      <defs><clipPath id="dhl-cup-clip"><path d="M29 16 H151 L140 186 Q139 197 128 197 H52 Q41 197 40 186 Z"/></clipPath>
-        <linearGradient id="dhl-wave-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#75cbff"/><stop offset="1" stop-color="#167fcb"/></linearGradient></defs>
-      <path d="M29 16 H151 L140 186 Q139 197 128 197 H52 Q41 197 40 186 Z" fill="none" stroke="currentColor" stroke-width="2.6"/>
-      ${has?`<g clip-path="url(#dhl-cup-clip)"><rect x="29" y="${y}" width="122" height="215" fill="url(#dhl-wave-grad)"/>
-        <path d="M29 ${y} Q58 ${y-3} 90 ${y} T151 ${y} V215 H29 Z" fill="#75cbff" opacity=".45"/></g>`:''}
-      <text x="90" y="121" text-anchor="middle" font-size="30" font-weight="700" fill="var(--primary-text-color,#182538)" stroke="var(--card-background-color,#fff)" stroke-width="2" paint-order="stroke">${progress.toFixed(0)}%</text></svg></div>`;
-  }
-  _historyHtml(){
-    if(!this._config.show_history)return '';
-    const rows=Array.isArray(this._history?.entries)?[...this._history.entries].reverse():[];
-    const table=rows.length?`<table aria-label="Today's drink moments"><thead><tr><th>Time</th><th>Volume</th></tr></thead><tbody>${rows.map(r=>{
-      let time='–';try{time=new Date(r.timestamp).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}catch{}
-      return `<tr><td>${dhlEscape(time)}</td><td class="num">+${dhlFmt(Number(r.volume_ml),this._config.unit)}</td></tr>`;
-    }).join('')}</tbody></table>`:`<div class="muted empty">${this._history?'No drinks recorded today.':'Loading drink history…'}</div>`;
-    const total=this._history?dhlFmt(this._history.total_ml,this._config.unit):'—';
-    return `<section class="dhl-history"><div class="dhl-row between"><h3>Today's intake</h3><span class="muted">${rows.length} entries</span></div>
-      <div class="dhl-table-wrap">${table}</div><div class="dhl-row between history-total"><strong>Total logged today</strong><strong>${total}</strong></div></section>`;
-  }
-  _render(force=false){
-    if(!this._config||!this._hass)return;
-    if(this._customOpen&&!force)return; // Keep the live input node and caret intact.
-    const name=this._config.title||this._config.profile||'jwDaily Hydration Log';
-    const target=this._millilitres('daily_target','target_ml');
-    const consumed=this._millilitres('consumed_today','consumed_ml');
-    const remaining=Math.max(0,target-consumed);
-    const paceEntity=this._state('hourly_pace');
-    const pace=dhlNum(paceEntity?.state)*(paceEntity?.attributes?.unit_of_measurement==='L/h'?1000:paceEntity?.attributes?.unit_of_measurement==='fl_oz/h'?DHL_OZ:1);
-    const pct=target>0?Math.min(100,Math.max(0,consumed/target*100)):0;
-    const stateKey=JSON.stringify([name,target,consumed,remaining,pace,pct,this._config,
-      this._history, this._error,this._status,this._busy,this._customOpen]);
-    if(!force&&stateKey===this._lastRenderKey)return;
-    this._lastRenderKey=stateKey;
-    const quick=this._config.show_manual!==false?`<div class="dhl-quick">${dhlQuick(this._config.quick_add).map(n=>
-      `<button type="button" data-action="quick" data-amount="${n}" ${this._busy?'disabled':''}>+ ${dhlFmt(n,this._config.unit)}</button>`).join('')}
-      ${this._customOpen?`<div class="dhl-custom"><label><input id="dhl-custom-value" type="number" min="0.01" step="any" inputmode="decimal" aria-label="Custom volume" value="${dhlEscape(this._customValue)}"/> ${this._config.unit==='fl_oz'?'fl oz':'mL'}</label>
-        <button data-action="confirm" ${this._busy?'disabled':''}>Add</button><button class="subtle" data-action="cancel">Cancel</button></div>`:
-        `<button class="subtle" data-action="custom">+ Custom…</button>`}</div>`:'';
-    this.shadowRoot.innerHTML=`<style>
-      :host{display:block} ha-card{overflow:hidden}.dhl-root{padding:16px;display:flex;flex-direction:column;gap:12px;color:var(--primary-text-color)}
-      header{display:flex;align-items:center;justify-content:space-between;gap:8px} header h2{font-size:1.12rem;margin:0;font-weight:650}
-      header .version{font-size:.7rem;color:var(--secondary-text-color)} .dhl-cup-wrap{display:flex;justify-content:center}
-      .dhl-cup{width:164px;height:190px}.dhl-total{text-align:center;font-size:1.02rem;font-variant-numeric:tabular-nums}
-      .dhl-total strong{font-size:1.17rem}.muted{color:var(--secondary-text-color);font-size:.82rem}
-      .dhl-pace{display:flex;justify-content:space-around;gap:12px;border-block:1px solid var(--divider-color);padding:10px 0}
-      .dhl-pace>div{text-align:center;flex:1}.dhl-pace strong{font-size:1.17rem;display:block}
-      .dhl-quick{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
-      button{font:inherit;font-size:.87rem;border:none;border-radius:18px;background:var(--primary-color,#2196f3);color:white;padding:8px 13px;cursor:pointer}
-      button:disabled{opacity:.55;cursor:wait}.subtle{background:var(--secondary-background-color,#e8eef4);color:var(--primary-text-color)}
-      .dhl-custom{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;width:100%}
-      .dhl-custom label{border:1px solid var(--divider-color);border-radius:15px;padding:4px 8px;font-size:.8rem}
-      .dhl-custom input{max-width:100px;background:transparent;color:var(--primary-text-color);border:0;font:inherit}
-      .dhl-history{border-top:1px solid var(--divider-color);padding-top:12px}.dhl-row{display:flex;align-items:center;gap:8px}
-      .between{justify-content:space-between}.dhl-history h3{font-size:.99rem;margin:0}
-      .dhl-table-wrap{max-height:255px;overflow:auto;margin-top:9px}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:.91rem}
-      th{text-align:left;color:var(--secondary-text-color);font-size:.8rem;font-weight:500}td,th{padding:6px 4px;border-bottom:1px solid var(--divider-color)}
-      td.num,th:last-child{text-align:right}.empty{text-align:center;padding:13px 0}.history-total{margin-top:8px;font-size:.91rem}
-      .dhl-error{color:var(--error-color,#b00020);font-size:.85rem}.dhl-status{font-size:.82rem;color:var(--secondary-text-color)}
-      .dhl-export{display:flex;justify-content:center;border-top:1px solid var(--divider-color);padding-top:11px}
-      .dhl-export button{background:var(--secondary-background-color,#e8eef4);color:var(--primary-text-color)}
-      </style><ha-card><div class="dhl-root">
-      ${this._config.show_title!==false?`<header><h2>${dhlEscape(name)}</h2><span class="version">v1.0.2</span></header>`:''}
-      ${this._config.show_cup!==false?this._cup(pct):`<div class="dhl-total">${pct.toFixed(0)}%</div>`}
-      <div class="dhl-total"><strong>${dhlFmt(consumed,this._config.unit)}</strong><span class="muted"> / ${dhlFmt(target,this._config.unit)}</span></div>
-      ${this._config.show_countdown!==false?`<div class="dhl-pace"><div><strong>${dhlFmt(remaining,this._config.unit)}</strong><span class="muted">left today</span></div><div><strong>${dhlFmt(pace,this._config.unit)}/h</strong><span class="muted">recommended pace</span></div></div>`:''}
-      ${quick}${this._error?`<div role="alert" class="dhl-error">${dhlEscape(this._error)}</div>`:''}
-      ${this._status?`<div aria-live="polite" class="dhl-status">${dhlEscape(this._status)}</div>`:''}
-      ${this._historyHtml()}
-      ${this._config.show_export!==false&&this._hass.user?.is_admin?`<div class="dhl-export"><button data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
-      </div></ha-card>`;
-  }
+  if(action==='export'){await this._export();}
+ }
+ async _register(){if(!this._selectedType||!this._selectedVolume){this._alert('Select both the liquid type and the volume.');return;}
+  const type=this._selectedType,volume=this._selectedVolume;
+  this._busy=true;this._error='';this._status='Recording drink…';this._render(true);
+  try{const saved=await this._hass.callWS({type:'jw_daily_hydration_log/add_drink',
+   profile:this._config.profile,volume_ml:volume,liquid_type:type});
+   this._undoId=saved.record_id||null;this._selectedType=null;this._selectedVolume=null;
+   this._status=`Added ${jdhlFmt(volume)} ${JDHL_LABEL[type]}`;
+   this._viewDate=null;this._history=null;await this._fetchHistory();
+  }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
+ }
+ async _saveModal(){let p;try{p=this._payload();}catch(e){this._alert(e);return;}
+  const m=this._modal;this._busy=true;this._error='';this._status='Saving drink…';this._render(true);
+  try{if(m.mode==='new'){
+   const saved=await this._hass.callWS({type:'jw_daily_hydration_log/add_drink',
+    profile:this._config.profile,volume_ml:p.volume,liquid_type:p.liquid_type,
+    date:p.date,time:p.time});
+   this._undoId=saved.record_id||null;
+   }else{
+    await this._hass.callWS({type:'jw_daily_hydration_log/edit_drink',profile:this._config.profile,
+     record_id:m.id,volume_ml:p.volume,liquid_type:p.liquid_type,date:p.date,time:p.time});
+   }
+   this._modal=null;this._confirmDelete=false;this._selectedType=null;this._selectedVolume=null;
+   this._viewDate=null;this._history=null;this._status='Drink saved';await this._fetchHistory();
+  }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
+ }
+ async _delete(){const m=this._modal;if(!m||m.mode!=='edit')return;
+  this._busy=true;this._error='';this._status='Deleting drink…';this._render(true);
+  try{await this._hass.callWS({type:'jw_daily_hydration_log/delete_drink',profile:this._config.profile,record_id:m.id});
+   if(this._undoId===m.id)this._undoId=null;
+   this._modal=null;this._confirmDelete=false;this._viewDate=null;this._history=null;
+   this._status='Drink deleted';await this._fetchHistory();
+  }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
+ }
+ async _undo(){if(!this._undoId||!this._hass?.user?.is_admin)return;
+  const id=this._undoId;this._busy=true;this._error='';this._status='Undoing drink…';this._render(true);
+  try{await this._hass.callWS({type:'jw_daily_hydration_log/delete_drink',profile:this._config.profile,record_id:id});
+   this._undoId=null;this._status='Last drink removed';this._viewDate=null;this._history=null;await this._fetchHistory();
+  }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
+ }
+ async _export(){this._busy=true;this._status='Preparing Excel export…';this._error='';this._render(true);
+  try{const response=await this._hass.callWS({type:'jw_daily_hydration_log/export'});
+   const data=Uint8Array.from(atob(response.base64),c=>c.charCodeAt(0));
+   const blob=new Blob([data],{type:response.mime_type});const url=URL.createObjectURL(blob);
+   const link=document.createElement('a');link.href=url;link.download=response.filename||'jwDaily Hydration Log - All Data.xlsx';
+   this.shadowRoot.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
+   this._status='Excel export started';
+  }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
+ }
+ _glass(pct){const p=Math.min(100,Math.max(0,pct)),y=179-p*158/100;
+  return `<svg class="glass" viewBox="0 0 160 200" role="img" aria-label="${p.toFixed(0)} percent of the daily target">
+   <defs><clipPath id="jdhl-cup"><path d="M32 19 L128 19 L120 175 Q119 185 108 185 L52 185 Q41 185 40 175 Z"/></clipPath></defs>
+   <path d="M32 19 L40 175 Q41 185 52 185 L108 185 Q119 185 120 175 L128 19" fill="none" stroke="var(--primary-text-color,#233245)" stroke-width="3" stroke-linecap="round"/>
+   ${p>0?`<g clip-path="url(#jdhl-cup)"><rect x="32" y="${y}" width="96" height="184" fill="#59baf2" opacity=".9"/>
+      <path d="M32 ${y} Q58 ${y-4} 80 ${y} T128 ${y}" stroke="#a2dcff" stroke-width="3" fill="none"/></g>`:''}
+   <path d="M38 23 L122 23" stroke="#df4545" stroke-width="2.6" stroke-dasharray="4 5" stroke-linecap="round"/>
+   <text x="80" y="108" text-anchor="middle" font-size="29" font-weight="700" fill="var(--primary-text-color,#233245)" stroke="var(--card-background-color,#fff)" stroke-width="2.5" paint-order="stroke">${p.toFixed(0)}%</text>
+  </svg>`;
+ }
+ _historyHTML(){if(this._config.show_history===false)return '';
+  const iso=this._viewDate||this._todayISO(),rows=Array.isArray(this._history?.entries)?[...this._history.entries].reverse():[];
+  const total=this._history?jdhlFmt(this._history.total_ml,this._config.unit):'—';
+  const canEdit=!!this._hass?.user?.is_admin;
+  const table=rows.length?`<div class="history-table"><table><thead><tr><th>Time</th><th>Liquid</th><th class="right">Volume</th></tr></thead><tbody>
+   ${rows.map(r=>{const time=this._timeParts(new Date(r.timestamp)).time;
+    return `<tr ${canEdit?`data-action="edit" data-id="${jdhlEscape(r.id)}" title="Edit drink moment" tabindex="0"`:''}>
+    <td>${jdhlEscape(time)}</td><td>${jdhlEscape(JDHL_LABEL[r.liquid_type]||'Unknown (legacy)')}</td><td class="right">+${jdhlFmt(Number(r.volume_ml),this._config.unit)} ${canEdit?'✎':''}</td></tr>`;}).join('')}
+   </tbody></table></div>`:`<p class="muted center">${this._history?'No drinks recorded on this date.':'Loading drink history…'}</p>`;
+  return `<section class="history"><div class="history-head"><h3>Drink history</h3><span class="muted">${rows.length} entries</span></div>
+   <div class="date-nav"><button data-action="prev" class="small secondary" aria-label="Previous day">‹</button>
+   <input aria-label="History date" data-field="history_date" value="${jdhlEscape(jdhlIsoToDate(iso)||iso)}" placeholder="DD-MM-YYYY" inputmode="numeric"/>
+   <button data-action="date-go" class="small secondary">Go</button><button data-action="next" class="small secondary" ${iso>=this._todayISO()?'disabled':''} aria-label="Next day">›</button></div>
+   ${table}<div class="history-total"><strong>Total ${iso===this._todayISO()?'today':'on selected day'}</strong><strong>${total}</strong></div></section>`;
+ }
+ _modalHTML(){if(!this._modal)return '';
+  const m=this._modal;
+  const options=JDHL_TYPES.map(([k,n])=>`<option value="${k}" ${m.liquid_type===k?'selected':''}>${n}</option>`).join('');
+  return `<div class="overlay" role="presentation"><section class="dialog" role="dialog" aria-modal="true" aria-label="${m.mode==='edit'?'Edit drink':'Add drink'}">
+   <h3>${m.mode==='edit'?'Edit drink moment':'Add drink moment'}</h3>
+   ${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<div class="fields">
+   <label>Liquid type<select data-field="liquid_type"><option value="">Select liquid type…</option>${options}</select></label>
+   <label>Volume (mL)<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${jdhlEscape(m.volume_ml)}"/></label>
+   <label>Date (DD-MM-YYYY)<input data-field="date" inputmode="numeric" placeholder="DD-MM-YYYY" value="${jdhlEscape(m.date)}"/></label>
+   <label>Time (24-hour)<input data-field="time" inputmode="numeric" placeholder="HH:MM:SS" value="${jdhlEscape(m.time)}"/></label></div>
+   ${this._confirmDelete?`<div class="delete-warning">Permanently delete this drink? This cannot be undone.</div>
+   <div class="dialog-actions"><button data-action="delete-back" class="secondary">Cancel</button><button data-action="delete-confirm" class="danger" ${this._busy?'disabled':''}>Confirm delete</button></div>`:
+   `<div class="dialog-actions">${m.mode==='edit'?`<button data-action="delete" class="danger" ${this._busy?'disabled':''}>Delete</button>`:''}
+    <button data-action="cancel" class="secondary">Cancel</button><button data-action="save" ${this._busy?'disabled':''}>Save</button></div>`}
+   </section></div>`;
+ }
+ _render(force=false){if(!this._config||!this._hass)return;
+  if(this._modal&&!force)return; // Do not replace popup input nodes during live typing.
+  const target=this._millilitres('daily_target','target_ml');const consumed=this._millilitres('consumed_today','consumed_ml');
+  const remaining=Math.max(0,target-consumed),pct=target?consumed/target*100:0;
+  const title=this._config.title||'jwDaily Hydration Log';const count=jdhlNum(this._state('drink_count_today')?.state);
+  const k=JSON.stringify([target,consumed,this._history,this._selectedType,this._selectedVolume,this._modal,this._confirmDelete,this._busy,this._error,this._status,this._viewDate,this._undoId,this._config]);
+  if(!force&&this._lastRender===k)return;this._lastRender=k;
+  const types=JDHL_TYPES.map(([v,n,ico])=>`<button class="type ${this._selectedType===v?'selected':''}" data-action="type" data-value="${v}" aria-pressed="${this._selectedType===v}">${ico} ${n}</button>`).join('');
+  const amounts=jdhlQuick(this._config.quick_add).map(n=>`<button class="amount ${this._selectedVolume===n?'selected':''}" data-action="amount" data-value="${n}" aria-pressed="${this._selectedVolume===n}">${jdhlFmt(n,'mL')}</button>`).join('');
+  this.shadowRoot.innerHTML=`<style>
+   :host{display:block}ha-card{overflow:hidden}.root{padding:18px;display:flex;flex-direction:column;gap:15px;color:var(--primary-text-color)}
+   header{display:flex;align-items:center;justify-content:space-between}header h2{margin:0;font-size:1.14rem;font-weight:650}header small{color:var(--secondary-text-color)}
+   .hero{display:grid;grid-template-columns:minmax(115px,34%) 1fr;align-items:center;gap:12px;padding:2px 6px 8px;max-width:620px;width:100%;margin:auto;box-sizing:border-box}
+   .glass{max-width:155px;width:100%;height:auto;display:block;margin:auto}.metrics{display:flex;flex-direction:column;gap:6px;min-width:0}
+   .metrics .big{font-size:clamp(1.25rem,4vw,1.75rem);font-weight:700}.metrics .muted{font-size:.88rem}.metrics .row{font-size:.88rem;display:flex;align-items:center;gap:7px}
+   .red{color:#da4141}.blue{color:#098cc8}.muted{color:var(--secondary-text-color)}.divider{border-top:1px solid var(--divider-color)}
+   .section-label{font-size:.88rem;font-weight:600;margin-bottom:8px}.types,.amounts{display:flex;flex-wrap:wrap;gap:8px}
+   button{font:inherit;border:none;border-radius:16px;background:var(--primary-color,#009dcc);color:white;padding:9px 13px;cursor:pointer}
+   button.selected{outline:3px solid var(--primary-text-color);outline-offset:2px;background:var(--primary-color,#009dcc)}
+   button.type,button.amount{background:var(--secondary-background-color,#e9eef3);color:var(--primary-text-color);border:1px solid var(--divider-color,#ccc);font-size:.86rem}
+   button.type.selected,button.amount.selected{background:var(--primary-color,#009dcc);color:white}button.secondary{background:var(--secondary-background-color,#ebeff2);color:var(--primary-text-color)}
+   button.danger{background:#b51f2d;color:white}button:disabled{opacity:.45;cursor:not-allowed}button.small{padding:5px 11px;border-radius:9px}
+   .register{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.register .note{font-size:.82rem;color:var(--secondary-text-color)}
+   .history{border-top:1px solid var(--divider-color);padding-top:13px}.history-head,.history-total{display:flex;justify-content:space-between;gap:10px;align-items:center}
+   .history h3{margin:0;font-size:1rem}.history-head .muted{font-size:.82rem}.date-nav{display:flex;align-items:center;justify-content:flex-end;gap:5px;margin:9px 0}
+   .date-nav input{width:112px;padding:6px 7px;border:1px solid var(--divider-color,#aaa);border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit;font-size:.8rem;text-align:center}
+   .history-table{max-height:280px;overflow:auto}table{width:100%;border-collapse:collapse}th{font-weight:500;color:var(--secondary-text-color);font-size:.8rem;text-align:left}
+   td,th{padding:8px 5px;border-bottom:1px solid var(--divider-color);font-size:.88rem;font-variant-numeric:tabular-nums}td.right,th.right{text-align:right}
+   tr[data-action]{cursor:pointer}tr[data-action]:hover{background:var(--secondary-background-color)}.history-total{margin-top:11px;font-size:.91rem}
+   .center{text-align:center}.error{color:var(--error-color,#a11b25);font-size:.84rem}.status{color:var(--secondary-text-color);font-size:.82rem}
+   .export{border-top:1px solid var(--divider-color);padding-top:12px;text-align:center}.export button{font-size:.85rem}
+   .overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:15px}
+   .dialog{width:min(450px,100%);box-sizing:border-box;background:var(--card-background-color,#fff);color:var(--primary-text-color);border-radius:15px;padding:18px;box-shadow:0 18px 50px #0005}
+   .dialog h3{margin:0 0 15px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fields label{display:flex;flex-direction:column;gap:4px;font-size:.81rem}
+   .fields input,.fields select{min-width:0;width:100%;box-sizing:border-box;background:var(--card-background-color,#fff);color:var(--primary-text-color);border:1px solid var(--divider-color,#aaa);border-radius:8px;padding:10px 8px;font:inherit}
+   .dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:16px}.dialog-actions button:first-child.danger{margin-right:auto}
+   .delete-warning{margin-top:15px;padding:10px;border:1px solid #b51f2d;border-radius:8px;color:#b51f2d;font-size:.87rem}
+   @media(max-width:380px){.root{padding:12px}.hero{grid-template-columns:110px 1fr;gap:5px}.metrics .row{font-size:.78rem}.fields{grid-template-columns:1fr}}
+   </style><ha-card><div class="root">
+   ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2><small>v1.1.0</small></header>`:''}
+   <div class="hero">${this._config.show_cup!==false?this._glass(pct):''}<div class="metrics">
+    <div class="big">${jdhlFmt(consumed,this._config.unit)}</div><div class="muted">of ${jdhlFmt(target,this._config.unit)} today</div>
+    <div class="row"><span class="red">⚑</span> Target: ${jdhlFmt(target,this._config.unit)}</div>
+    <div class="row"><span class="blue">💧</span> Remaining: ${jdhlFmt(remaining,this._config.unit)}</div>
+    <div class="row">◷ ${count} drink moments</div></div></div>
+   ${this._config.show_manual!==false?`<div class="divider"></div><section><div class="section-label">1. Select a liquid</div><div class="types">${types}</div></section>
+    <section><div class="section-label">2. Select a volume</div><div class="amounts">${amounts}</div></section>
+    <div class="register"><span class="note">${this._selectedType&&this._selectedVolume?`${JDHL_LABEL[this._selectedType]} · ${jdhlFmt(this._selectedVolume)}`:'Select both options to enable Add drink'}</span>
+    <button data-action="register" ${!(this._selectedType&&this._selectedVolume)||this._busy?'disabled':''}>Add drink</button>
+    <button class="secondary" data-action="new" ${this._busy?'disabled':''}>Custom date &amp; time…</button>
+    ${this._undoId&&this._hass?.user?.is_admin?`<button class="secondary" data-action="undo" ${this._busy?'disabled':''}>Undo last drink</button>`:''}</div>`:''}
+   ${this._error?`<div class="error" role="alert">${jdhlEscape(this._error)}</div>`:''}${this._status?`<div class="status" aria-live="polite">${jdhlEscape(this._status)}</div>`:''}
+   ${this._historyHTML()}
+   ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
+   ${this._modalHTML()}</div></ha-card>`;
+ }
 }
 
-const DHL_Q_PRESETS=[120,150,200,250,300,500,750,1000];
-const DHL_LABELS={profile:'Person',title:'Card title',show_title:'Show the title',show_cup:'Show the cup',
-  show_countdown:'Show countdown and pace',show_manual:'Show volume buttons',show_history:'Show today\'s drink history',
-  show_export:'Show Excel export (administrators)',unit:'Display units',quick_add:'Volume buttons (always mL)'};
-function dhlEditorSchema(profiles){return [
-  {name:'profile',selector:{select:{mode:'dropdown',options:profiles}}},
-  {name:'title',selector:{text:{}}},
-  {name:'',type:'grid',schema:['show_title','show_cup','show_countdown','show_manual','show_history','show_export'].map(name=>({name,selector:{boolean:{}}}))},
-  {name:'unit',selector:{select:{options:[{value:'mL',label:'Metric (mL/L)'},{value:'fl_oz',label:'Imperial (fl oz)'}]}}},
-  {name:'quick_add',selector:{select:{multiple:true,custom_value:true,options:DHL_Q_PRESETS.map(n=>({value:String(n),label:String(n)}))}}},
-];}
-class DailyHydrationLogCardEditor extends HTMLElement {
-  constructor(){super();this._config=null;this._hass=null;this._form=null;}
-  setConfig(c){this._config={...DHL_DEFAULTS,...c};this._render();}
-  connectedCallback(){
-    if(!customElements.get('ha-form')){const tile=customElements.get('hui-tile-card');
-      if(tile?.getConfigElement)tile.getConfigElement();}
-  }
-  set hass(h){this._hass=h;this._render();}
-  _profiles(){return Object.keys(this._hass?.states||{}).filter(x=>x.startsWith('sensor.jwdhl_')&&x.endsWith('_daily_target'))
-    .sort().map(id=>({value:id.slice('sensor.jwdhl_'.length,-'_daily_target'.length),
-      label:(this._hass.states[id].attributes?.friendly_name||id).replace(/ Daily target$/,'')}));}
-  _render(){if(!this._config||!this._hass)return;
-    if(!this._form){const form=document.createElement('ha-form');form.computeLabel=s=>DHL_LABELS[s.name]||'';
-      form.addEventListener('value-changed',e=>{e.stopPropagation();const data={...e.detail.value};
-        if(!data.profile&&this._config.profile)data.profile=this._config.profile;
-        data.quick_add=dhlQuick(data.quick_add);this._config=data;
-        this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:data},bubbles:true,composed:true}));});
-      this.appendChild(form);this._form=form;}
-    this._form.hass=this._hass;this._form.schema=dhlEditorSchema(this._profiles());
-    this._form.data={...this._config,quick_add:dhlQuick(this._config.quick_add).map(String)};
-  }
+const JDHL_EDITOR_LABELS={profile:'Person',title:'Card title',show_title:'Show title',show_cup:'Show glass',
+ show_manual:'Show liquid and volume controls',show_history:'Show drink history',show_export:'Show Excel export',
+ unit:'Display units',quick_add:'Quick-select volumes (mL)'};
+function jdhlEditorSchema(profiles){return [
+ {name:'profile',selector:{select:{mode:'dropdown',options:profiles}}},{name:'title',selector:{text:{}}},
+ {name:'',type:'grid',schema:['show_title','show_cup','show_manual','show_history','show_export'].map(name=>({name,selector:{boolean:{}}}))},
+ {name:'unit',selector:{select:{options:[{value:'mL',label:'Metric (mL/L)'},{value:'fl_oz',label:'Imperial (fl oz)'}]}}},
+ {name:'quick_add',selector:{select:{multiple:true,custom_value:true,options:[120,150,200,250,300,500,750,1000].map(n=>({value:String(n),label:String(n)}))}}}
+ ];}
+class JwDailyHydrationLogCardEditor extends HTMLElement{
+ constructor(){super();this._config=null;this._hass=null;this._form=null;}
+ setConfig(c){this._config={...JDHL_DEFAULTS,...c};this._render();}
+ connectedCallback(){if(!customElements.get('ha-form')){const tile=customElements.get('hui-tile-card');if(tile?.getConfigElement)tile.getConfigElement();}}
+ set hass(h){this._hass=h;this._render();}
+ _profiles(){return Object.keys(this._hass?.states||{}).filter(x=>x.startsWith('sensor.jwdhl_')&&x.endsWith('_daily_target')).sort().map(id=>({value:id.slice('sensor.jwdhl_'.length,-'_daily_target'.length),label:(this._hass.states[id].attributes?.friendly_name||id).replace(/ Daily target$/,'')}));}
+ _render(){if(!this._config||!this._hass)return;
+  if(!this._form){const f=document.createElement('ha-form');f.computeLabel=s=>JDHL_EDITOR_LABELS[s.name]||'';
+   f.addEventListener('value-changed',e=>{e.stopPropagation();const data={...e.detail.value};
+    if(!data.profile&&this._config.profile)data.profile=this._config.profile;
+    data.quick_add=jdhlQuick(data.quick_add);this._config=data;
+    this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:data},bubbles:true,composed:true}));});
+   this.appendChild(f);this._form=f;}
+  this._form.hass=this._hass;this._form.schema=jdhlEditorSchema(this._profiles());
+  this._form.data={...this._config,quick_add:jdhlQuick(this._config.quick_add).map(String)};
+ }
 }
-if(!customElements.get(DHL_TAG))customElements.define(DHL_TAG,DailyHydrationLogCard);
-if(!customElements.get(DHL_EDITOR))customElements.define(DHL_EDITOR,DailyHydrationLogCardEditor);
+if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydrationLogCard);
+if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
-if(!window.customCards.some(c=>c.type===DHL_TAG))window.customCards.push({type:DHL_TAG,name:'jwDaily Hydration Log',
-  description:'Daily drink tracking with timestamped history and Excel export',preview:true});
-console.info('DAILY-HYDRATION-LOG-CARD v1.0.2');
+if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
+console.info('jwDaily Hydration Log Card v1.1.0');

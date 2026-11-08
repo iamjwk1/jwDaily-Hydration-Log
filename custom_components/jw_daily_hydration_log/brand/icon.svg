@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <defs>
-    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#61d3f9"/><stop offset="1" stop-color="#1689c9"/></linearGradient>
-  </defs>
-  <rect width="256" height="256" rx="54" fill="#123a61"/>
-  <path d="M128 28C109 59 68 103 68 149c0 33 27 62 60 62s60-29 60-62c0-46-41-90-60-121Z" fill="url(#wave)"/>
-  <path d="M87 146c-1 27 15 46 37 50" fill="none" stroke="#b2efff" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
-  <text x="128" y="163" font-family="DejaVu Sans, sans-serif" font-size="57" font-weight="bold" text-anchor="middle" fill="#ffffff" letter-spacing="-5">jw</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="w" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#61d3f9"/><stop offset="1" stop-color="#1689c9"/></linearGradient></defs><rect width="256" height="256" rx="54" fill="#123a61"/><path d="M128 28C109 59 68 103 68 149c0 33 27 62 60 62s60-29 60-62c0-46-41-90-60-121Z" fill="url(#w)"/><text x="128" y="162" font-size="56" font-family="sans-serif" font-weight="bold" text-anchor="middle" fill="white">jw</text></svg>
