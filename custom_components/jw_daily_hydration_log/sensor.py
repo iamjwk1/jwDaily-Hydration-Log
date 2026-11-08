@@ -10,7 +10,7 @@ from .const import DOMAIN, ENTITY_PREFIX, from_ml
 
 async def async_setup_entry(hass, entry, async_add_entities):
     c = hass.data[DOMAIN]['profiles'][entry.entry_id]
-    async_add_entities([DailyTarget(c), ConsumedToday(c), ManualConsumed(c), Remaining(c), Pace(c), Progress(c), DrinkCount(c)])
+    async_add_entities([DailyTarget(c), ConsumedToday(c), ManualConsumed(c), Remaining(c), Progress(c), DrinkCount(c)])
 
 class _Sensor(SensorEntity):
     _attr_should_poll = False
@@ -70,16 +70,6 @@ class Remaining(_Volume):
     def __init__(self,c):super().__init__(c,'remaining','Remaining')
     @property
     def native_value(self):return self.volume(self.coordinator.remaining_ml)
-
-class Pace(_Volume):
-    _attr_icon='mdi:speedometer'
-    def __init__(self,c):super().__init__(c,'hourly_pace','Hourly pace')
-    @property
-    def native_unit_of_measurement(self):return f'{self.coordinator.unit}/h'
-    @property
-    def native_value(self):return self.volume(self.coordinator.hourly_pace_ml)
-    @property
-    def extra_state_attributes(self):return {'day_start':self.coordinator.day_start.isoformat(),'day_end':self.coordinator.day_end.isoformat()}
 
 class Progress(_Sensor):
     _attr_icon='mdi:chart-donut'

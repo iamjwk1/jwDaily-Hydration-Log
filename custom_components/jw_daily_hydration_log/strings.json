@@ -1,5 +1,43 @@
 {
   "title": "jwDaily Hydration Log",
-  "config": {"step": {"user": {"title": "Add hydration profile", "description": "Create a separate jwDaily Hydration Log profile. Existing Personal Hydration Manager profiles are never changed.", "data": {"name": "Person name", "age": "Age", "gender": "Gender", "pregnancy": "Pregnancy", "lactation": "Lactation", "day_start": "Pace window start", "day_end": "Pace window end", "source_sensor": "Optional external source sensor", "source_mode": "Source combination mode", "unit": "Display unit"}}}, "error": {"invalid_name": "Enter a valid name"}, "abort": {"already_configured": "This profile already exists"}},
-  "options": {"step": {"init": {"title": "Profile settings", "data": {"age": "Age", "gender": "Gender", "pregnancy": "Pregnancy", "lactation": "Lactation", "day_start": "Pace window start", "day_end": "Pace window end", "source_sensor": "Optional external source sensor", "source_mode": "Source combination mode", "unit": "Display unit"}}}}
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add hydration profile",
+        "description": "Create a separate jwDaily Hydration Log profile. Existing Personal Hydration Manager profiles are never changed.",
+        "data": {
+          "name": "Person name",
+          "age": "Age",
+          "gender": "Gender",
+          "pregnancy": "Pregnancy",
+          "lactation": "Lactation",
+          "source_sensor": "Optional external source sensor",
+          "source_mode": "Source combination mode",
+          "unit": "Display unit"
+        }
+      }
+    },
+    "error": {
+      "invalid_name": "Enter a valid name"
+    },
+    "abort": {
+      "already_configured": "This profile already exists"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Profile settings",
+        "data": {
+          "age": "Age",
+          "gender": "Gender",
+          "pregnancy": "Pregnancy",
+          "lactation": "Lactation",
+          "source_sensor": "Optional external source sensor",
+          "source_mode": "Source combination mode",
+          "unit": "Display unit"
+        }
+      }
+    }
+  }
 }

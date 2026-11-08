@@ -1,31 +1,16 @@
-# Changelog
+# jwDaily Hydration Log - changelog
 
-## v1.0.2 — First official jwDaily Hydration Log release
+## v1.1.0 (development; not yet released)
+- Choose both a liquid type and volume for each new drink. Neither persists between registrations or card sessions.
+- Six liquid types: water, coffee, tea, milk, soup, other.
+- Click a drink row to open a Save / Delete / Cancel dialog. The edited record replaces its old values, and deletion permanently removes it from this integration's ledger.
+- Manual date DD-MM-YYYY and time HH:MM or HH:MM:SS in local 24-hour format, including backdating.
+- Undo last drink deletes only the just-created record by its server-generated ID.
+- New compact glass layout with open rim and dashed red target line.
+- Pace feature removed from card, sensors, config UI and calculation loop.
+- Excel export with seven worksheets, including per-day breakdown and new liquid types. Old entries are categorized Unknown (legacy).
+- No changes to the original Personal Hydration Manager.
+- No public stable v1.1.0 release until integration load, migrations and runtime history/export tests are accepted on a real HA system.
 
-Independent Home Assistant integration derived from Loryan Strant's MIT-licensed Personal Hydration Manager v0.4.1.
-
-### Features
-- Independent integration domain `jw_daily_hydration_log` and entities prefixed `jwdhl_`.
-- Lovelace card `custom:jwdaily-hydration-log-card` with animated daily progress and configurable quick-add amounts.
-- Persistent per-drink history: local timestamps, actual volumes, unique event IDs and source information.
-- History table beneath the buttons, with the newest drink first.
-- Complete administrator-only Excel (.xlsx) export with six worksheets: Profiles, Drink Moments, Daily Totals, Source Readings, Adjustments and Export Info.
-- Multiple independent hydration profiles and configurable daily targets.
-- Services, external sensor tracking and optional notification/TTS blueprints.
-- Unified slug normalization: names such as `Jan-Willem` and `Jan Willem` resolve consistently.
-- Dedicated integration branding and a separate MIT copyright/attribution notice.
-
-### Important
-- This fork does **not** replace, remove or alter the upstream Personal Hydration Manager installation.
-- Existing profiles and hydration history stored by the original integration are **not** automatically imported. The fork uses a separate storage namespace.
-- Dashboard YAML: `type: custom:jwdaily-hydration-log-card`.
-- If upgrading from the earlier pre-release card name `custom:jw-daily-hydration-log-card`, update your dashboard configuration.
-- GitHub's automatically generated source ZIP is **not** the special executable HA ZIP installer previously supplied separately.
-- Install and update through HACS as a custom integration, after backing up your working Home Assistant configuration.
-- Home Assistant requires a restart after a new integration installation or a Python-code update.
-
-### Licensing
-MIT. The original `Copyright (c) 2026 Loryan Strant` notice and full upstream MIT license are retained.
-
-### Quality
-Offline source QA and Home Assistant hassfest validated. A functional HA v1.0.2 installation was accepted, including manual additions, drink history and Excel export.
+## v1.0.2
+- Initial stable release with persistent drink logging and Excel export.

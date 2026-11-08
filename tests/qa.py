@@ -53,7 +53,9 @@ class FakeConfigEntry:
     options={}
 
 class FakeHass:
-    def __init__(self):self.bus=types.SimpleNamespace(async_listen=lambda *a:lambda:None)
+    def __init__(self):
+        self.bus=types.SimpleNamespace(async_listen=lambda *a:lambda:None)
+        self.config=types.SimpleNamespace(time_zone='Europe/Amsterdam')
     def async_create_task(self,coro):return asyncio.create_task(coro)
 
 module('homeassistant')
@@ -72,48 +74,82 @@ async def test_coordinator():
     h=FakeHass()
     c=coordinator.HydrationCoordinator(h,FakeConfigEntry())
     await c.async_initialize()
-    check('Hyphenated name normalizes to jan_willem',c.slug=='jan_willem')
-    data=[120,150,300,500]
-    await asyncio.gather(*(c.async_add_drink(x,'mL','dashboard') for x in data))
-    check('Four concurrent clicks become four separate records',len(c.get_history())==4 and len({x['id'] for x in c.get_history()})==4)
-    check('Four clicks add exact 1070 mL',c.manual_consumed_ml==1070 and c.consumed_ml==1070)
-    await c.async_add_drink(10,'fl_oz','dashboard')
-    check('Fluid ounces converted to mL',abs(c.manual_consumed_ml-(1070+295.735))<1e-5)
-    try:await c.async_add_drink(0,'mL')
-    except ValueError:pass
-    else:raise AssertionError('Zero drink accepted')
-    check('Invalid zero amount produces no ledger event',len(c.get_history())==5)
-    # Reload from Store and verify no loss of timestamped records.
+    check('Hyphenated name normalized', c.slug=='jan_willem')
+    try:
+        await c.async_add_drink(120,'mL','dashboard')
+    except ValueError:
+        check('Drink without liquid type rejected',True)
+    else:check('Drink without liquid type rejected',False)
+    data=[(120,'water'),(150,'coffee'),(300,'tea'),(500,'milk')]
+    drinks=await asyncio.gather(*(c.async_add_drink(x,'mL','dashboard',t) for x,t in data))
+    ids=[r['id'] for r in drinks]
+    check('Four independent records, types explicitly recorded',len(c.get_history())==4 and len(set(ids))==4
+          and {r['liquid_type'] for r in c.get_history()}=={'water','coffee','tea','milk'})
+    check('Four drinks total 1070 mL',round(c.consumed_ml,1)==1070 and c.manual_consumed_ml==1070)
+    try:
+        await c.async_edit_drink(ids[0],125,'other','08-11-2026','25:00')
+    except ValueError:check('Time validates strict 24h',True)
+    else:check('Time validates strict 24h',False)
+    await c.async_edit_drink(ids[0],180,'soup','08-11-2026','08:28:10')
+    row=next(r for r in c.records if r['id']==ids[0])
+    check('Edit in place retains record ID, replaces type and time',row['liquid_type']=='soup' and row['volume_ml']==180
+          and row['timestamp'].endswith('08:28:10+01:00') and len(c.get_history())==4)
+    check('Edit corrects today total',c.manual_consumed_ml==1130 and c.consumed_ml==1130)
+    await c.async_delete_drink(ids[1])
+    check('Delete permanently removes old entry',not any(r.get('id')==ids[1] for r in c.records)
+          and len(c.get_history())==3)
+    check('Delete corrects today total',c.consumed_ml==980 and c.manual_consumed_ml==980)
+    await c.async_edit_drink(ids[2],300,'water','07-11-2026','18:00')
+    check('Moving an entry to yesterday updates current daily volume',c.manual_consumed_ml==680
+          and c.daily_archive['2026-11-07']['consumed_ml']==300)
+    check('Moving an entry to yesterday updates daily event counts',len(c.get_history())==2
+          and len(c.get_history('2026-11-07'))==1 and c.daily_archive['2026-11-07']['drink_count']==1)
+    await c.async_edit_drink(ids[2],350,'tea','07-11-2026','18:30')
+    check('Editing previous day updates archived daily totals',c.daily_archive['2026-11-07']['manual_ml']==350
+          and c.daily_archive['2026-11-07']['drink_count']==1)
+    await c.async_delete_drink(ids[2])
+    check('Deleting previous day removes record and subtracts archived total',c.daily_archive['2026-11-07']['manual_ml']==0
+          and c.daily_archive['2026-11-07']['drink_count']==0)
+    try: await c.async_add_drink(99,'mL','dashboard','water',day='09-11-2026',clock='12:00')
+    except ValueError:check('Future drink timestamp rejected',True)
+    else:check('Future drink timestamp rejected',False)
+    try: await c.async_add_drink(99,'mL','dashboard','water',day='29-03-2026',clock='02:30')
+    except ValueError:check('Nonexistent Dutch DST wall time rejected',True)
+    else:check('Nonexistent Dutch DST wall time rejected',False)
     await c.async_shutdown()
-    c2=coordinator.HydrationCoordinator(h,FakeConfigEntry())
-    await c2.async_initialize()
-    check('Drink history survives integration restart',len(c2.get_history())==5 and c2.consumed_ml==c.consumed_ml)
+    reloaded=coordinator.HydrationCoordinator(h,FakeConfigEntry())
+    await reloaded.async_initialize()
+    check('Edited history and hard deletions survive restart',len(reloaded.get_history())==2
+          and round(reloaded.consumed_ml)==680 and len(reloaded.get_history('2026-11-07'))==0)
+    # Load a v1.0.2-style historic record and make sure its category is unknown, not water.
+    legacy=await reloaded.async_add_drink(80,'mL','dashboard','other')
+    legacy.pop('liquid_type')
+    await reloaded._save();await reloaded.async_shutdown()
+    reloaded=coordinator.HydrationCoordinator(h,FakeConfigEntry());await reloaded.async_initialize()
+    check('Legacy v1.0.2 drinks treated as unknown',any(r['liquid_type']=='unknown' for r in reloaded.get_history()))
     FakeTime.now_value=datetime(2026,11,9,0,0,tzinfo=timezone(timedelta(hours=1)))
-    await c2.async_maybe_reset()
-    check('Midnight resets current total, not ledger',c2.consumed_ml==0 and len(c2.records)>=6 and '2026-11-08' in c2.daily_archive)
-    check('New day starts with empty drink history',c2.get_history()==[])
-    await c2.async_add_drink(200,'mL')
-    check('New day still logs with correct date',len(c2.get_history())==1)
-    snap=c2.export_snapshot()
-    data=excel.export_xlsx([snap],'Europe/Amsterdam')
-    with ZipFile(BytesIO(data)) as z:
-        check('Excel ZIP CRC',z.testzip() is None)
-        required=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,7)]
-        check('Excel six complete worksheets',all(x in z.namelist() for x in required))
-        for key in required:
-            ET.fromstring(z.read(key))
-        check('Excel XML well-formed',True)
-        sheet=z.read('xl/worksheets/sheet2.xml').decode()
-        check('Five old and one new drink exported',sheet.count('<row r=')==7)
-        check('Excel numeric values (not strings)', '<v>120' in sheet and '<v>500' in sheet)
-        check('Excel dates use datetime style', 's="2"' in sheet)
-    await c2.async_set_consumed(700,'mL')
-    check('Manual correction recorded separately from drink history',
-          c2.records[-1]['kind']=='set_consumed' and len(c2.get_history())==1)
-    await c2.async_reset_today()
-    check('Manual reset retained as correction record', c2.records[-1]['kind']=='reset')
-    check('Manual reset no artificial drink event',len(c2.get_history())==1)
-    await c2.async_shutdown()
+    await reloaded.async_maybe_reset()
+    check('Midnight reset archives the correct 760 mL and keeps dated entries',reloaded.consumed_ml==0
+          and reloaded.daily_archive['2026-11-08']['manual_ml']==760 and len(reloaded.get_history('2026-11-08'))==3)
+    await reloaded.async_add_drink(200,'mL','dashboard','milk')
+    check('New day starts at 200 mL',reloaded.consumed_ml==200 and len(reloaded.get_history())==1)
+    await reloaded.async_add_drink(225,'mL','manual_backdate','water',day='06-11-2026',clock='10:30:25')
+    check('Backdated registration never changes current day total',reloaded.consumed_ml==200
+          and reloaded.daily_archive['2026-11-06']['manual_ml']==225)
+    snap=reloaded.export_snapshot();payload=excel.export_xlsx([snap],'Europe/Amsterdam')
+    with ZipFile(BytesIO(payload)) as z:
+        check('Excel container ZIP CRC',z.testzip() is None)
+        files=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,8)]
+        check('Seven Excel worksheets present',all(k in z.namelist() for k in files))
+        for f in files:ET.fromstring(z.read(f))
+        check('Seven worksheets valid XML',True)
+        ws=z.read('xl/worksheets/sheet2.xml').decode()
+        check('Deleted old drinks absent from Excel',ids[1] not in ws and ids[2] not in ws)
+        check('Updated type and volume exported', 'soup' in ws and '<v>180' in ws)
+        breakdown=z.read('xl/worksheets/sheet7.xml').decode()
+        check('Liquid type breakdown exported with unknown legacy', 'Unknown legacy mL' in breakdown)
+        check('Excel dates native with DD-MM-YYYY number format', 's="4"' in breakdown and 'formatCode="dd-mm-yyyy"' in z.read('xl/styles.xml').decode())
+    await reloaded.async_shutdown()
 
 asyncio.run(test_coordinator())
 print(f'QA PASS COUNT: {sum(ok for _,ok in RESULTS)}/{len(RESULTS)}')

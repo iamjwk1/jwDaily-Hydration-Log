@@ -1,11 +1,23 @@
 log_drink:
   name: Log drink
-  description: Add a drink to a profile and permanently record its timestamp and volume.
+  description: Register an explicitly chosen liquid and volume. Optionally supply a local date and 24-hour time.
   fields:
     profile:
       name: Profile
       required: true
       selector: {text: {}}
+    liquid_type:
+      name: Liquid type
+      required: true
+      selector:
+        select:
+          options:
+            - {value: water, label: Water}
+            - {value: coffee, label: Coffee}
+            - {value: tea, label: Tea}
+            - {value: milk, label: Milk}
+            - {value: soup, label: Soup}
+            - {value: other, label: Other}
     volume:
       name: Volume
       required: true
@@ -16,13 +28,21 @@ log_drink:
       selector:
         select:
           options: [mL, L, fl_oz]
+    date:
+      name: Date (optional)
+      description: Both date and time must be set together; DD-MM-YYYY.
+      selector: {text: {}}
+    time:
+      name: Local time (optional)
+      description: Both date and time must be set together; HH:MM or HH:MM:SS, 24-hour format.
+      selector: {text: {}}
     origin:
       name: Origin
-      description: Optional provenance (e.g. dashboard, automation).
+      description: Optional source description (e.g. dashboard, automation).
       selector: {text: {}}
 reset_today:
   name: Reset today
-  description: Reset today while retaining the full activity ledger and previous snapshot.
+  description: Reset the live daily totals while retaining saved drink records for the day.
   fields:
     profile:
       name: Profile
@@ -30,7 +50,7 @@ reset_today:
       selector: {text: {}}
 set_consumed:
   name: Set consumed
-  description: Set an absolute total; correction is recorded in the ledger.
+  description: Set an absolute total; not treated as a newly consumed drink.
   fields:
     profile:
       name: Profile
