@@ -174,4 +174,4 @@ Source code is provided in this archive. Run tests with `python3 tests/qa.py` on
 
 This project is derived from the MIT-licensed [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager) by Loryan Strant. The original MIT notice is preserved in [LICENSE-UPSTREAM-MIT](LICENSE-UPSTREAM-MIT).
 
-**Repository license note:** The repository was initialized with a GPL-3.0 [LICENSE](LICENSE) before this source publication. That existing file has deliberately not been overwritten. Please review the intended license for the fork before issuing a public release; the original upstream MIT terms and notices remain applicable to upstream portions.
+**License:** jwDaily Hydration Log is published under the [MIT License](LICENSE). The original copyright notice (`Copyright (c) 2026 Loryan Strant`) is preserved unchanged in both the primary license and the verbatim [upstream MIT license](LICENSE-UPSTREAM-MIT). The contributors' modifications are identified separately. The repository's initial GPLv3 placeholder is superseded by this MIT license.
