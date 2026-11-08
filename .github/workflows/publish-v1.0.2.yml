@@ -1,0 +1,62 @@
+name: Publish jwDaily Hydration Log v1.0.2
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-v1.0.2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-v1.0.2
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Test and publish official release
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python syntax and offline tests
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+      - name: Frontend offline tests
+        run: node tests/frontend_qa.js
+      - name: Validate release metadata and branding
+        run: |
+          python - <<'PY'
+          import json, pathlib, struct
+          root = pathlib.Path('custom_components/jw_daily_hydration_log')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          hacs = json.loads(pathlib.Path('hacs.json').read_text())
+          assert manifest['domain'] == 'jw_daily_hydration_log'
+          assert manifest['version'] == '1.0.2'
+          assert hacs['name'] == 'jwDaily Hydration Log'
+          icon = (root / 'brand/icon.png').read_bytes()
+          assert icon[:8] == b'\x89PNG\r\n\x1a\n'
+          assert struct.unpack('>II', icon[16:24]) == (256, 256)
+          assert pathlib.Path('CHANGELOG.md').is_file()
+          print('RELEASE METADATA PASS')
+          PY
+      - uses: home-assistant/actions/hassfest@master
+      - name: Create official GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.0.2 >/dev/null 2>&1; then
+            echo 'Release v1.0.2 already exists; leaving it unchanged.'
+            gh release view v1.0.2 --json url,tagName,name
+            exit 0
+          fi
+          gh release create v1.0.2 --target "$GITHUB_SHA" --title 'jwDaily Hydration Log v1.0.2' --notes-file CHANGELOG.md --latest
+          gh release view v1.0.2 --json url,tagName,name
