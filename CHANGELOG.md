@@ -1,21 +1,18 @@
-# jwDaily Hydration Log - changelog
+# jwDaily Hydration Log — changelog
 
-## v1.1.0-beta.1 — HACS pre-release (testing only)
+## v1.1.0-beta.2 (HACS pre-release)
+- Compact glass/history/Add card; same Add/Edit popup; larger liquid icons.
+- Custom liquid types with name, MDI icon or SVG file, and optional default volume, stored per profile.
+- Automatic volume preselection only after selecting a custom type with a configured default.
+- Red dashed 100% target line moved approximately 15 px lower (SVG y=39); level animates to it and the water surface gently ripples.
+- Card version shown bottom-right.
+- Excel extended to eight sheets including complete Liquid Types catalog, plus human-readable liquid names and custom-type breakdown.
+- Existing v1.0.2 and beta.1 data retained; no separate edit/delete history.
+- HACS-only distribution. No changes to upstream Personal Hydration Manager.
 
-- Beta of the planned v1.1.0 improvements; production v1.0.2 remains the stable release.
-- The manifest and card use beta version 1.1.0-beta.1.
-- Install only via the HACS prerelease/version selector after a full HA backup.
-- WARNING: Updating automated drink logging requires a `liquid_type` parameter; entity `hourly_pace` is removed.
-- Choose both a liquid type and volume for each new drink. Neither persists between registrations or card sessions.
-- Six liquid types: water, coffee, tea, milk, soup, other.
-- Click a drink row to open a Save / Delete / Cancel dialog. The edited record replaces its old values, and deletion permanently removes it from this integration's ledger.
-- Manual date DD-MM-YYYY and time HH:MM or HH:MM:SS in local 24-hour format, including backdating.
-- Undo last drink deletes only the just-created record by its server-generated ID.
-- New compact glass layout with open rim and dashed red target line.
-- Pace feature removed from card, sensors, config UI and calculation loop.
-- Excel export with seven worksheets, including per-day breakdown and new liquid types. Old entries are categorized Unknown (legacy).
-- No changes to the original Personal Hydration Manager.
-- No public stable v1.1.0 release until integration load, migrations and runtime history/export tests are accepted on a real HA system.
+## v1.1.0-beta.1
+- Explicit liquid and volume, popup edit/delete, backdated records, Dutch date + 24h time.
+- Pace removed, compact open glass, seven-tab Excel export, Undo last drink.
 
 ## v1.0.2
-- Initial stable release with persistent drink logging and Excel export.
+- First stable independent release with timestamped history and complete Excel export.

@@ -25,7 +25,7 @@ CONFIG_SCHEMA=cv.config_entry_only_config_schema(DOMAIN)
 _DRINK_SCHEMA=vol.Schema({vol.Required('profile'):cv.string,vol.Required('volume'):vol.Coerce(float),
                            vol.Optional('unit',default='mL'):vol.In(UNITS),
                            vol.Optional('origin',default='service'):cv.string,
-                           vol.Required('liquid_type'):vol.In(LIQUID_TYPES),
+                           vol.Required('liquid_type'):cv.string,
                            vol.Optional('date'):cv.string,vol.Optional('time'):cv.string})
 _RESET_SCHEMA=vol.Schema({vol.Required('profile'):cv.string})
 _SET_SCHEMA=vol.Schema({vol.Required('profile'):cv.string,vol.Required('volume'):vol.Coerce(float),
@@ -85,8 +85,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             _LOGGER.warning('Invalid drink event ignored: %s',exc)
             return
         liquid_type=event.data.get('liquid_type')
-        if liquid_type not in LIQUID_TYPES:
-            _LOGGER.warning('Drink event ignored: liquid_type is required')
+        if not c._valid_liquid_type(liquid_type):
+            _LOGGER.warning('Drink event ignored: valid liquid_type is required')
             return
         hass.async_create_task(c.async_add_drink(volume,unit,'event',liquid_type))
 
@@ -95,6 +95,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_edit_drink)
     websocket_api.async_register_command(hass,ws_delete_drink)
     websocket_api.async_register_command(hass,ws_history)
+    websocket_api.async_register_command(hass,ws_add_liquid_type)
+    websocket_api.async_register_command(hass,ws_delete_liquid_type)
     websocket_api.async_register_command(hass,ws_export)
     return True
 
@@ -143,6 +145,7 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'profile':c.slug,'date':msg.get('date') or c._today(), 'entries':records,
         'count':len(records),'total_ml':round(sum(x['volume_ml'] for x in records),2),
         'consumed_ml':round(c.consumed_ml,2),'target_ml':c.target_ml,
+        'liquid_types':c.get_liquid_definitions(),
     })
 
 
@@ -199,6 +202,39 @@ async def ws_delete_drink(hass:HomeAssistant, connection:websocket_api.ActiveCon
         return
     connection.send_result(msg['id'],{'deleted':True})
 
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/add_liquid_type',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('name'):str,
+                                  probatio.Optional('icon_mdi'):str,
+                                  probatio.Optional('icon_svg'):str,
+                                  probatio.Optional('default_volume_ml'):float})
+@websocket_api.async_response
+async def ws_add_liquid_type(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        c=_resolve(hass,msg['profile'])
+        item=await c.async_add_liquid_type(msg['name'],msg.get('icon_mdi',''),
+                                           msg.get('icon_svg',''),msg.get('default_volume_ml'))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
+        return
+    connection.send_result(msg['id'],item)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/delete_liquid_type',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('liquid_type'):str})
+@websocket_api.async_response
+async def ws_delete_liquid_type(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        await _resolve(hass,msg['profile']).async_delete_liquid_type(msg['liquid_type'])
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
+        return
+    connection.send_result(msg['id'],{'deleted':True})
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/export',probatio.Optional('profile'):str})

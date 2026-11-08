@@ -1,43 +1,44 @@
-# jwDaily Hydration Log v1.1.0-beta.1 (HACS pre-release)
+# jwDaily Hydration Log v1.1.0-beta.2
 
-Independent Home Assistant custom integration derived from [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. MIT licensed; the verbatim upstream notice is included in `LICENSE-UPSTREAM-MIT`.
+**Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
-## New in v1.1.0-beta.1
+Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
-- All new cards start with **neither a selected liquid nor a selected volume**. Select one of Water, Coffee, Tea, Milk, Soup or Other **and** one quick volume, then press **Add drink**. Both selections clear after a successful addition and after reopening the card.
-- Clicking an existing record opens an edit dialog with liquid, amount, date (`DD-MM-YYYY`) and time (24-hour `HH:MM` or `HH:MM:SS`). Actions: **Save, Delete, Cancel**. Delete requires confirmation.
-- Changes overwrite the existing record in-place; Delete permanently removes it from the integration ledger. There is **no edit/delete audit log**. The optional immediate **Undo last drink** permanently removes the just-added record. Existing external HA backups and Recorder history are outside the integration and are not purged.
-- **Custom date & time** adds a new entry with both liquid and volume explicitly entered (no pre-selected liquid/volume).
-- Compact responsive glass layout: open-top glass with dashed red target line; numbers to the right; no large unused margin.
-- Pace feature removed: no hourly-pace sensor or calculated pace, no minute updates, and no pace settings. A previous `hourly_pace` entity is removed from the entity registry for this integration when the v1.1.0 code is first loaded.
-- XLSX export now contains seven worksheets: Profiles, Drink Moments, Daily Totals, Source Readings, Adjustments, Export Info and Daily Breakdown. Dates are numeric Excel dates displayed `DD-MM-YYYY`, timestamps 24-hour `DD-MM-YYYY HH:MM:SS`.
+Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## Data and upgrade safety
+## What's new in beta.2
 
-- The same integration domain `jw_daily_hydration_log`, profiles, entity unique IDs and storage namespace are preserved from v1.0.2.
-- Old v1.0.2 drink moments remain intact and are shown as `Unknown (legacy)` for their missing liquid type (never guessed as Water).
-- Existing v1.0.2 `day_start`/`day_end` config-entry keys, if any, are ignored by v1.1.0; the settings no longer appear in the UI.
-- `log_drink` and external drink events now **require** `liquid_type` to prevent unclassified new entries. Review any pre-existing automations or scripts that call this service. The bundled push-notification blueprint now has a required liquid selector; existing automations based on it must be reviewed before upgrade.
-- When editing, moving or deleting a moment, current or archived daily totals are adjusted. External sensor readings remain separately preserved.
-- Stored drink history is kept across restarts, daily reset and exports. The package never touches the original `personal_hydration_manager` domain.
-- This is a **pre-release candidate**. The offline QA suite does not replace runtime acceptance in Home Assistant; do not publish a stable v1.1.0 tag until the runtime test passes.
+- **Compact card:** only daily progress glass, drink history, and **+ Add drink** are visible initially. The version is displayed at the bottom-right of the card.
+- **Same popup for Add and Edit:** choose a liquid using large icons, select a volume button or enter an amount, and enter date (`DD-MM-YYYY`) and 24-hour time. Edit mode additionally provides **Delete**, requiring confirmation. No forgotten previous liquid/volume selections.
+- **Own liquid type buttons:** in Add/Edit popup, choose **+ Add custom liquid type** (HA administrator). Supply a unique name, an `mdi:` icon **or** a local `.svg` file (max 16 KB), and optionally a default volume in mL. The definitions are stored **per profile** in Home Assistant's existing `.storage/jw_daily_hydration_log.*` data. They survive restarts and HACS updates.
+- **Smart volume default:** standard liquid types do not select a volume automatically. A custom type only preselects its volume after you explicitly select that type and only if a default was configured. New drink popups otherwise start with no type or volume selected.
+- **Safety for SVGs:** uploads are sanitized by the backend against scripts, remote resources and unsupported XML elements; previewed as inert image elements (not inline markup).
+- **Animated glass:** rising water level on changes plus a gently moving wave. The red dashed 100% target is **16 SVG units (~15 displayed px)** lower than before. The top stays open, with the 100% fill level aligned to the target line.
+- **Excel export:** eight worksheets; the new **Liquid Types** sheet includes each custom type's name, ID, icon configuration and default volume. **Drink Moments** also includes a human-readable liquid name; **Daily Breakdown** includes custom types. Prior Excel data remains exportable.
+- Existing drink modifications replace stored values. Deletions remove the integration's record. Previously saved records from v1.0.2 show **Unknown (legacy)** if they lack a type. Changes to existing historical records are not archived separately.
+- The `hourly_pace` sensor, pace settings and pace calculations remain removed since beta.1.
 
-## Install beta using HACS only
+## Install / update — only through HACS
 
-**Development preview** — the stable release remains `v1.0.2`. Before testing this beta, make a full Home Assistant backup, including `.storage/jw_daily_hydration_log.*` and your dashboard configuration. Do not manually copy files into `/config/custom_components/` and do not delete or re-create the existing profile.
+1. Make a current full HA backup including the integration's `.storage` data, and check scripts and automations for the service change described below.
+2. Open **HACS → jwDaily Hydration Log → ⋮ → Redownload → Need a different version?**. If necessary enable pre-releases for the repository.
+3. Select **`v1.1.0-beta.2`**, download, then **restart Home Assistant**.
+4. Refresh the dashboard with `Ctrl+Shift+R` and verify that the card footer shows beta.2. Keep the existing profile `Jan-Willem` and existing dashboard configuration.
+5. Test a new custom liquid (name, SVG icon, default amount), register a drink via Add popup, edit/delete only a **test entry**, verify Excel's eight tabs. Do not delete valuable records to test the beta.
 
-1. Open **HACS → jwDaily Hydration Log** (custom integration repository: `https://github.com/iamjwk1/jwDaily-Hydration-Log`).
-2. Enable **Pre-release** for this repository if HACS requires it, or open **⋮ → Redownload → Need a different version?**.
-3. Select release **`v1.1.0-beta.1`** and download it.
-4. Restart Home Assistant after HACS has replaced the integration code.
-5. Refresh the dashboard in your browser (`Ctrl+Shift+R`) to load the new card JavaScript. Verify that the card displays `v1.1.0-beta.1`.
-6. Verify your **existing** `Jan-Willem` profile, the old drink history (marked `Unknown (legacy)`), editing/deleting, a new typed drink, daily totals and the seven-sheet Excel export.
+This repository's GitHub source ZIP is **not an executable installer**. Do not manually copy files into `/config/custom_components/`; HACS owns their upgrades.
 
-**Breaking change:** `jw_daily_hydration_log.log_drink` and drink events now require `liquid_type`. Existing automations calling them must be updated. The obsolete `hourly_pace` sensor is removed. Because deletes are permanent in the current storage, test deletion on a newly created test entry, not a valuable historical entry.
+## Backward compatibility and cautions
 
-**Rollback:** In HACS choose `v1.0.2` from the version selector and restart Home Assistant. Downgrading code does not automatically undo data already changed by the beta. To recover deleted or edited records, restore a separate HA backup; review all changes since that backup before restoring.
+- Integration domain remains `jw_daily_hydration_log`; entity IDs, config entries and storage keys remain intact.
+- Drink entries, archives, source readings and daily targets persist across the update. `custom_liquid_types` is an optional new storage key (empty until configured).
+- **Breaking API change introduced in beta.1:** service `jw_daily_hydration_log.log_drink` and drink events now require `liquid_type`. Values: `water`, `coffee`, `tea`, `milk`, `soup`, `other`, or an existing `custom_<id>` from this profile. Audit existing automations before upgrading.
+- Editing or deleting a drink changes stored history irreversibly within this integration; old values may still exist in HA backups or the Recorder. No hidden edit log is kept.
+- You may remove an unused custom liquid type; the backend prohibits removing one that has been used in saved drink history.
+- The updated Excel export contains **all stored records for all profiles**, including custom liquid definitions and SVG markup. It remains restricted to HA administrators.
+- Rollback **code** through HACS version selection to `v1.1.0-beta.1` or `v1.0.2` only after a current full backup. **Older versions may overwrite the new custom-type catalog when they save state; custom type definitions could be lost on downgrade.** Rolling back code never recovers edited/deleted records; restore the relevant separate HA backup to recover data.
 
-### Card YAML
+### Dashboard YAML (unchanged)
 
 ```yaml
 type: custom:jwdaily-hydration-log-card
@@ -49,16 +50,10 @@ show_manual: true
 show_history: true
 show_export: true
 unit: mL
-quick_add:
-  - 120
-  - 150
-  - 300
-  - 500
+quick_add: [120, 150, 300, 500]
 ```
 
-`profile: jan_willem` works when the display name is `Jan-Willem` because the integration uses Home Assistant's `slugify()`.
-
-### Updated service example
+### Service example
 
 ```yaml
 action: jw_daily_hydration_log.log_drink
@@ -69,10 +64,6 @@ data:
   unit: mL
 ```
 
-### Excel export
+## Quality & release policy
 
-Use the admin-only **Export all data to Excel (.xlsx)** button. Drink Moments contains the *current edited* entries only; deleted entries are absent. The adjustments worksheet contains explicit `set_consumed` and `reset` commands, not a hidden log of drink edits/deletions. The source readings sheet is unaffected.
-
-### Rollback via HACS
-
-In HACS use **⋮ → Redownload → Need a different version? → v1.0.2** and restart HA. This restores older **code**, not drink entries already edited or deleted by this beta. Restore a verified HA backup if you need historical values back.
+The beta branch must pass Python offline tests, JavaScript browser-shell tests, Home Assistant Hassfest and HACS Validation. Stable v1.0.2 stays unchanged until live acceptance on the HA system. PR reviews, tags and releases remain public on GitHub; updates are offered only through HACS.

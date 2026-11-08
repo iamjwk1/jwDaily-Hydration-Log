@@ -13,8 +13,8 @@ from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 from zoneinfo import ZoneInfo
 
-SHEETS = ["Profiles", "Drink Moments", "Daily Totals", "Source Readings", "Adjustments", "Export Info", "Daily Breakdown"]
-VERSION = "1.1.0"
+SHEETS = ["Profiles", "Drink Moments", "Daily Totals", "Source Readings", "Adjustments", "Export Info", "Daily Breakdown", "Liquid Types"]
+VERSION = "1.1.0-beta.2"
 
 
 def _xml(value: object) -> str:
@@ -119,16 +119,21 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
                      "Source sensor", "Source mode", "Display unit",
                      "Target mL", "Today consumed mL", "Today manual mL", "Today remaining mL", "Progress %"]]
     drink_rows = [["Record ID", "Timestamp (local)", "Profile", "Volume mL", "Entered volume", "Entered unit",
-                   "Liquid type", "Origin", "Details"]]
+                   "Liquid type", "Liquid name", "Origin", "Details"]]
     day_rows = [["Date", "Profile", "Manual mL", "Source mL", "Consumed mL", "Target mL", "Drink count",
                  "Closed at (local)", "Record type"]]
     source_rows = [["Record ID", "Timestamp (local)", "Profile", "Sensor", "Raw value", "Raw unit",
                     "Value mL", "Change mL", "Consumed after mL"]]
     correction_rows = [["Record ID", "Timestamp (local)", "Profile", "Action", "Value mL", "Before mL",
                         "After mL", "Origin", "Details"]]
-    breakdown_rows = [["Date", "Profile", "Water mL", "Coffee mL", "Tea mL", "Milk mL", "Soup mL", "Other mL", "Unknown legacy mL", "Total mL", "Drink count"]]
+    breakdown_rows = [["Date", "Profile", "Water mL", "Coffee mL", "Tea mL", "Milk mL", "Soup mL", "Other mL", "Unknown legacy mL", "Custom types mL", "Total mL", "Drink count"]]
+    type_rows = [["Profile", "Liquid ID", "Name", "MDI Icon", "SVG Image", "Default volume mL"]]
     for p in profiles:
         cfg = p["config"]
+        catalog = {x["id"]:x for x in p.get("custom_liquid_types", [])}
+        for typ in catalog.values():
+            type_rows.append([cfg["name"], typ["id"], typ["name"], typ.get("icon_mdi", ""),
+                              typ.get("icon_svg", ""), typ.get("default_volume_ml")])
         profile_rows.append([p["entry_id"], cfg["name"], p["slug"], cfg["age"], cfg["gender"],
                              cfg["pregnancy"], cfg["lactation"],
                              cfg["source_sensor"], cfg["source_mode"], cfg["unit"], p["target_ml"],
@@ -139,7 +144,9 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
             if record["kind"] == "drink":
                 drink_rows.append([record["id"], moment, cfg["name"], record.get("volume_ml", 0),
                                    record.get("input_volume", 0), record.get("input_unit", "mL"),
-                                   record.get("liquid_type", "unknown"), record.get("origin", ""),
+                                   record.get("liquid_type", "unknown"),
+                                   catalog.get(record.get("liquid_type", ""), {}).get("name",
+                                       record.get("liquid_type", "unknown")), record.get("origin", ""),
                                    json.dumps(record.get("details", {}), ensure_ascii=False)])
             if record["kind"] in ("reset", "set_consumed", "set_target"):
                 correction_rows.append([record["id"], moment, cfg["name"], record["kind"],
@@ -153,12 +160,12 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
             date = record.get("timestamp", "")[:10]
             typ = record.get("liquid_type", "unknown")
             if typ not in ("water", "coffee", "tea", "milk", "soup", "other"):
-                typ = "unknown"
+                typ = "custom" if typ in catalog else "unknown"
             key = (date, typ)
             daily_types[key] = daily_types.get(key, 0.0) + float(record.get("volume_ml", 0))
         for day in sorted({date for date, typ in daily_types}):
             row = [round(daily_types.get((day, typ), 0.0), 3)
-                   for typ in ("water", "coffee", "tea", "milk", "soup", "other", "unknown")]
+                   for typ in  ("water", "coffee", "tea", "milk", "soup", "other", "unknown", "custom")]
             breakdown_rows.append([_date_serial(day), cfg["name"], *row,
                                    round(sum(row), 3), sum(1 for r in p["records"]
                                      if r["kind"] == "drink" and r["timestamp"][:10] == day)])
@@ -184,15 +191,15 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
                  ["Legacy data", "Individual drink moments before installation were not stored by the original integration"],
                  ["Timestamp format", "Excel numeric local datetime; HH:MM:SS, Europe/Amsterdam unless configured otherwise"],
                  ["Data integrity", "Each drink is stored before UI refresh; no event limit or export truncation"]]
-    contents = [profile_rows, drink_rows, day_rows, source_rows, correction_rows, info_rows, breakdown_rows]
-    datetime_columns = [set(), {2}, {8}, {2}, {2}, set(), set()]
-    date_columns = [set(), set(), {1}, set(), set(), set(), {1}]
+    contents = [profile_rows, drink_rows, day_rows, source_rows, correction_rows, info_rows, breakdown_rows, type_rows]
+    datetime_columns = [set(), {2}, {8}, {2}, {2}, set(), set(), set()]
+    date_columns = [set(), set(), {1}, set(), set(), set(), {1}, set()]
     buffer = BytesIO()
     with ZipFile(buffer, "w", ZIP_DEFLATED, compresslevel=6) as archive:
         archive.writestr('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + ''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1, len(SHEETS) + 1)) + '</Types>')
         archive.writestr('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
         archive.writestr('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>' + ''.join(f'<sheet name="{_xml(name)}" sheetId="{i}" r:id="rId{i}"/>' for i, name in enumerate(SHEETS, 1)) + '</sheets></workbook>')
-        archive.writestr('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + ''.join(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(SHEETS) + 1)) + '<Relationship Id="rId8" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
+        archive.writestr('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + ''.join(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(SHEETS) + 1)) + '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
         archive.writestr('xl/styles.xml', STYLES)
         for i, rows in enumerate(contents, 1):
             archive.writestr(f'xl/worksheets/sheet{i}.xml', _worksheet(rows, datetime_columns[i-1], date_columns[i-1]))

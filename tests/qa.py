@@ -136,19 +136,54 @@ async def test_coordinator():
     await reloaded.async_add_drink(225,'mL','manual_backdate','water',day='06-11-2026',clock='10:30:25')
     check('Backdated registration never changes current day total',reloaded.consumed_ml==200
           and reloaded.daily_archive['2026-11-06']['manual_ml']==225)
+    kinds=reloaded.get_liquid_definitions()
+    check('Built-in catalog has six types and no automatic volumes',len(kinds)==6
+          and all(x['default_volume_ml'] is None for x in kinds))
+    testsvg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#48aaff"/></svg>'
+    custom=await reloaded.async_add_liquid_type('Citroenwater','',testsvg,250)
+    check('Custom SVG liquid stores own name, icon and default volume',custom['name']=='Citroenwater'
+          and custom['icon_svg']==testsvg and custom['default_volume_ml']==250 and custom['id'].startswith('custom_'))
+    try: await reloaded.async_add_liquid_type('Bad SVG','', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',100)
+    except ValueError: check('Reject scripts in SVG uploads',True)
+    else:check('Reject scripts in SVG uploads',False)
+    try: await reloaded.async_add_liquid_type('External SVG','', '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://evil.com/a"/></svg>',100)
+    except ValueError: check('Reject external SVG resources',True)
+    else:check('Reject external SVG resources',False)
+    try: await reloaded.async_add_liquid_type('Citroenwater','mdi:cup', '',200)
+    except ValueError:check('Reject duplicate custom liquid names',True)
+    else:check('Reject duplicate custom liquid names',False)
+    try: await reloaded.async_add_drink(100,'mL','dashboard','custom_unknown')
+    except ValueError: check('Reject non-existent custom liquid',True)
+    else:check('Reject non-existent custom liquid',False)
+    custom_drink=await reloaded.async_add_drink(250,'mL','dashboard',custom['id'])
+    check('Custom liquid drink saved in normal ledger',any(r['liquid_type']==custom['id'] for r in reloaded.get_history()))
+    try: await reloaded.async_delete_liquid_type(custom['id'])
+    except ValueError:check('Used liquid type cannot be removed',True)
+    else:check('Used liquid type cannot be removed',False)
+    await reloaded.async_shutdown()
+    reloaded=coordinator.HydrationCoordinator(h,FakeConfigEntry());await reloaded.async_initialize()
+    check('Custom SVG icon, volume and drink survive HA restart',any(x['id']==custom['id'] and x['icon_svg']==testsvg
+          and x['default_volume_ml']==250 for x in reloaded.custom_liquid_types) and
+          any(x['liquid_type']==custom['id'] for x in reloaded.get_history()))
     snap=reloaded.export_snapshot();payload=excel.export_xlsx([snap],'Europe/Amsterdam')
     with ZipFile(BytesIO(payload)) as z:
         check('Excel container ZIP CRC',z.testzip() is None)
-        files=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,8)]
-        check('Seven Excel worksheets present',all(k in z.namelist() for k in files))
+        files=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,9)]
+        check('Eight Excel worksheets present',all(k in z.namelist() for k in files))
         for f in files:ET.fromstring(z.read(f))
-        check('Seven worksheets valid XML',True)
+        check('Eight worksheets valid XML',True)
         ws=z.read('xl/worksheets/sheet2.xml').decode()
         check('Deleted old drinks absent from Excel',ids[1] not in ws and ids[2] not in ws)
         check('Updated type and volume exported', 'soup' in ws and '<v>180' in ws)
         breakdown=z.read('xl/worksheets/sheet7.xml').decode()
         check('Liquid type breakdown exported with unknown legacy', 'Unknown legacy mL' in breakdown)
-        check('Excel dates native with DD-MM-YYYY number format', 's="4"' in breakdown and 'formatCode="dd-mm-yyyy"' in z.read('xl/styles.xml').decode())
+        catalog_sheet=z.read('xl/worksheets/sheet8.xml').decode()
+        check('Custom liquid catalog exported with SVG and default volume',
+              'Citroenwater' in catalog_sheet and 'circle' in catalog_sheet and '<v>250' in catalog_sheet)
+        check('Excel dates native with DD-MM-YYYY number format' , 's="4"' in breakdown and 'formatCode="dd-mm-yyyy"' in z.read('xl/styles.xml').decode())
+    await reloaded.async_delete_drink(custom_drink['id'])
+    await reloaded.async_delete_liquid_type(custom['id'])
+    check('Unused custom type can be permanently removed',not any(x['id']==custom['id'] for x in reloaded.custom_liquid_types))
     await reloaded.async_shutdown()
 
 asyncio.run(test_coordinator())
