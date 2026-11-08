@@ -14,7 +14,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from zoneinfo import ZoneInfo
 
 SHEETS = ["Profiles", "Drink Moments", "Daily Totals", "Source Readings", "Adjustments", "Export Info", "Daily Breakdown", "Liquid Types"]
-VERSION = "1.1.0-beta.2"
+VERSION = "1.1.0-beta.3"
 
 
 def _xml(value: object) -> str:
@@ -126,7 +126,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
                     "Value mL", "Change mL", "Consumed after mL"]]
     correction_rows = [["Record ID", "Timestamp (local)", "Profile", "Action", "Value mL", "Before mL",
                         "After mL", "Origin", "Details"]]
-    breakdown_rows = [["Date", "Profile", "Water mL", "Coffee mL", "Tea mL", "Milk mL", "Soup mL", "Other mL", "Unknown legacy mL", "Custom types mL", "Total mL", "Drink count"]]
+    breakdown_rows = [["Date", "Profile", "Water mL", "Coffee mL", "Tea mL", "Milk mL", "Soup mL", "Wine mL", "Other mL", "Unknown legacy mL", "Custom types mL", "Total mL", "Drink count"]]
     type_rows = [["Profile", "Liquid ID", "Name", "MDI Icon", "SVG Image", "Default volume mL"]]
     for p in profiles:
         cfg = p["config"]
@@ -159,13 +159,13 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
                 continue
             date = record.get("timestamp", "")[:10]
             typ = record.get("liquid_type", "unknown")
-            if typ not in ("water", "coffee", "tea", "milk", "soup", "other"):
+            if typ not in ("water", "coffee", "tea", "milk", "soup", "wine", "other"):
                 typ = "custom" if typ in catalog else "unknown"
             key = (date, typ)
             daily_types[key] = daily_types.get(key, 0.0) + float(record.get("volume_ml", 0))
         for day in sorted({date for date, typ in daily_types}):
             row = [round(daily_types.get((day, typ), 0.0), 3)
-                   for typ in  ("water", "coffee", "tea", "milk", "soup", "other", "unknown", "custom")]
+                   for typ in  ("water", "coffee", "tea", "milk", "soup", "wine", "other", "unknown", "custom")]
             breakdown_rows.append([_date_serial(day), cfg["name"], *row,
                                    round(sum(row), 3), sum(1 for r in p["records"]
                                      if r["kind"] == "drink" and r["timestamp"][:10] == day)])

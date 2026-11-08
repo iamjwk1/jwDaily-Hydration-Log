@@ -60,8 +60,9 @@ _SVG_ATTRS = {'xmlns', 'viewBox', 'width', 'height', 'd', 'points', 'cx', 'cy',
               'gradientUnits', 'gradientTransform'}
 _BUILTIN_LIQUIDS = (
     ('water', 'Water', 'mdi:water'), ('coffee', 'Coffee', 'mdi:coffee'),
-    ('tea', 'Tea', 'mdi:tea'), ('milk', 'Milk', 'mdi:glass-mug-variant'),
-    ('soup', 'Soup', 'mdi:food-soup'), ('other', 'Other', 'mdi:glass-cocktail'),
+    ('tea', 'Tea', 'mdi:tea'), ('milk', 'Milk', 'mdi:cow'),
+    ('soup', 'Soup', 'mdi:bowl-mix'), ('wine', 'Wine', 'mdi:glass-wine'),
+    ('other', 'Other', 'mdi:glass-water'),
 )
 
 
@@ -501,6 +502,21 @@ class HydrationCoordinator:
                        liquid_type=r.get('liquid_type', 'unknown'), origin=r.get('origin', ''))
                   for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
         return sorted(values, key=lambda r: (r['timestamp'],r['id']))
+
+    def today_breakdown(self) -> list[dict]:
+        """Fresh current-day totals by stored liquid type, independent of history pagination.
+
+        Only individually logged drink moments can be attributed; never guess the
+        type of external source-sensor measurements or pre-v1.1.0 records.
+        """
+        totals: dict[str, float] = {}
+        for record in self.records:
+            if record.get('kind') != 'drink' or record.get('timestamp', '')[:10] != self._today():
+                continue
+            liquid = record.get('liquid_type', 'unknown')
+            totals[liquid] = totals.get(liquid, 0.0) + float(record.get('volume_ml', 0))
+        return [dict(liquid_type=key, volume_ml=round(volume, 3))
+                for key, volume in sorted(totals.items()) if volume > 0]
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}

@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.3 (HACS pre-release)
+- Save now verifies the running Python backend version first. Stale backends produce a restart instruction instead of generic `Unknown command` and no partial write is attempted.
+- Add/Edit popup now has a complete calendar picker displaying `DD-MM-YYYY`; time remains in 24h format.
+- New current-day liquid-by-type bar chart. Main card displays blue consumed volume aligned with animated fill, red target label and black remaining volume inside glass. Target line stays ~15 px lower and glass rim open.
+- Remove redundant totals beneath history; compact Excel export button.
+- Built-in Wine type and cow, soup-bowl and ordinary water-glass icons; Excel daily breakdown includes Wine.
+- All profile data and existing v1.1.0-beta.2 registrations remain stored unchanged. Release via HACS only.
+
 ## v1.1.0-beta.2 (HACS pre-release)
 - Compact glass/history/Add card; same Add/Edit popup; larger liquid icons.
 - Custom liquid types with name, MDI icon or SVG file, and optional default volume, stored per profile.

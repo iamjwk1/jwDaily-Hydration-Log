@@ -136,8 +136,16 @@ async def test_coordinator():
     await reloaded.async_add_drink(225,'mL','manual_backdate','water',day='06-11-2026',clock='10:30:25')
     check('Backdated registration never changes current day total',reloaded.consumed_ml==200
           and reloaded.daily_archive['2026-11-06']['manual_ml']==225)
+    check('Today breakdown derives from current day only',
+          reloaded.today_breakdown()==[{'liquid_type':'milk','volume_ml':200.0}])
+    wine=await reloaded.async_add_drink(75,'mL','dashboard','wine')
+    check('Wine recorded as distinct type and appears in today breakdown',
+          any(x['liquid_type']=='wine' and x['volume_ml']==75 for x in reloaded.today_breakdown()))
+    await reloaded.async_delete_drink(wine['id'])
+    check('Wine removal correctly updates today breakdown',
+          not any(x['liquid_type']=='wine' for x in reloaded.today_breakdown()))
     kinds=reloaded.get_liquid_definitions()
-    check('Built-in catalog has six types and no automatic volumes',len(kinds)==6
+    check('Built-in catalog has seven types including wine and no automatic volumes',len(kinds)==7 and any(x['id']=='wine' and x['icon_mdi']=='mdi:glass-wine' for x in kinds)
           and all(x['default_volume_ml'] is None for x in kinds))
     testsvg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#48aaff"/></svg>'
     custom=await reloaded.async_add_liquid_type('Citroenwater','',testsvg,250)
@@ -176,7 +184,7 @@ async def test_coordinator():
         check('Deleted old drinks absent from Excel',ids[1] not in ws and ids[2] not in ws)
         check('Updated type and volume exported', 'soup' in ws and '<v>180' in ws)
         breakdown=z.read('xl/worksheets/sheet7.xml').decode()
-        check('Liquid type breakdown exported with unknown legacy', 'Unknown legacy mL' in breakdown)
+        check('Liquid type breakdown exported with wine and unknown legacy', 'Unknown legacy mL' in breakdown and 'Wine mL' in breakdown)
         catalog_sheet=z.read('xl/worksheets/sheet8.xml').decode()
         check('Custom liquid catalog exported with SVG and default volume',
               'Citroenwater' in catalog_sheet and 'circle' in catalog_sheet and '<v>250' in catalog_sheet)

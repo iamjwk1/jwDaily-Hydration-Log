@@ -3,14 +3,14 @@ from __future__ import annotations
 
 DOMAIN = 'jw_daily_hydration_log'
 NAME = 'jwDaily Hydration Log'
-VERSION = '1.1.0-beta.2'
+VERSION = '1.1.0-beta.3'
 PLATFORMS = ['sensor', 'number']
 ENTITY_PREFIX = 'jwdhl'
 EVENT_DRINK = 'jw_daily_hydration_log_drink'
 SIGNAL = 'jw_daily_hydration_log_updated_{}'
 UNITS = ('mL', 'L', 'fl_oz')
 SOURCE_MODES = ('absolute', 'delta', 'sum')
-LIQUID_TYPES = ('water', 'coffee', 'tea', 'milk', 'soup', 'other')
+LIQUID_TYPES = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 
 NASEM_TABLE = ((1,3,None,900),(4,8,None,1200),(9,13,'male',1900),
                (9,13,'female',1600),(14,18,'male',2600),(14,18,'female',1800),

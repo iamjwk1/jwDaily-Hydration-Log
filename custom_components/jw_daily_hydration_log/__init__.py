@@ -91,6 +91,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         hass.async_create_task(c.async_add_drink(volume,unit,'event',liquid_type))
 
     hass.bus.async_listen(EVENT_DRINK,on_drink_event)
+    websocket_api.async_register_command(hass,ws_capabilities)
     websocket_api.async_register_command(hass,ws_add_drink)
     websocket_api.async_register_command(hass,ws_edit_drink)
     websocket_api.async_register_command(hass,ws_delete_drink)
@@ -130,6 +131,14 @@ async def async_unload_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     return ok
 
 
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/capabilities'})
+@callback
+def ws_capabilities(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    """Confirm that the Python backend matches the frontend before any write."""
+    connection.send_result(msg['id'],{'version':VERSION,'add_drink':True,
+                                      'edit_drink':True,'custom_liquid_types':True})
+
+
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/history',probatio.Required('profile'):str,
                                   probatio.Optional('date'):str})
 @callback
@@ -146,6 +155,8 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'count':len(records),'total_ml':round(sum(x['volume_ml'] for x in records),2),
         'consumed_ml':round(c.consumed_ml,2),'target_ml':c.target_ml,
         'liquid_types':c.get_liquid_definitions(),
+        'today_breakdown':c.today_breakdown(),
+        'backend_version':VERSION,
     })
 
 
