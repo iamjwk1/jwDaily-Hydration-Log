@@ -37,7 +37,7 @@ def manifest_check(archive):
     for name, expected in listed.items():
         if name.startswith('/') or '..' in Path(name).parts or '\\' in name:
             raise RuntimeError('Unsafe path in ZIP: '+name)
-        if not (name=='__main__.py' or name.startswith(ROOTS) or name.startswith('tests/') or name in ('README.md','LICENSE','LICENSE-UPSTREAM-MIT','hacs.json')):
+        if not (name=='__main__.py' or name.startswith(ROOTS) or name.startswith('tests/') or name in ('README.md','CHANGELOG.md','LICENSE','LICENSE-UPSTREAM-MIT','hacs.json')):
             raise RuntimeError('Unapproved archive member: '+name)
         data=archive.read(name)
         if sha(data)!=expected['sha256'] or len(data)!=expected['size']:
