@@ -60,8 +60,8 @@ jobs:
         run: |
           if gh release view v1.1.0-beta.1 >/dev/null 2>&1; then
             echo 'Pre-release already exists; leaving it unchanged.'
-            gh release view v1.1.0-beta.1 --json tagName,isPrerelease,isLatest,url
+            gh release view v1.1.0-beta.1 --json tagName,isPrerelease,url
             exit 0
           fi
           gh release create v1.1.0-beta.1 --target "$GITHUB_SHA" --title 'jwDaily Hydration Log v1.1.0-beta.1' --prerelease --latest=false --notes-file RELEASE_NOTES_v1.1.0-beta.1.md
-          gh release view v1.1.0-beta.1 --json tagName,isPrerelease,isLatest,url
+          gh release view v1.1.0-beta.1 --json tagName,isPrerelease,url
