@@ -1,0 +1,63 @@
+blueprint:
+  name: jwDaily Hydration Log - Confirmed mobile reminder
+  description: >-
+    Send an actionable mobile app notification, and log the chosen volume only
+    after the user confirms drinking it. No confirmation means no new event.
+  domain: automation
+  input:
+    profile:
+      name: jwDaily Hydration Log profile
+      description: The person slug, e.g. jan_willem
+      selector:
+        text:
+    notify_service:
+      name: Mobile notification service
+      description: e.g. notify.mobile_app_phone
+      selector:
+        text:
+    drink_volume:
+      name: Volume when confirmed (mL)
+      default: 250
+      selector:
+        number: {min: 1, max: 5000, step: 1, unit_of_measurement: mL, mode: box}
+    triggers:
+      name: When to send the reminder
+      selector:
+        trigger:
+trigger: !input triggers
+variables:
+  jwdhl_profile: !input profile
+  jwdhl_notify: !input notify_service
+  jwdhl_volume: !input drink_volume
+  jwdhl_tag: "jwdhl_{{ jwdhl_profile }}_{{ now().timestamp() | int }}_{{ context.id }}"
+  jwdhl_action: "DHL_DRANK_{{ jwdhl_tag }}"
+action:
+  - service: "notify.{{ jwdhl_notify | regex_replace('^notify\\.', '') }}"
+    data:
+      title: "Time for water 💧"
+      message: "Have you had {{ jwdhl_volume }} mL of water?"
+      data:
+        tag: "{{ jwdhl_tag }}"
+        actions:
+          - action: "{{ jwdhl_action }}"
+            title: "I drank {{ jwdhl_volume }} mL"
+  - wait_for_trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ jwdhl_action }}"
+    timeout:
+      hours: 2
+    continue_on_timeout: true
+  - choose:
+      - conditions:
+          - "{{ wait.trigger is not none }}"
+        sequence:
+          - action: jw_daily_hydration_log.log_drink
+            data:
+              profile: "{{ jwdhl_profile }}"
+              volume: "{{ jwdhl_volume }}"
+              unit: mL
+              origin: mobile_notification
+mode: parallel
+max: 10

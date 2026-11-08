@@ -1,0 +1,19 @@
+{
+  "domain": "jw_daily_hydration_log",
+  "name": "jwDaily Hydration Log",
+  "codeowners": [
+    "@iamjwk1"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "http",
+    "frontend",
+    "lovelace"
+  ],
+  "documentation": "https://github.com/iamjwk1/jwDaily-Hydration-Log",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": [],
+  "version": "1.0.2",
+  "issue_tracker": "https://github.com/iamjwk1/jwDaily-Hydration-Log/issues"
+}

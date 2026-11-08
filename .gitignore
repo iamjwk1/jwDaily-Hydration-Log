@@ -1,0 +1,13 @@
+# Home Assistant and Python runtime artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.env.*
+.storage/
+/config/
+/backup/
+*.log
+*.xlsx
+.DS_Store

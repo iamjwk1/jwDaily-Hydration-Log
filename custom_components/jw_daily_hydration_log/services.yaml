@@ -1,0 +1,48 @@
+log_drink:
+  name: Log drink
+  description: Add a drink to a profile and permanently record its timestamp and volume.
+  fields:
+    profile:
+      name: Profile
+      required: true
+      selector: {text: {}}
+    volume:
+      name: Volume
+      required: true
+      selector: {number: {min: 0.01, max: 100000, mode: box}}
+    unit:
+      name: Unit
+      default: mL
+      selector:
+        select:
+          options: [mL, L, fl_oz]
+    origin:
+      name: Origin
+      description: Optional provenance (e.g. dashboard, automation).
+      selector: {text: {}}
+reset_today:
+  name: Reset today
+  description: Reset today while retaining the full activity ledger and previous snapshot.
+  fields:
+    profile:
+      name: Profile
+      required: true
+      selector: {text: {}}
+set_consumed:
+  name: Set consumed
+  description: Set an absolute total; correction is recorded in the ledger.
+  fields:
+    profile:
+      name: Profile
+      required: true
+      selector: {text: {}}
+    volume:
+      name: Volume
+      required: true
+      selector: {number: {min: 0, max: 100000, mode: box}}
+    unit:
+      name: Unit
+      default: mL
+      selector:
+        select:
+          options: [mL, L, fl_oz]

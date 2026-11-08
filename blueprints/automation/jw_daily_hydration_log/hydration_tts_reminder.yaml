@@ -1,0 +1,80 @@
+blueprint:
+  name: jwDaily Hydration Log - TTS reminder
+  description: >-
+    Speak current hydration progress using an existing TTS service and speaker.
+    Quiet hours can differ from the profile's pace window.
+  domain: automation
+  input:
+    name:
+      name: Name to announce
+      default: ""
+      selector:
+        text:
+    tts_service:
+      name: TTS service
+      description: e.g. tts.google_translate_say or tts.cloud_say
+      selector:
+        text:
+    media_player:
+      name: Media player(s)
+      selector:
+        entity: {domain: media_player, multiple: true}
+    consumed_sensor:
+      name: DHL consumed-today sensor
+      selector:
+        entity: {domain: sensor}
+    remaining_sensor:
+      name: DHL remaining sensor
+      selector:
+        entity: {domain: sensor}
+    progress_sensor:
+      name: DHL progress sensor
+      selector:
+        entity: {domain: sensor}
+    quiet_after_complete:
+      name: Skip when goal completed
+      default: true
+      selector:
+        boolean:
+    earliest_hour:
+      name: Earliest hour
+      default: 8
+      selector:
+        number: {min: 0, max: 23, mode: slider}
+    latest_hour:
+      name: Latest hour
+      default: 21
+      selector:
+        number: {min: 0, max: 23, mode: slider}
+    triggers:
+      name: When to speak
+      selector:
+        trigger:
+trigger: !input triggers
+variables:
+  person_name: !input name
+  speech_service: !input tts_service
+  consumed_entity: !input consumed_sensor
+  remaining_entity: !input remaining_sensor
+  progress_entity: !input progress_sensor
+  quiet_after_complete: !input quiet_after_complete
+  earliest_hour: !input earliest_hour
+  latest_hour: !input latest_hour
+condition:
+  - condition: template
+    value_template: "{{ now().hour >= earliest_hour and now().hour <= latest_hour }}"
+  - condition: template
+    value_template: "{{ not (quiet_after_complete and (states(progress_entity) | float(0)) >= 100) }}"
+action:
+  - variables:
+      consumed: "{{ states(consumed_entity) }}"
+      remaining: "{{ states(remaining_entity) }}"
+      unit: "{{ state_attr(remaining_entity, 'unit_of_measurement') or 'mL' }}"
+  - service: "tts.{{ speech_service | regex_replace('^tts\\.', '') }}"
+    data:
+      entity_id: !input media_player
+      message: >-
+        {% if person_name %}{{ person_name }}, {% endif %}
+        you have consumed {{ consumed }} {{ unit }} today.
+        {{ remaining }} {{ unit }} remains towards your daily goal.
+mode: single
