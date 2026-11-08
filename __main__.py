@@ -70,7 +70,8 @@ def preflight(config,archive,version):
     if old_fork:print('WARNING: old fork history/config is NOT imported. Do not remove it before migration review.')
     print('Existing fork paths:',existing or 'none')
     print('Will NOT modify upstream PHM or any dashboard YAML.')
-    print('Next action only with explicit --apply:',f'python3 {sys.argv[0]!r} --apply')
+    next_flag = '--upgrade' if existing else '--apply'
+    print('Next action only after approval:', f'python3 {sys.argv[0]!r} {next_flag}')
     return existing
 
 
@@ -168,7 +169,7 @@ def install(config, backup_dir, archive, upgrade):
                  f'HA CORE CHECK: {checker}\nBACKUP: {backup_path}\n'
                  f'BACKUP SHA256: {sha(backup_path.read_bytes())}\n'
                  f'UPSTREAM MODIFIED: NO\nRESTART AUTOMATICALLY PERFORMED: NO\n'
-                 f'Next: restart Home Assistant after confirming check PASS; add jwDaily Hydration Log profile.\n')
+                 f'Next: restart Home Assistant after confirming check PASS; keep existing profile if already configured.\n')
             report=config/f'{stamp()} jwDaily Hydration Log Install Result v1.1.0.txt'
             report.write_text(msg,encoding='utf8')
             print(msg,'REPORT:',report)
