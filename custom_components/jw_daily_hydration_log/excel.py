@@ -127,7 +127,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
     correction_rows = [["Record ID", "Timestamp (local)", "Profile", "Action", "Value mL", "Before mL",
                         "After mL", "Origin", "Details"]]
     breakdown_rows = [["Date", "Profile", "Water mL", "Coffee mL", "Tea mL", "Milk mL", "Soup mL", "Wine mL", "Other mL", "Unknown legacy mL", "Custom types mL", "Total mL", "Drink count"]]
-    type_rows = [["Profile", "Liquid ID", "Name", "MDI Icon", "SVG Image", "Default volume mL", "Custom", "Button order"]]
+    type_rows = [["Profile", "Liquid ID", "Name", "MDI Icon", "SVG Image", "Default volume mL", "Custom", "Button order", "Visible in picker"]]
     button_rows = [["Profile", "Position", "Volume mL", "Custom configured"]]
     for p in profiles:
         cfg = p["config"]
@@ -136,7 +136,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
         for position, typ in enumerate(definitions, 1):
             type_rows.append([cfg["name"], typ["id"], typ["name"], typ.get("icon_mdi", ""),
                               typ.get("icon_svg", ""), typ.get("default_volume_ml"),
-                              bool(typ.get("custom", False)), position])
+                              bool(typ.get("custom", False)), position, not bool(typ.get("hidden", False))])
         volumes = p.get("volume_buttons")
         if volumes is None:
             button_rows.append([cfg["name"], "", "Uses dashboard quick_add", False])

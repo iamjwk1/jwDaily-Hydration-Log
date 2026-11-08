@@ -172,6 +172,18 @@ async def test_coordinator():
     builtin=await reloaded.async_update_liquid_type('water','Spring water','mdi:water-plus','',330)
     check('Built-in liquid renamed and default volume added without replacing its ID',
           builtin['id']=='water' and builtin['name']=='Spring water' and builtin['default_volume_ml']==330)
+    before_hidden_ids=[item['id'] for item in reloaded.get_history()]
+    hidden=await reloaded.async_set_builtin_liquid_visibility('water',False)
+    check('Delete built-in hides picker button without deleting definition',hidden['hidden'] is True
+          and next(x for x in reloaded.get_liquid_definitions() if x['id']=='water')['hidden'] is True)
+    check('Deleting builtin does not delete or retype drink history',
+          [item['id'] for item in reloaded.get_history()]==before_hidden_ids)
+    try: await reloaded.async_set_builtin_liquid_visibility(custom['id'],False)
+    except ValueError:check('Cannot soft-hide custom type using built-in API',True)
+    else:check('Cannot soft-hide custom type using built-in API',False)
+    try: await reloaded.async_set_builtin_liquid_visibility('water','false')
+    except ValueError:check('Visibility requires actual boolean',True)
+    else:check('Visibility requires actual boolean',False)
     custom_changed=await reloaded.async_update_liquid_type(custom['id'],'Citroenwater XL','',testsvg,275)
     check('Custom SVG liquid can be renamed with new default and stable ID',
           custom_changed['id']==custom['id'] and custom_changed['default_volume_ml']==275 and
@@ -199,6 +211,9 @@ async def test_coordinator():
           reloaded.get_liquid_definitions()[0]['id']==custom['id'] and
           next(x for x in reloaded.get_liquid_definitions() if x['id']=='water')['name']=='Spring water' and
           reloaded.volume_buttons==[333,120,250])
+    check('Hidden built-in choice persists after HA restart',
+          'water' in reloaded.hidden_builtin_liquids and
+          next(x for x in reloaded.get_liquid_definitions() if x['id']=='water')['hidden'])
     check('Custom SVG icon, volume and drink survive HA restart',any(x['id']==custom['id'] and x['icon_svg']==testsvg
           and x['default_volume_ml']==275 for x in reloaded.custom_liquid_types) and
           any(x['liquid_type']==custom['id'] for x in reloaded.get_history()))
@@ -220,12 +235,18 @@ async def test_coordinator():
         pref_sheet=z.read('xl/worksheets/sheet9.xml').decode()
         check('Saved volume button order exported to ninth sheet',
               'Volume mL' in pref_sheet and '<v>333' in pref_sheet and '<v>120' in pref_sheet)
+        check('Visibility status included in Excel liquid catalog',
+              'Visible in picker' in catalog_sheet and 'Spring water' in catalog_sheet)
         check('Edited built-in name, icon and order exported',
               'Spring water' in catalog_sheet and 'mdi:water-plus' in catalog_sheet and 'Button order' in catalog_sheet)
         workbook_rels=z.read('xl/_rels/workbook.xml.rels').decode()
         check('Styles relationship distinct from all nine worksheet IDs',
               'Id="rId10"' in workbook_rels)
         check('Excel dates native with DD-MM-YYYY number format' , 's="4"' in breakdown and 'formatCode="dd-mm-yyyy"' in z.read('xl/styles.xml').decode())
+    restored=await reloaded.async_set_builtin_liquid_visibility('water',True)
+    check('Restore re-enables built-in selection without losing custom display data',
+          restored['hidden'] is False and restored['name']=='Spring water' and
+          len(reloaded.get_history())>0)
     await reloaded.async_delete_drink(custom_drink['id'])
     await reloaded.async_delete_liquid_type(custom['id'])
     check('Unused custom type can be permanently removed',not any(x['id']==custom['id'] for x in reloaded.custom_liquid_types))

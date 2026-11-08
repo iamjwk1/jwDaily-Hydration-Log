@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.5 (HACS pre-release)
+- Added **Delete** to all installation-provided liquid types. Deleting a built-in removes its selection button, not its stable ID, history, historical totals or Excel data. A **Restore** control is provided in the manager. Changes persist by profile across HA restarts.
+- The manager provides a confirmation before deleting a type; custom types continue to be deleted physically only when unused.
+- Fixed the Manage liquid edit layout: two short columns, labels no longer awkwardly wrap and SVG input has an entire row with visible picker controls.
+- Reworked hero grid and liquid bar chart to fit dashboard width; right-aligned Add, left-aligned history date and Excel button, scrollable history area enlarged.
+- Added Excel visibility status (Liquid Types tab), plus backend and frontend regression tests for hide/restore and old record preservation.
+- All original Personal Hydration Manager code and stored jwDaily Hydration Log drink events remain untouched by code publication.
+
 ## v1.1.0-beta.4 (HACS pre-release)
 - Added persistent profile-level administration of built-in and custom liquid labels, MDI/SVG icons, default volumes, and button ordering while preserving stable history IDs.
 - Added 0–24 customizable, reorderable quick-add volume buttons with add/edit/delete UI and persistent profile storage. Original per-card `quick_add` remains the fallback until customized.

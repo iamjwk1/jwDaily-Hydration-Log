@@ -99,6 +99,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_add_liquid_type)
     websocket_api.async_register_command(hass,ws_delete_liquid_type)
     websocket_api.async_register_command(hass,ws_update_liquid_type)
+    websocket_api.async_register_command(hass,ws_set_builtin_liquid_visibility)
     websocket_api.async_register_command(hass,ws_set_liquid_order)
     websocket_api.async_register_command(hass,ws_set_volume_buttons)
     websocket_api.async_register_command(hass,ws_export)
@@ -139,7 +140,7 @@ async def async_unload_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
 def ws_capabilities(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
     """Confirm that the Python backend matches the frontend before any write."""
     connection.send_result(msg['id'],{'version':VERSION,'add_drink':True,
-                                      'edit_drink':True,'custom_liquid_types':True})
+                                      'edit_drink':True,'custom_liquid_types':True,'builtin_liquid_visibility':True})
 
 
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/history',probatio.Required('profile'):str,
@@ -267,6 +268,22 @@ async def ws_update_liquid_type(hass:HomeAssistant,connection:websocket_api.Acti
             msg.get('icon_svg',''),msg.get('default_volume_ml'))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
+        return
+    connection.send_result(msg['id'],item)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_builtin_liquid_visibility',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('liquid_type'):str,
+                                  probatio.Required('visible'):bool})
+@websocket_api.async_response
+async def ws_set_builtin_liquid_visibility(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        item=await _resolve(hass,msg['profile']).async_set_builtin_liquid_visibility(
+            msg['liquid_type'],msg['visible'])
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_builtin_visibility',str(exc))
         return
     connection.send_result(msg['id'],item)
 

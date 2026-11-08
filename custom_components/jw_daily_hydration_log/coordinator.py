@@ -136,6 +136,7 @@ class HydrationCoordinator:
         self.custom_liquid_types: list[dict[str, Any]] = []
         # Profile-scoped settings; stable liquid IDs preserve all old drink records.
         self.liquid_overrides: dict[str, dict[str, Any]] = {}
+        self.hidden_builtin_liquids: list[str] = []
         self.liquid_order: list[str] = []
         # None means follow the existing dashboard's quick_add YAML until customized.
         self.volume_buttons: list[float] | None = None
@@ -222,6 +223,8 @@ class HydrationCoordinator:
             self.daily_archive = dict(saved.get('daily_archive',{}))
             self.custom_liquid_types = list(saved.get('custom_liquid_types', []))
             self.liquid_overrides = dict(saved.get('liquid_overrides') or {})
+            self.hidden_builtin_liquids = [ident for ident in (saved.get('hidden_builtin_liquids') or [])
+                                           if ident in LIQUID_TYPES]
             self.liquid_order = list(saved.get('liquid_order') or [])
             if saved.get('volume_buttons') is not None:
                 self.volume_buttons = list(saved['volume_buttons'])
@@ -453,6 +456,7 @@ class HydrationCoordinator:
             custom_liquid_types=self.custom_liquid_types,
             liquid_overrides=self.liquid_overrides,
             liquid_order=self.liquid_order,
+            hidden_builtin_liquids=self.hidden_builtin_liquids,
             volume_buttons=self.volume_buttons))
 
     @callback
@@ -462,11 +466,11 @@ class HydrationCoordinator:
     def get_liquid_definitions(self) -> list[dict]:
         """Ordered definitions, merging built-in display overrides with stable IDs."""
         base = [dict(id=key, name=name, icon_mdi=icon, icon_svg='',
-                     default_volume_ml=None, custom=False)
+                     default_volume_ml=None, custom=False, hidden=key in self.hidden_builtin_liquids)
                 for key, name, icon in _BUILTIN_LIQUIDS]
         for item in base:
             item.update(self.liquid_overrides.get(item['id'], {}))
-        items = base + [dict(item) for item in self.custom_liquid_types]
+        items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
         priority = {ident: index for index, ident in enumerate(self.liquid_order)}
         fallback = {item['id']: index for index, item in enumerate(items)}
         return sorted(items, key=lambda item: priority.get(item['id'], len(priority) + fallback[item['id']]))
@@ -552,6 +556,26 @@ class HydrationCoordinator:
             self._dispatch()
             return next(item for item in self.get_liquid_definitions() if item['id'] == liquid_type)
 
+    async def async_set_builtin_liquid_visibility(self, liquid_type: str, visible: bool) -> dict:
+        """Remove or restore a built-in button without deleting historical records.
+
+        Built-in IDs are part of historical drink data and service contracts. Hiding
+        removes the type from the picker only, while preserving the definition for
+        past records, the today chart, Excel and explicit recovery.
+        """
+        if liquid_type not in LIQUID_TYPES or type(visible) is not bool:
+            raise ValueError('Expected a built-in liquid and a boolean visibility')
+        async with self._lock:
+            hidden = set(self.hidden_builtin_liquids)
+            if visible:
+                hidden.discard(liquid_type)
+            else:
+                hidden.add(liquid_type)
+            self.hidden_builtin_liquids = [key for key, _, _ in _BUILTIN_LIQUIDS if key in hidden]
+            await self._save()
+            self._dispatch()
+            return next(item for item in self.get_liquid_definitions() if item['id'] == liquid_type)
+
     async def async_set_liquid_order(self, ordered_ids: list[str]) -> list[str]:
         """Replace the entire catalog order atomically, rejecting stale lists."""
         async with self._lock:
@@ -611,4 +635,5 @@ class HydrationCoordinator:
                     daily_archive={key:dict(val) for key,val in self.daily_archive.items()},
                     custom_liquid_types=[dict(item) for item in self.custom_liquid_types],
                     liquid_definitions=self.get_liquid_definitions(),
+                    hidden_builtin_liquids=list(self.hidden_builtin_liquids),
                     volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons))

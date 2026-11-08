@@ -1,4 +1,4 @@
-/* jwDaily beta4 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta5 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -15,7 +15,7 @@ const history=[];let seq=0;let storedVolumes=null;
 const catalog=[
  ['water','Water','mdi:water'],['coffee','Coffee','mdi:coffee'],['tea','Tea','mdi:tea'],
  ['milk','Milk','mdi:cow'],['soup','Soup','mdi:bowl-mix'],['wine','Wine','mdi:glass-wine'],['other','Other','mdi:glass-water']
-].map(([id,name,icon_mdi])=>({id,name,icon_mdi,icon_svg:'',default_volume_ml:null,custom:false}));
+].map(([id,name,icon_mdi])=>({id,name,icon_mdi,icon_svg:'',default_volume_ml:null,custom:false,hidden:false}));
 const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_daily_target':{state:'3000',attributes:{target_ml:3000}},
  'sensor.jwdhl_jan_willem_consumed_today':{state:'0',attributes:{consumed_ml:0}},
@@ -23,11 +23,11 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.4',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.5',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:history.map(x=>({...x})),
    total_ml:history.reduce((a,r)=>a+r.volume_ml,0),liquid_types:catalog.map(x=>({...x})),
    today_breakdown:history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]),
-   volume_buttons:storedVolumes,backend_version:'1.1.0-beta.4'};
+   volume_buttons:storedVolumes,backend_version:'1.1.0-beta.5'};
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
      default_volume_ml:msg.default_volume_ml??null,custom:true};catalog.push(item);return item;
@@ -39,6 +39,9 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
    const keys=msg.order;assert.strictEqual(keys.length,catalog.length);
    const old=[...catalog];catalog.splice(0,catalog.length,...keys.map(k=>old.find(x=>x.id===k)));
    return {order:keys};}
+  if(msg.type==='jw_daily_hydration_log/set_builtin_liquid_visibility'){
+   const found=catalog.find(x=>x.id===msg.liquid_type && !x.custom);
+   assert(found,'Known built-in liquid');found.hidden=!msg.visible;return {...found};}
   if(msg.type==='jw_daily_hydration_log/set_volume_buttons'){
    storedVolumes=[...msg.volumes];return {volumes:storedVolumes};}
   if(msg.type==='jw_daily_hydration_log/delete_liquid_type'){
@@ -72,8 +75,13 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.4'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.5'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
+ assert(c.shadowRoot.innerHTML.includes('justify-content:flex-end}.register .add-drink'));
+ assert(c.shadowRoot.innerHTML.includes('justify-content:flex-start;gap:5px'));
+ assert(c.shadowRoot.innerHTML.includes('padding-top:10px;text-align:left'));
+ console.log('PASS: modified dashboard layout preserves right-aligned Add and left-aligned history/export controls');
+
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));
  assert(c._glass(10,2700,3000).includes('attributeName="y"'));
@@ -111,6 +119,24 @@ async function main(){
  console.log('PASS: standard types never prefill volume, type and amount are explicit');
  await c._click(click('manage-liquids'));assert(c._manageOpen);assert(c.shadowRoot.innerHTML.includes('Manage liquid types'));
  assert(c.shadowRoot.innerHTML.includes('data-action="manage-edit"'));
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-hide"'), 'Built-ins have a Delete button');
+ await c._click(click('manage-hide','milk'));
+ assert(c.shadowRoot.innerHTML.includes('Confirm delete'));
+ assert(c.shadowRoot.innerHTML.includes('History and Excel remain intact'));
+ await c._click(click('manage-delete-cancel'));assert(!c._managePendingDelete);
+ await c._click(click('manage-hide','milk'));await c._click(click('manage-delete-confirm'));
+ assert(catalog.find(x=>x.id==='milk').hidden===true);
+ assert(c.shadowRoot.innerHTML.includes('Hidden built-in liquid types'));
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-restore"'));
+ console.log('PASS: Delete installed Milk removes its Add choice, preserves catalog and offers Restore');
+ await c._click(click('manage-cancel'));
+ assert(!c.shadowRoot.innerHTML.includes('data-action="type" data-value="milk"'),'Milk removed from Add');
+ await c._click(click('type','milk'));assert.strictEqual(c._modal.liquid_type,'water');
+ await c._click(click('manage-liquids'));
+ await c._click(click('manage-restore','milk'));
+ assert(catalog.find(x=>x.id==='milk').hidden===false);
+ console.log('PASS: hidden builtin can be restored without losing historical IDs');
+
  assert(c.shadowRoot.innerHTML.includes('data-action="manage-up"'));
  await c._click(click('manage-add'));assert(c.shadowRoot.innerHTML.includes('Add liquid'));
  assert(c.shadowRoot.innerHTML.includes('data-field="custom_svg_file"'));
@@ -170,6 +196,8 @@ async function main(){
  console.log('PASS: popup Delete confirms and removes entry');
  await c._click(click('new'));await c._click(click('manage-liquids'));
  await c._click(click('manage-remove','custom_1'));
+ assert(c._managePendingDelete?.id==='custom_1');
+ await c._click(click('manage-delete-confirm'));
  assert(!catalog.some(x=>x.id==='custom_1'));
  console.log('PASS: unused custom liquid can be removed');
  await c._click(click('manage-cancel'));await c._click(click('cancel'));
