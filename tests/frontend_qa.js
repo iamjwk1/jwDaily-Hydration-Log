@@ -1,4 +1,4 @@
-/* jwDaily beta3 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta4 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -11,7 +11,7 @@ const sandbox={HTMLElement:Node,customElements:{get:k=>els[k],define:(k,c)=>els[
  atob,btoa,Date,CustomEvent:class{},Intl};
 vm.createContext(sandbox);vm.runInContext(src,sandbox);
 const click=(action,value)=>({target:{closest:()=>({dataset:{action,value}})}});
-const history=[];let seq=0;
+const history=[];let seq=0;let storedVolumes=null;
 const catalog=[
  ['water','Water','mdi:water'],['coffee','Coffee','mdi:coffee'],['tea','Tea','mdi:tea'],
  ['milk','Milk','mdi:cow'],['soup','Soup','mdi:bowl-mix'],['wine','Wine','mdi:glass-wine'],['other','Other','mdi:glass-water']
@@ -23,15 +23,24 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.3',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.4',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:history.map(x=>({...x})),
    total_ml:history.reduce((a,r)=>a+r.volume_ml,0),liquid_types:catalog.map(x=>({...x})),
    today_breakdown:history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]),
-   backend_version:'1.1.0-beta.3'};
+   volume_buttons:storedVolumes,backend_version:'1.1.0-beta.4'};
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
      default_volume_ml:msg.default_volume_ml??null,custom:true};catalog.push(item);return item;
   }
+  if(msg.type==='jw_daily_hydration_log/update_liquid_type'){
+   const item=catalog.find(x=>x.id===msg.liquid_type);assert(item);
+   Object.assign(item,{name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',default_volume_ml:msg.default_volume_ml??null});return {...item};}
+  if(msg.type==='jw_daily_hydration_log/set_liquid_order'){
+   const keys=msg.order;assert.strictEqual(keys.length,catalog.length);
+   const old=[...catalog];catalog.splice(0,catalog.length,...keys.map(k=>old.find(x=>x.id===k)));
+   return {order:keys};}
+  if(msg.type==='jw_daily_hydration_log/set_volume_buttons'){
+   storedVolumes=[...msg.volumes];return {volumes:storedVolumes};}
   if(msg.type==='jw_daily_hydration_log/delete_liquid_type'){
    const i=catalog.findIndex(x=>x.id===msg.liquid_type);assert(i>=0);
    assert(!history.some(x=>x.liquid_type===msg.liquid_type));catalog.splice(i,1);return {deleted:true};}
@@ -63,7 +72,7 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.3'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.4'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));
@@ -71,6 +80,15 @@ async function main(){
  assert(c._glass(10,2700,3000).includes('repeatCount="indefinite"'));
  assert(!c.shadowRoot.innerHTML.toLowerCase().includes('recommended pace'));
  assert(c._glass(100,0,3000).includes('y="39"'));
+ assert(c._glass(101,0,3000).includes('y="19"'));
+ assert(c._glass(250,0,3000).includes('y="19"'));
+ const overflow=c._glass(250,0,3000);
+ assert(overflow.includes('aria-label="250 percent of daily goal"'));
+ assert(overflow.includes('M38 39 L122 39'));
+ assert(overflow.indexOf('fill="#59baf2"')<overflow.indexOf('stroke="#e04444"'));
+ assert(overflow.includes('paint-order="stroke"'));
+ console.log('PASS: over-target level fills open rim, stays capped, red target overlay visible');
+
  console.log('PASS: dashed red target line 16 SVG units lower, 100% fill reaches target, animation present');
  await c._click(click('new'));assert(c._modal.mode==='new');
  assert.strictEqual(c._modal.liquid_type,'');assert.strictEqual(c._modal.volume_ml,'');
@@ -91,15 +109,40 @@ async function main(){
  assert.strictEqual(c._modal.volume_ml,'');
  await c._click(click('amount','120'));assert.strictEqual(c._modal.volume_ml,'120');
  console.log('PASS: standard types never prefill volume, type and amount are explicit');
- await c._click(click('manage-liquids'));assert(c._manageOpen);assert(c.shadowRoot.innerHTML.includes('Add custom liquid'));
+ await c._click(click('manage-liquids'));assert(c._manageOpen);assert(c.shadowRoot.innerHTML.includes('Manage liquid types'));
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-edit"'));
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-up"'));
+ await c._click(click('manage-add'));assert(c.shadowRoot.innerHTML.includes('Add liquid'));
  assert(c.shadowRoot.innerHTML.includes('data-field="custom_svg_file"'));
  c._customDraft.custom_name='Fresh juice';c._customDraft.icon_svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/></svg>';
  c._customDraft.icon_mdi='';c._customDraft.custom_default_volume_ml='250';
  await c._click(click('manage-save'));
- assert(!c._manageOpen);assert(c._modal.liquid_type.startsWith('custom_'));
+ assert(c._manageOpen);assert(c._modal.liquid_type.startsWith('custom_'));
+ assert(c.shadowRoot.innerHTML.includes('Fresh juice'));
+ await c._click(click('manage-edit','custom_1'));
+ assert(c._customDraft.custom_name==='Fresh juice');
+ c._customDraft.custom_name='Fresh juice XL';c._customDraft.custom_default_volume_ml='275';
+ await c._click(click('manage-save'));
+ assert(catalog.find(x=>x.id==='custom_1').name==='Fresh juice XL');
+ assert(catalog.find(x=>x.id==='custom_1').default_volume_ml===275);
+ await c._click(click('manage-up','custom_1'));
+ assert(wsCalls.some(x=>x.type==='jw_daily_hydration_log/set_liquid_order'));
+ await c._click(click('manage-edit','water'));
+ c._customDraft.custom_name='Spring water';c._customDraft.custom_default_volume_ml='330';
+ await c._click(click('manage-save'));
+ assert(catalog.find(x=>x.id==='water').name==='Spring water');
+ console.log('PASS: existing custom and built-in liquid labels, icons, defaults, ordering editable');
+ await c._click(click('manage-cancel'));
+ assert(!c._manageOpen);
  assert.strictEqual(c._modal.volume_ml,'250');
  assert(c.shadowRoot.innerHTML.includes('Fresh juice'));
  assert(c.shadowRoot.innerHTML.includes('data:image/svg+xml'));
+ await c._click(click('manage-volumes'));assert(c._volumeManageOpen);
+ assert(c.shadowRoot.innerHTML.includes('data-action="volume-remove"'));
+ c._volumeDraft=['333','120','250'];await c._click(click('volume-save'));
+ assert(!c._volumeManageOpen);assert.deepStrictEqual(storedVolumes,[333,120,250]);
+ assert(c.shadowRoot.innerHTML.includes('333 mL'));
+ console.log('PASS: quick volume buttons added, modified, removed and persisted on profile');
  console.log('PASS: custom SVG liquid with name and 250mL default persists via WS and auto-selects');
  c._modal.date='08-11-2026';c._modal.time='16:25:25';
  await c._click(click('save'));
@@ -107,12 +150,12 @@ async function main(){
  assert.strictEqual(history[0].liquid_type,'custom_1');
  console.log('PASS: chosen custom liquid/volume recorded; subsequent Add starts empty');
  assert(c.shadowRoot.innerHTML.includes('Today by liquid'));
- assert(c.shadowRoot.innerHTML.includes('Fresh juice'));
+ assert(c.shadowRoot.innerHTML.includes('Fresh juice XL'));
  assert(c.shadowRoot.innerHTML.includes('300') || c.shadowRoot.innerHTML.includes('250'));
  console.log('PASS: responsive today-by-liquid bar chart tracks backend breakdown');
  await c._click(click('new'));
  assert.strictEqual(c._modal.liquid_type,'');assert.strictEqual(c._modal.volume_ml,'');
- await c._click(click('type','custom_1'));assert.strictEqual(c._modal.volume_ml,'250');
+ await c._click(click('type','custom_1'));assert.strictEqual(c._modal.volume_ml,'275');
  await c._click(click('cancel'));assert.strictEqual(c._modal,null);
  console.log('PASS: selection is never remembered, but custom default volume auto-fills on selection');
  c._openEdit(history[0].id);assert(c.shadowRoot.innerHTML.includes('Delete'));

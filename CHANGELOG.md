@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.4 (HACS pre-release)
+- Added persistent profile-level administration of built-in and custom liquid labels, MDI/SVG icons, default volumes, and button ordering while preserving stable history IDs.
+- Added 0–24 customizable, reorderable quick-add volume buttons with add/edit/delete UI and persistent profile storage. Original per-card `quick_add` remains the fallback until customized.
+- Popup volume, date and time field text enlarged for better legibility.
+- Glass at exactly 100% reaches lowered target line; any amount over the target fills to the open rim without overflowing. The red goal line and red goal text render above blue liquid for readability.
+- Excel export now includes nine workbooks tabs, adding Volume Buttons and exporting all built-in liquid overrides/order in Liquid Types. Existing drinks and data remain intact.
+- Python backend and frontend regression tests extended; HACS/Hassfest gate before GitHub prerelease publication.
+
 ## v1.1.0-beta.3 (HACS pre-release)
 - Save now verifies the running Python backend version first. Stale backends produce a restart instruction instead of generic `Unknown command` and no partial write is attempted.
 - Add/Edit popup now has a complete calendar picker displaying `DD-MM-YYYY`; time remains in 24h format.

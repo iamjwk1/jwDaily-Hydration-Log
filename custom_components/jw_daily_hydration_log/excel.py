@@ -13,7 +13,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 from zoneinfo import ZoneInfo
 
-SHEETS = ["Profiles", "Drink Moments", "Daily Totals", "Source Readings", "Adjustments", "Export Info", "Daily Breakdown", "Liquid Types"]
+SHEETS = ["Profiles", "Drink Moments", "Daily Totals", "Source Readings", "Adjustments", "Export Info", "Daily Breakdown", "Liquid Types", "Volume Buttons"]
 VERSION = "1.1.0-beta.3"
 
 
@@ -127,13 +127,21 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
     correction_rows = [["Record ID", "Timestamp (local)", "Profile", "Action", "Value mL", "Before mL",
                         "After mL", "Origin", "Details"]]
     breakdown_rows = [["Date", "Profile", "Water mL", "Coffee mL", "Tea mL", "Milk mL", "Soup mL", "Wine mL", "Other mL", "Unknown legacy mL", "Custom types mL", "Total mL", "Drink count"]]
-    type_rows = [["Profile", "Liquid ID", "Name", "MDI Icon", "SVG Image", "Default volume mL"]]
+    type_rows = [["Profile", "Liquid ID", "Name", "MDI Icon", "SVG Image", "Default volume mL", "Custom", "Button order"]]
+    button_rows = [["Profile", "Position", "Volume mL", "Custom configured"]]
     for p in profiles:
         cfg = p["config"]
         catalog = {x["id"]:x for x in p.get("custom_liquid_types", [])}
-        for typ in catalog.values():
+        definitions = p.get("liquid_definitions") or list(catalog.values())
+        for position, typ in enumerate(definitions, 1):
             type_rows.append([cfg["name"], typ["id"], typ["name"], typ.get("icon_mdi", ""),
-                              typ.get("icon_svg", ""), typ.get("default_volume_ml")])
+                              typ.get("icon_svg", ""), typ.get("default_volume_ml"),
+                              bool(typ.get("custom", False)), position])
+        volumes = p.get("volume_buttons")
+        if volumes is None:
+            button_rows.append([cfg["name"], "", "Uses dashboard quick_add", False])
+        for position, value in enumerate(volumes or [], 1):
+            button_rows.append([cfg["name"], position, value, True])
         profile_rows.append([p["entry_id"], cfg["name"], p["slug"], cfg["age"], cfg["gender"],
                              cfg["pregnancy"], cfg["lactation"],
                              cfg["source_sensor"], cfg["source_mode"], cfg["unit"], p["target_ml"],
@@ -191,15 +199,15 @@ def export_xlsx(profiles: list[dict], timezone_name: str = "Europe/Amsterdam") -
                  ["Legacy data", "Individual drink moments before installation were not stored by the original integration"],
                  ["Timestamp format", "Excel numeric local datetime; HH:MM:SS, Europe/Amsterdam unless configured otherwise"],
                  ["Data integrity", "Each drink is stored before UI refresh; no event limit or export truncation"]]
-    contents = [profile_rows, drink_rows, day_rows, source_rows, correction_rows, info_rows, breakdown_rows, type_rows]
-    datetime_columns = [set(), {2}, {8}, {2}, {2}, set(), set(), set()]
-    date_columns = [set(), set(), {1}, set(), set(), set(), {1}, set()]
+    contents = [profile_rows, drink_rows, day_rows, source_rows, correction_rows, info_rows, breakdown_rows, type_rows, button_rows]
+    datetime_columns = [set(), {2}, {8}, {2}, {2}, set(), set(), set(), set()]
+    date_columns = [set(), set(), {1}, set(), set(), set(), {1}, set(), set()]
     buffer = BytesIO()
     with ZipFile(buffer, "w", ZIP_DEFLATED, compresslevel=6) as archive:
         archive.writestr('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + ''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1, len(SHEETS) + 1)) + '</Types>')
         archive.writestr('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
         archive.writestr('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>' + ''.join(f'<sheet name="{_xml(name)}" sheetId="{i}" r:id="rId{i}"/>' for i, name in enumerate(SHEETS, 1)) + '</sheets></workbook>')
-        archive.writestr('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + ''.join(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(SHEETS) + 1)) + '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
+        archive.writestr('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + ''.join(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(SHEETS) + 1)) + '<Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
         archive.writestr('xl/styles.xml', STYLES)
         for i, rows in enumerate(contents, 1):
             archive.writestr(f'xl/worksheets/sheet{i}.xml', _worksheet(rows, datetime_columns[i-1], date_columns[i-1]))

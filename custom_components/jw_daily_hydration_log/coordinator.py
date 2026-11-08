@@ -134,6 +134,11 @@ class HydrationCoordinator:
         self.source_readings: list[dict[str, Any]] = []
         self.daily_archive: dict[str, dict[str, Any]] = {}
         self.custom_liquid_types: list[dict[str, Any]] = []
+        # Profile-scoped settings; stable liquid IDs preserve all old drink records.
+        self.liquid_overrides: dict[str, dict[str, Any]] = {}
+        self.liquid_order: list[str] = []
+        # None means follow the existing dashboard's quick_add YAML until customized.
+        self.volume_buttons: list[float] | None = None
 
     def _now(self) -> datetime:
         return dt_util.now()
@@ -216,6 +221,10 @@ class HydrationCoordinator:
             self.source_readings = list(saved.get('source_readings',[]))
             self.daily_archive = dict(saved.get('daily_archive',{}))
             self.custom_liquid_types = list(saved.get('custom_liquid_types', []))
+            self.liquid_overrides = dict(saved.get('liquid_overrides') or {})
+            self.liquid_order = list(saved.get('liquid_order') or [])
+            if saved.get('volume_buttons') is not None:
+                self.volume_buttons = list(saved['volume_buttons'])
         if self.last_reset_date != self._today():
             self._rolled()
             await self._save()
@@ -441,17 +450,26 @@ class HydrationCoordinator:
             last_reset_date=self.last_reset_date,target_override_ml=self.target_override_ml,
             last_source_value=self._last_source_value,source_baseline=self._source_baseline_ml,
             records=self.records,source_readings=self.source_readings,daily_archive=self.daily_archive,
-            custom_liquid_types=self.custom_liquid_types))
+            custom_liquid_types=self.custom_liquid_types,
+            liquid_overrides=self.liquid_overrides,
+            liquid_order=self.liquid_order,
+            volume_buttons=self.volume_buttons))
 
     @callback
     def _dispatch(self) -> None:
         async_dispatcher_send(self.hass,self.signal)
 
     def get_liquid_definitions(self) -> list[dict]:
+        """Ordered definitions, merging built-in display overrides with stable IDs."""
         base = [dict(id=key, name=name, icon_mdi=icon, icon_svg='',
                      default_volume_ml=None, custom=False)
                 for key, name, icon in _BUILTIN_LIQUIDS]
-        return base + [dict(item) for item in self.custom_liquid_types]
+        for item in base:
+            item.update(self.liquid_overrides.get(item['id'], {}))
+        items = base + [dict(item) for item in self.custom_liquid_types]
+        priority = {ident: index for index, ident in enumerate(self.liquid_order)}
+        fallback = {item['id']: index for index, item in enumerate(items)}
+        return sorted(items, key=lambda item: priority.get(item['id'], len(priority) + fallback[item['id']]))
 
     def _valid_liquid_type(self, liquid_type: str | None) -> bool:
         return isinstance(liquid_type, str) and (
@@ -481,6 +499,8 @@ class HydrationCoordinator:
                         icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
                         icon_svg=icon_svg, default_volume_ml=vol, custom=True)
             self.custom_liquid_types.append(item)
+            if self.liquid_order:
+                self.liquid_order.append(item['id'])
             await self._save()
             self._dispatch()
             return dict(item)
@@ -493,8 +513,72 @@ class HydrationCoordinator:
             if any(x.get('kind') == 'drink' and x.get('liquid_type') == liquid_type for x in self.records):
                 raise ValueError('This liquid is used in drink history and cannot be deleted')
             self.custom_liquid_types.remove(item)
+            self.liquid_order = [key for key in self.liquid_order if key != liquid_type]
             await self._save()
             self._dispatch()
+
+    async def async_update_liquid_type(self, liquid_type: str, name: str,
+                                      icon_mdi: str = '', icon_svg: str = '',
+                                      default_volume_ml=None) -> dict:
+        """Update any liquid's display metadata. Never rewrite its historical ID."""
+        if not isinstance(name, str):
+            raise ValueError('Liquid name is required')
+        name = name.strip()
+        if not 1 <= len(name) <= 48 or any(ord(c) < 32 for c in name):
+            raise ValueError('Liquid name must be 1-48 characters')
+        if icon_mdi and icon_svg:
+            raise ValueError('Choose an MDI icon or an SVG, not both')
+        if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}', icon_mdi):
+            raise ValueError('Invalid MDI icon (example: mdi:coffee)')
+        if icon_svg:
+            icon_svg = _safe_svg(icon_svg)
+        volume = _default_volume(default_volume_ml)
+        async with self._lock:
+            definitions = self.get_liquid_definitions()
+            existing = next((item for item in definitions if item['id'] == liquid_type), None)
+            if existing is None:
+                raise ValueError('Liquid type not found')
+            if any(item['id'] != liquid_type and item['name'].casefold() == name.casefold()
+                   for item in definitions):
+                raise ValueError('Liquid name already exists')
+            props = dict(name=name,
+                         icon_mdi=icon_mdi or ('mdi:glass-water' if not icon_svg else ''),
+                         icon_svg=icon_svg, default_volume_ml=volume)
+            if existing['custom']:
+                next(item for item in self.custom_liquid_types if item['id'] == liquid_type).update(props)
+            else:
+                self.liquid_overrides[liquid_type] = props
+            await self._save()
+            self._dispatch()
+            return next(item for item in self.get_liquid_definitions() if item['id'] == liquid_type)
+
+    async def async_set_liquid_order(self, ordered_ids: list[str]) -> list[str]:
+        """Replace the entire catalog order atomically, rejecting stale lists."""
+        async with self._lock:
+            known = [item['id'] for item in self.get_liquid_definitions()]
+            if (not isinstance(ordered_ids, list)
+                    or any(not isinstance(ident, str) for ident in ordered_ids)
+                    or len(ordered_ids) != len(known)
+                    or len(set(ordered_ids)) != len(known)
+                    or set(ordered_ids) != set(known)):
+                raise ValueError('Liquid order must contain each existing type exactly once')
+            self.liquid_order = list(ordered_ids)
+            await self._save()
+            self._dispatch()
+            return list(self.liquid_order)
+
+    async def async_set_volume_buttons(self, volumes: list[float]) -> list[float]:
+        """Store ordered quick-add volumes, including an intentionally empty list."""
+        if not isinstance(volumes, list) or len(volumes) > 24:
+            raise ValueError('Choose 0 to 24 volume buttons')
+        cleaned = [_default_volume(value) for value in volumes]
+        if any(value is None for value in cleaned) or len(set(cleaned)) != len(cleaned):
+            raise ValueError('Volumes must be positive, unique and between 0 and 100,000 mL')
+        async with self._lock:
+            self.volume_buttons = cleaned
+            await self._save()
+            self._dispatch()
+            return list(self.volume_buttons)
 
     def get_history(self, date: str | None = None) -> list[dict]:
         day = date or self._today()
@@ -525,4 +609,6 @@ class HydrationCoordinator:
                     target_ml=self.target_ml,source_contribution_ml=self.source_contribution_ml,
                     records=[dict(r) for r in self.records],source_readings=[dict(r) for r in self.source_readings],
                     daily_archive={key:dict(val) for key,val in self.daily_archive.items()},
-                    custom_liquid_types=[dict(item) for item in self.custom_liquid_types])
+                    custom_liquid_types=[dict(item) for item in self.custom_liquid_types],
+                    liquid_definitions=self.get_liquid_definitions(),
+                    volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons))

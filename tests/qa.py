@@ -168,18 +168,47 @@ async def test_coordinator():
     try: await reloaded.async_delete_liquid_type(custom['id'])
     except ValueError:check('Used liquid type cannot be removed',True)
     else:check('Used liquid type cannot be removed',False)
+    check('Default quick-add buttons unset for beta3 migration',reloaded.volume_buttons is None)
+    builtin=await reloaded.async_update_liquid_type('water','Spring water','mdi:water-plus','',330)
+    check('Built-in liquid renamed and default volume added without replacing its ID',
+          builtin['id']=='water' and builtin['name']=='Spring water' and builtin['default_volume_ml']==330)
+    custom_changed=await reloaded.async_update_liquid_type(custom['id'],'Citroenwater XL','',testsvg,275)
+    check('Custom SVG liquid can be renamed with new default and stable ID',
+          custom_changed['id']==custom['id'] and custom_changed['default_volume_ml']==275 and
+          custom_changed['icon_svg']==testsvg)
+    check('Existing drink remains associated with same custom liquid ID after rename',
+          any(item['liquid_type']==custom['id'] for item in reloaded.get_history()))
+    first=[item['id'] for item in reloaded.get_liquid_definitions()]
+    changed=[custom['id']]+[item for item in first if item!=custom['id']]
+    stored=await reloaded.async_set_liquid_order(changed)
+    check('Reordered liquid buttons retain stable IDs',stored==changed and
+          reloaded.get_liquid_definitions()[0]['id']==custom['id'])
+    try: await reloaded.async_set_liquid_order(['water','water'])
+    except ValueError:check('Invalid/duplicate liquid order rejected',True)
+    else:check('Invalid/duplicate liquid order rejected',False)
+    volumes=await reloaded.async_set_volume_buttons([333,120,250])
+    check('Volume buttons editable and reorderable',volumes==[333,120,250])
+    try: await reloaded.async_set_volume_buttons([120,120])
+    except ValueError:check('Duplicate volume button rejected without saving',True)
+    else:check('Duplicate volume button rejected without saving',False)
+    check('Volume settings do not change drink records',
+          reloaded.volume_buttons==[333,120,250] and any(x['liquid_type']==custom['id'] for x in reloaded.get_history()))
     await reloaded.async_shutdown()
     reloaded=coordinator.HydrationCoordinator(h,FakeConfigEntry());await reloaded.async_initialize()
+    check('Restart persists built-in customizations, type order and volume buttons',
+          reloaded.get_liquid_definitions()[0]['id']==custom['id'] and
+          next(x for x in reloaded.get_liquid_definitions() if x['id']=='water')['name']=='Spring water' and
+          reloaded.volume_buttons==[333,120,250])
     check('Custom SVG icon, volume and drink survive HA restart',any(x['id']==custom['id'] and x['icon_svg']==testsvg
-          and x['default_volume_ml']==250 for x in reloaded.custom_liquid_types) and
+          and x['default_volume_ml']==275 for x in reloaded.custom_liquid_types) and
           any(x['liquid_type']==custom['id'] for x in reloaded.get_history()))
     snap=reloaded.export_snapshot();payload=excel.export_xlsx([snap],'Europe/Amsterdam')
     with ZipFile(BytesIO(payload)) as z:
         check('Excel container ZIP CRC',z.testzip() is None)
-        files=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,9)]
-        check('Eight Excel worksheets present',all(k in z.namelist() for k in files))
+        files=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,10)]
+        check('Nine Excel worksheets present',all(k in z.namelist() for k in files))
         for f in files:ET.fromstring(z.read(f))
-        check('Eight worksheets valid XML',True)
+        check('Nine worksheets valid XML',True)
         ws=z.read('xl/worksheets/sheet2.xml').decode()
         check('Deleted old drinks absent from Excel',ids[1] not in ws and ids[2] not in ws)
         check('Updated type and volume exported', 'soup' in ws and '<v>180' in ws)
@@ -187,11 +216,26 @@ async def test_coordinator():
         check('Liquid type breakdown exported with wine and unknown legacy', 'Unknown legacy mL' in breakdown and 'Wine mL' in breakdown)
         catalog_sheet=z.read('xl/worksheets/sheet8.xml').decode()
         check('Custom liquid catalog exported with SVG and default volume',
-              'Citroenwater' in catalog_sheet and 'circle' in catalog_sheet and '<v>250' in catalog_sheet)
+              'Citroenwater XL' in catalog_sheet and 'circle' in catalog_sheet and '<v>275' in catalog_sheet)
+        pref_sheet=z.read('xl/worksheets/sheet9.xml').decode()
+        check('Saved volume button order exported to ninth sheet',
+              'Volume mL' in pref_sheet and '<v>333' in pref_sheet and '<v>120' in pref_sheet)
+        check('Edited built-in name, icon and order exported',
+              'Spring water' in catalog_sheet and 'mdi:water-plus' in catalog_sheet and 'Button order' in catalog_sheet)
+        workbook_rels=z.read('xl/_rels/workbook.xml.rels').decode()
+        check('Styles relationship distinct from all nine worksheet IDs',
+              'Id="rId10"' in workbook_rels)
         check('Excel dates native with DD-MM-YYYY number format' , 's="4"' in breakdown and 'formatCode="dd-mm-yyyy"' in z.read('xl/styles.xml').decode())
     await reloaded.async_delete_drink(custom_drink['id'])
     await reloaded.async_delete_liquid_type(custom['id'])
     check('Unused custom type can be permanently removed',not any(x['id']==custom['id'] for x in reloaded.custom_liquid_types))
+    await reloaded.async_set_volume_buttons([])
+    check('All quick buttons can be intentionally removed',reloaded.volume_buttons==[])
+    await reloaded.async_shutdown()
+    last=coordinator.HydrationCoordinator(h,FakeConfigEntry());await last.async_initialize()
+    check('Empty quick-button configuration survives restart without fallback',last.volume_buttons==[])
+    reloaded=last
+
     await reloaded.async_shutdown()
 
 asyncio.run(test_coordinator())

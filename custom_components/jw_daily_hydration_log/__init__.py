@@ -98,6 +98,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_history)
     websocket_api.async_register_command(hass,ws_add_liquid_type)
     websocket_api.async_register_command(hass,ws_delete_liquid_type)
+    websocket_api.async_register_command(hass,ws_update_liquid_type)
+    websocket_api.async_register_command(hass,ws_set_liquid_order)
+    websocket_api.async_register_command(hass,ws_set_volume_buttons)
     websocket_api.async_register_command(hass,ws_export)
     return True
 
@@ -155,6 +158,7 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'count':len(records),'total_ml':round(sum(x['volume_ml'] for x in records),2),
         'consumed_ml':round(c.consumed_ml,2),'target_ml':c.target_ml,
         'liquid_types':c.get_liquid_definitions(),
+        'volume_buttons':None if c.volume_buttons is None else list(c.volume_buttons),
         'today_breakdown':c.today_breakdown(),
         'backend_version':VERSION,
     })
@@ -246,6 +250,54 @@ async def ws_delete_liquid_type(hass:HomeAssistant,connection:websocket_api.Acti
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return
     connection.send_result(msg['id'],{'deleted':True})
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/update_liquid_type',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('liquid_type'):str,
+                                  probatio.Required('name'):str,
+                                  probatio.Optional('icon_mdi'):str,
+                                  probatio.Optional('icon_svg'):str,
+                                  probatio.Optional('default_volume_ml'):float})
+@websocket_api.async_response
+async def ws_update_liquid_type(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        item=await _resolve(hass,msg['profile']).async_update_liquid_type(
+            msg['liquid_type'],msg['name'],msg.get('icon_mdi',''),
+            msg.get('icon_svg',''),msg.get('default_volume_ml'))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
+        return
+    connection.send_result(msg['id'],item)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_liquid_order',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('order'):[str]})
+@websocket_api.async_response
+async def ws_set_liquid_order(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        order=await _resolve(hass,msg['profile']).async_set_liquid_order(msg['order'])
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_liquid_order',str(exc))
+        return
+    connection.send_result(msg['id'],{'order':order})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_volume_buttons',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('volumes'):[float]})
+@websocket_api.async_response
+async def ws_set_volume_buttons(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
+    try:
+        volumes=await _resolve(hass,msg['profile']).async_set_volume_buttons(msg['volumes'])
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_volume_buttons',str(exc))
+        return
+    connection.send_result(msg['id'],{'volumes':volumes})
+
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/export',probatio.Optional('profile'):str})
