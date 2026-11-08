@@ -1,0 +1,67 @@
+name: Publish jwDaily Hydration Log v1.1.0-beta.1
+on:
+  push:
+    branches: ["release/v1.1.0-beta.1"]
+    paths:
+      - .github/workflows/publish-beta-v1.1.0.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jwdhl-beta-v1.1.0-beta.1
+  cancel-in-progress: false
+
+jobs:
+  publish-beta:
+    name: Validate and publish pre-release
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python compilation and functional regression tests
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+      - name: Frontend tests
+        run: node tests/frontend_qa.js
+      - name: Check beta and HACS metadata
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path('custom_components/jw_daily_hydration_log')
+          manifest = json.loads((root/'manifest.json').read_text())
+          const = (root/'const.py').read_text()
+          card = (root/'www/jwdaily-hydration-log-card.js').read_text()
+          assert manifest['domain'] == 'jw_daily_hydration_log'
+          assert manifest['version'] == '1.1.0-beta.1'
+          assert "VERSION = '1.1.0-beta.1'" in const
+          assert 'v1.1.0-beta.1' in card
+          assert (root/'brand/icon.png').is_file()
+          assert json.loads(pathlib.Path('hacs.json').read_text())['name'] == 'jwDaily Hydration Log'
+          assert pathlib.Path('RELEASE_NOTES_v1.1.0-beta.1.md').is_file()
+          print('BETA METADATA PASS')
+          PY
+      - uses: home-assistant/actions/hassfest@master
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+      - name: Publish GitHub pre-release (never mark latest stable)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.1.0-beta.1 >/dev/null 2>&1; then
+            echo 'Pre-release already exists; leaving it unchanged.'
+            gh release view v1.1.0-beta.1 --json tagName,isPrerelease,isLatest,url
+            exit 0
+          fi
+          gh release create v1.1.0-beta.1 --target "$GITHUB_SHA" --title 'jwDaily Hydration Log v1.1.0-beta.1' --prerelease --latest=false --notes-file RELEASE_NOTES_v1.1.0-beta.1.md
+          gh release view v1.1.0-beta.1 --json tagName,isPrerelease,isLatest,url

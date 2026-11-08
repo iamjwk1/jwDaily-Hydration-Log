@@ -1,6 +1,11 @@
 # jwDaily Hydration Log - changelog
 
-## v1.1.0 (development; not yet released)
+## v1.1.0-beta.1 — HACS pre-release (testing only)
+
+- Beta of the planned v1.1.0 improvements; production v1.0.2 remains the stable release.
+- The manifest and card use beta version 1.1.0-beta.1.
+- Install only via the HACS prerelease/version selector after a full HA backup.
+- WARNING: Updating automated drink logging requires a `liquid_type` parameter; entity `hourly_pace` is removed.
 - Choose both a liquid type and volume for each new drink. Neither persists between registrations or card sessions.
 - Six liquid types: water, coffee, tea, milk, soup, other.
 - Click a drink row to open a Save / Delete / Cancel dialog. The edited record replaces its old values, and deletion permanently removes it from this integration's ledger.

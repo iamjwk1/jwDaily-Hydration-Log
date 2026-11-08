@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.1 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -262,7 +262,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    .delete-warning{margin-top:15px;padding:10px;border:1px solid #b51f2d;border-radius:8px;color:#b51f2d;font-size:.87rem}
    @media(max-width:380px){.root{padding:12px}.hero{grid-template-columns:110px 1fr;gap:5px}.metrics .row{font-size:.78rem}.fields{grid-template-columns:1fr}}
    </style><ha-card><div class="root">
-   ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2><small>v1.1.0</small></header>`:''}
+   ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2><small>v1.1.0-beta.1</small></header>`:''}
    <div class="hero">${this._config.show_cup!==false?this._glass(pct):''}<div class="metrics">
     <div class="big">${jdhlFmt(consumed,this._config.unit)}</div><div class="muted">of ${jdhlFmt(target,this._config.unit)} today</div>
     <div class="row"><span class="red">⚑</span> Target: ${jdhlFmt(target,this._config.unit)}</div>
@@ -311,4 +311,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.1');
