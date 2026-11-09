@@ -246,6 +246,18 @@ async def test_coordinator():
     check('Custom SVG icon, volume and drink survive HA restart',any(x['id']==custom['id'] and x['icon_svg']==testsvg
           and x['default_volume_ml']==275 for x in reloaded.custom_liquid_types) and
           any(x['liquid_type']==custom['id'] for x in reloaded.get_history()))
+    hourly=reloaded.chart_hourly_today()
+    weekly=reloaded.chart_last_7_days()
+    check('Hourly charts expose 24 local clock bins and total registered drinks',
+          len(hourly['buckets'])==24 and abs(hourly['total_logged_ml']-sum(b['total_ml'] for b in hourly['buckets']))<0.001)
+    check('Hourly charts preserve stable custom liquid IDs',
+          any(custom['id'] in b['liquids'] for b in hourly['buckets']))
+    check('Seven-day charts include all calendar days and current type breakdown',
+          len(weekly['days'])==7 and weekly['days'][-1]['date']==reloaded._today()
+          and any(custom['id'] in d['liquids'] for d in weekly['days']))
+    check('Chart totals represent recorded drinks, not unattributed external sensor volume',
+          hourly['coverage']=='typed_logged_drinks_only' and
+          weekly['coverage']=='typed_logged_drinks_only')
     check('Excel filename uses HA-local DD timestamp and literal spaces',
           excel.export_filename('Europe/Amsterdam',datetime(2026,11,9,13,28,tzinfo=timezone.utc))
           == '20261109-1428 jwDaily Hydration Log - All Data.xlsx')

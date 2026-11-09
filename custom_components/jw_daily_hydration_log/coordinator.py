@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, date, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 import math
 import re
@@ -668,6 +668,55 @@ class HydrationCoordinator:
                     source_ml=round(max(0.0, source), 3),
                     drink_count=len(entries),
                     liquid_breakdown=self.liquid_breakdown(day))
+
+    def chart_hourly_today(self) -> dict:
+        """24 local-clock hour buckets, typed drink records only.
+
+        Two physical hours during the autumn DST transition share the same
+        labelled 02:00 local bucket. Source sensors cannot be typed per hour
+        and are explicitly excluded to avoid misattribution.
+        """
+        day=self._today()
+        tz=ZoneInfo(getattr(self.hass.config, 'time_zone', 'Europe/Amsterdam'))
+        buckets=[]
+        for hour in range(24):
+            start=datetime.combine(date.fromisoformat(day),time(hour=hour),tzinfo=tz)
+            buckets.append(dict(hour=f'{hour:02d}:00',start=start.isoformat(timespec='seconds'),
+                                total_ml=0.0,liquids={}))
+        for record in self.records:
+            if record.get('kind')!='drink' or record.get('timestamp','')[:10]!=day:
+                continue
+            try:
+                hour=int(record['timestamp'][11:13])
+                volume=float(record.get('volume_ml',0))
+                if not 0<=hour<=23 or not math.isfinite(volume) or volume<=0: continue
+            except (TypeError,ValueError,IndexError):
+                continue
+            bucket=buckets[hour]
+            liquid=str(record.get('liquid_type') or 'unknown')
+            bucket['total_ml']+=volume
+            bucket['liquids'][liquid]=bucket['liquids'].get(liquid,0.0)+volume
+        for bucket in buckets:
+            bucket['total_ml']=round(bucket['total_ml'],3)
+            bucket['liquids']={k:round(v,3) for k,v in bucket['liquids'].items()}
+        return dict(date=day,total_logged_ml=round(sum(b['total_ml'] for b in buckets),3),
+                    buckets=buckets,coverage='typed_logged_drinks_only',
+                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()})
+
+    def chart_last_7_days(self) -> dict:
+        """Exactly seven HA-local calendar days, including today, by stable type ID."""
+        today=date.fromisoformat(self._today())
+        rows=[]
+        for offset in range(6,-1,-1):
+            day=(today-timedelta(days=offset)).isoformat()
+            summary=self.day_summary(day)
+            typed={part['liquid_type']:part['volume_ml'] for part in summary['liquid_breakdown']}
+            rows.append(dict(date=day,total_logged_ml=round(sum(typed.values()),3),
+                             consumed_ml=summary['consumed_ml'],target_ml=summary['target_ml'],
+                             drink_count=summary['drink_count'],liquids=typed))
+        return dict(days=rows,total_logged_ml=round(sum(r['total_logged_ml'] for r in rows),3),
+                    coverage='typed_logged_drinks_only',
+                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()})
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
