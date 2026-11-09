@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import math
 import re
@@ -41,8 +41,10 @@ def _local_timestamp(hass: HomeAssistant, day: str | None, clock: str | None) ->
     # Reject spring-forward wall times that never happened in this timezone.
     if value.astimezone(timezone.utc).astimezone(tz).replace(tzinfo=None) != value.replace(tzinfo=None):
         raise ValueError('This time does not exist because of daylight saving time')
-    if value > dt_util.now().astimezone(tz) + timedelta(minutes=5):
-        raise ValueError('Drink time cannot be in the future')
+    # The calendar DAY cannot be in the future, but any valid time TODAY is
+    # allowed, including a time later than the current HA-local clock.
+    if value.date() > dt_util.now().astimezone(tz).date():
+        raise ValueError('Drink date cannot be in the future')
     return value.isoformat(timespec='seconds')
 
 

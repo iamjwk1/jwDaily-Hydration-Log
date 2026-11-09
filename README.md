@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.6
+# jwDaily Hydration Log v1.1.0-beta.7
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,12 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.6
+## What's new in beta.7
+
+- **Future time permitted:** On today's HA-local calendar date, any valid 24-hour time can be entered, even if later than now.
+- **Future calendar day blocked:** Tomorrow and later dates remain rejected in the popup and Python backend. Earlier days remain permitted; impossible DST wall times remain rejected.
+- The glass/chart and compact Add layout from beta.6 remains intact.
+
 
 - **Layout fixed against the supplied reference screenshot:** blue volume left and close to the open glass, glass moved substantially left, daily liquid bar chart on the right. Full bar volumes are no longer clipped.
 - **Compact Add button directly below the right-side chart** instead of a separate tall full-width button row. Drink count sits under the glass.
@@ -39,7 +44,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 
 1. Make a current full HA backup including the integration's `.storage` data, and check scripts and automations for the service change described below.
 2. Open **HACS → jwDaily Hydration Log → ⋮ → Redownload → Need a different version?**. If necessary enable pre-releases for the repository.
-3. Select **`v1.1.0-beta.6`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
+3. Select **`v1.1.0-beta.7`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
 4. Refresh the dashboard with `Ctrl+Shift+R` and verify that the card footer shows beta.5. Keep the existing profile `Jan-Willem` and existing dashboard configuration.
 5. Test Add with a built-in liquid and the new date picker, then a custom liquid (name, SVG icon, default amount), register a drink via Add popup, edit/delete only a **test entry**, verify Excel's eight tabs. Do not delete valuable records to test the beta.
 

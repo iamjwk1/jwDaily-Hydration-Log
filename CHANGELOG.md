@@ -1,5 +1,12 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.7 (HACS pre-release)
+- Permit future 24-hour CLOCK times when the selected date is TODAY; reject any calendar date later than TODAY.
+- Validate date using HA's configured local timezone in the backend and block future dates in the popup.
+- Continue rejecting invalid calendar dates and nonexistent daylight-saving-time wall times.
+- Retain beta.6 layout and all stored drink records without migration changes.
+
+
 ## v1.1.0-beta.6 (HACS pre-release)
 - Matched the card's daily header to the user's reference screenshot: total close to a left-positioned open glass and a wider bar chart on the right, with readable, unclipped numeric volumes.
 - Moved the **+ Add drink** button under the chart and made it smaller; kept **Undo last drink** as a compact secondary action when appropriate.

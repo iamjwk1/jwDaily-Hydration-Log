@@ -110,9 +110,12 @@ async def test_coordinator():
     await c.async_delete_drink(ids[2])
     check('Deleting previous day removes record and subtracts archived total',c.daily_archive['2026-11-07']['manual_ml']==0
           and c.daily_archive['2026-11-07']['drink_count']==0)
-    try: await c.async_add_drink(99,'mL','dashboard','water',day='09-11-2026',clock='12:00')
-    except ValueError:check('Future drink timestamp rejected',True)
-    else:check('Future drink timestamp rejected',False)
+    # HA local time in test is 08:30; 23:59 today is a valid intentional entry.
+    timestamp = coordinator._local_timestamp(h,'08-11-2026','23:59:59')
+    check('Later time today is allowed', timestamp.startswith('2026-11-08T23:59:59+01:00'))
+    try: await c.async_add_drink(99,'mL','dashboard','water',day='09-11-2026',clock='00:00')
+    except ValueError as exc:check('Future calendar date rejected', 'date' in str(exc).lower())
+    else:check('Future calendar date rejected',False)
     try: await c.async_add_drink(99,'mL','dashboard','water',day='29-03-2026',clock='02:30')
     except ValueError:check('Nonexistent Dutch DST wall time rejected',True)
     else:check('Nonexistent Dutch DST wall time rejected',False)

@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.6 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.7 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -199,12 +199,15 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(!this._liquidInfo(m?.liquid_type) || (m.mode==='new' && this._liquidInfo(m.liquid_type)?.hidden))throw Error('Select a visible liquid type.');
   if(!Number.isFinite(volume)||volume<=0||volume>100000)throw Error('Enter a volume between 0 and 100,000 mL.');
   if(!/^\d{2}-\d{2}-\d{4}$/.test(date)||!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw Error('Use DD-MM-YYYY and a 24-hour time HH:MM or HH:MM:SS.');
+  const iso=jdhlDateToIso(date);
+  if(!iso||!Number.isFinite(Date.parse(`${iso}T12:00:00`))||jdhlIsoDate(new Date(`${iso}T12:00:00`))!==iso)throw Error('Use a valid calendar date.');
+  if(iso>this._todayISO())throw Error('Future dates are not allowed; a later time today is allowed.');
   return {volume,liquid_type:m.liquid_type,date,time};
  }
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.6')throw Error(`Frontend v1.1.0-beta.6 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.7')throw Error(`Frontend v1.1.0-beta.7 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -559,7 +562,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    @media(max-width:520px){.fields{grid-template-columns:repeat(2,minmax(0,165px))}}
    @media(max-width:380px){.root{padding:12px}.hero{grid-template-columns:minmax(64px,1fr) 145px;gap:5px}.fields{grid-template-columns:1fr}}
 
-   /* v1.1.0-beta.6: exact three-zone reference layout, no separate full-width Add row.
+   /* v1.1.0-beta.7: exact three-zone reference layout, no separate full-width Add row.
       Allow chart labels AND numeric values to stay visible at normal dashboard widths. */
    .root{gap:11px}
    .hero{display:grid;grid-template-columns:88px 228px minmax(0,1fr);align-items:start;gap:12px;padding:0;width:100%;min-width:0;box-sizing:border-box}
@@ -613,7 +616,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    ${this._historyHTML()}
    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.6</footer></div></ha-card>`;
+   <footer class="card-version">v1.1.0-beta.7</footer></div></ha-card>`;
  }
 }
 
@@ -647,4 +650,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.6');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.7');
