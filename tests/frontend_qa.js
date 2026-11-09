@@ -68,7 +68,7 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
    const i=history.findIndex(x=>x.id===msg.record_id);assert(i>=0);const [r]=history.splice(i,1);
    this.states['sensor.jwdhl_jan_willem_consumed_today'].attributes.consumed_ml-=r.volume_ml;
    this.states['sensor.jwdhl_jan_willem_drink_count_today'].state=String(history.length);return {deleted:true};}
-  if(msg.type==='jw_daily_hydration_log/export')return {filename:'jwDaily Hydration Log - All Data.xlsx',
+  if(msg.type==='jw_daily_hydration_log/export')return {filename:'20261109-1428 jwDaily Hydration Log - All Data.xlsx',
    mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',base64:btoa('PK')};
   throw Error('Unexpected WebSocket '+JSON.stringify(msg));
  }};
@@ -225,7 +225,7 @@ async function main(){
  assert(!catalog.some(x=>x.id==='custom_1'));
  console.log('PASS: unused custom liquid can be removed');
  await c._click(click('manage-cancel'));await c._click(click('cancel'));
- await c._click(click('export'));assert.deepStrictEqual(downloads,['jwDaily Hydration Log - All Data.xlsx']);
+ await c._click(click('export'));assert.deepStrictEqual(downloads,['20261109-1428 jwDaily Hydration Log - All Data.xlsx']);
  console.log('PASS: admin Excel export retained');
  const past='2026-11-07';
  c._viewDate=past;

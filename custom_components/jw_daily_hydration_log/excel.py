@@ -14,7 +14,18 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from zoneinfo import ZoneInfo
 
 SHEETS = ["Profiles", "Drink Moments", "Daily Totals", "Source Readings", "Adjustments", "Export Info", "Daily Breakdown", "Liquid Types", "Volume Buttons"]
-VERSION = "1.1.0-beta.3"
+VERSION = "1.1.0-beta.8"
+
+def export_filename(timezone_name: str = "Europe/Amsterdam", when: datetime | None = None) -> str:
+    """Deterministic HA-local Excel export filename; literal spaces retained.
+
+    Example: 20261109-1428 jwDaily Hydration Log - All Data.xlsx.
+    The optional timestamp supports stable timezone/DST regression tests.
+    """
+    tz = ZoneInfo(timezone_name)
+    local = when.astimezone(tz) if when is not None else datetime.now(tz)
+    return f"{local:%Y%m%d-%H%M} jwDaily Hydration Log - All Data.xlsx"
+
 
 
 def _xml(value: object) -> str:

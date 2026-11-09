@@ -246,6 +246,12 @@ async def test_coordinator():
     check('Custom SVG icon, volume and drink survive HA restart',any(x['id']==custom['id'] and x['icon_svg']==testsvg
           and x['default_volume_ml']==275 for x in reloaded.custom_liquid_types) and
           any(x['liquid_type']==custom['id'] for x in reloaded.get_history()))
+    check('Excel filename uses HA-local DD timestamp and literal spaces',
+          excel.export_filename('Europe/Amsterdam',datetime(2026,11,9,13,28,tzinfo=timezone.utc))
+          == '20261109-1428 jwDaily Hydration Log - All Data.xlsx')
+    check('Excel filename handles summer DST correctly',
+          excel.export_filename('Europe/Amsterdam',datetime(2026,7,19,13,28,tzinfo=timezone.utc))
+          == '20260719-1528 jwDaily Hydration Log - All Data.xlsx')
     snap=reloaded.export_snapshot();payload=excel.export_xlsx([snap],'Europe/Amsterdam')
     with ZipFile(BytesIO(payload)) as z:
         check('Excel container ZIP CRC',z.testzip() is None)
