@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.7
+# jwDaily Hydration Log v1.1.0-beta.8
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,14 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.7
+## What's new in beta.8
+
+- **Reference-matched Excel:** Export now follows the user-edited four-sheet workbook: `Hydration log`, `Daily Totals`, `Settings - Liquid Types` and `Settings - Volume Buttons`, including the chosen B2 export header, B4–B8 metadata, B11 table header, frozen rows, original styles and native Excel percentage formulas. The workbook uses the literal file naming format `YYYYMMDD-HHMM jwDaily Hydration Log - All Data.xlsx`.
+- **The selected day controls everything:** the open glass, blue volume, remaining volume, red goal, count and drink-type bar chart now show the day chosen in history. Historical days read archived totals and their historic target when saved; missing external source values are not invented.
+- **Responsive layout rebuilt:** card-width-based columns keep the cup and blue total to the left, all chart volumes and the smaller Add control visible on the right at card widths 721/888 px and mobile sizes.
+- **Improved history readability:** larger date selector text and larger drink moment fonts. Excel export stays compact at bottom left.
+- **Export scope:** All retained individual drink moments and configured liquid/volume settings are exported to the four reference sheets. Raw source reading and adjustment diagnostics, which are absent from the reference workbook, are not exported in this four-tab view.
+
 
 - **Future time permitted:** On today's HA-local calendar date, any valid 24-hour time can be entered, even if later than now.
 - **Future calendar day blocked:** Tomorrow and later dates remain rejected in the popup and Python backend. Earlier days remain permitted; impossible DST wall times remain rejected.
@@ -26,7 +33,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 - **Persistent volume-button management (admin):** open Add drink → Manage volume buttons to add, edit, delete, or move each preset. Values are saved per hydration profile; zero buttons is valid and leaves manual custom amount input available. Existing dashboard `quick_add` YAML remains the default until a profile-specific change is saved.
 - **Over-target waterline:** 100% reaches the lowered red target line. Any intake beyond 100% fills to the open rim, never above it; red target line and goal text remain layered *above* the blue fill, and the consumed total can continue increasing without limit from the graphic.
 - **Legibility:** larger volume, date and time controls; more readable labels in the popup.
-- **Today summary redesigned:** blue consumed volume aligned with the glass waterline, target in red above the dashed line, and remaining volume in the white area of the glass. A live horizontal bar chart to the right summarizes current-day drinks by liquid type, independent of the date viewed in history. The redundant history total is removed and Excel button is more compact.
+- **Today summary redesigned:** blue consumed volume aligned with the glass waterline, target in red above the dashed line, and remaining volume in the white area of the glass. The horizontal bar chart on the right summarizes the *selected* day, synchronized with the glass and its target. The redundant history total is removed and Excel button is more compact.
 - **Native-like calendar picker:** the date picker is now a calendar popup with a visible `DD-MM-YYYY` date, previous/next month and keyboard-focusable day buttons. Time remains in 24-hour notation. Popup fields have compact widths.
 - **Wine and icon adjustments:** Wine is a built-in type; Milk uses `mdi:cow`, Soup uses `mdi:bowl-mix`, and Other uses `mdi:glass-water`.
 - **Backend version handshake:** Save checks the running Home Assistant backend version before writing. If a card has updated but HA Core has not restarted, the UI explains the mismatch and prevents a partial/invalid registration rather than showing an unhelpful `Unknown command`.
@@ -36,7 +43,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 - **Smart volume default:** standard liquid types do not select a volume automatically. A custom type only preselects its volume after you explicitly select that type and only if a default was configured. New drink popups otherwise start with no type or volume selected.
 - **Safety for SVGs:** uploads are sanitized by the backend against scripts, remote resources and unsupported XML elements; previewed as inert image elements (not inline markup).
 - **Animated glass:** rising water level on changes plus a gently moving wave. The red dashed 100% target is **16 SVG units (~15 displayed px)** lower than before. The top stays open, with the 100% fill level aligned to the target line.
-- **Excel export:** eight worksheets; the new **Liquid Types** sheet includes each custom type's name, ID, icon configuration and default volume. **Drink Moments** also includes a human-readable liquid name; **Daily Breakdown** includes custom types. Prior Excel data remains exportable.
+- **Excel export:** four reference-matched worksheets with native Excel tables: **Hydration log**, **Daily Totals**, **Settings - Liquid Types** and **Settings - Volume Buttons**. All saved drink moments are retained in Hydration log, including custom liquid names.
 - Existing drink modifications replace stored values. Deletions remove the integration's record. Previously saved records from v1.0.2 show **Unknown (legacy)** if they lack a type. Changes to existing historical records are not archived separately.
 - The `hourly_pace` sensor, pace settings and pace calculations remain removed since beta.1.
 
@@ -44,9 +51,9 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 
 1. Make a current full HA backup including the integration's `.storage` data, and check scripts and automations for the service change described below.
 2. Open **HACS → jwDaily Hydration Log → ⋮ → Redownload → Need a different version?**. If necessary enable pre-releases for the repository.
-3. Select **`v1.1.0-beta.7`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
+3. Select **`v1.1.0-beta.8`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
 4. Refresh the dashboard with `Ctrl+Shift+R` and verify that the card footer shows beta.5. Keep the existing profile `Jan-Willem` and existing dashboard configuration.
-5. Test Add with a built-in liquid and the new date picker, then a custom liquid (name, SVG icon, default amount), register a drink via Add popup, edit/delete only a **test entry**, verify Excel's eight tabs. Do not delete valuable records to test the beta.
+5. Test Add with a built-in liquid and the new date picker, then a custom liquid (name, SVG icon, default amount), register a drink via Add popup, edit/delete only a **test entry**, verify all four Excel tabs. Do not delete valuable records to test the beta.
 
 This repository's GitHub source ZIP is **not an executable installer**. Do not manually copy files into `/config/custom_components/`; HACS owns their upgrades.
 
@@ -57,7 +64,7 @@ This repository's GitHub source ZIP is **not an executable installer**. Do not m
 - **Breaking API change introduced in beta.1:** service `jw_daily_hydration_log.log_drink` and drink events now require `liquid_type`. Values: `water`, `coffee`, `tea`, `milk`, `soup`, `wine`, `other`, or an existing `custom_<id>` from this profile. Audit existing automations before upgrading.
 - Editing or deleting a drink changes stored history irreversibly within this integration; old values may still exist in HA backups or the Recorder. No hidden edit log is kept.
 - You may remove an unused custom liquid type; the backend prohibits removing one that has been used in saved drink history.
-- The updated Excel export contains **all stored records for all profiles**, including custom liquid definitions and SVG markup. It remains restricted to HA administrators.
+- The updated Excel export contains **all stored records for all profiles**, including custom liquid definitions and SVG markup. The four-sheet export remains restricted to HA administrators.
 - Rollback **code** through HACS version selection to `v1.1.0-beta.4`, `v1.1.0-beta.3`, `v1.1.0-beta.2`, `v1.1.0-beta.1` or `v1.0.2` only after a current full backup. **Older versions may overwrite the new custom-type catalog when they save state; custom type definitions could be lost on downgrade.** Rolling back code never recovers edited/deleted records; restore the relevant separate HA backup to recover data.
 
 ### Dashboard YAML (unchanged)
@@ -94,6 +101,6 @@ The beta branch must pass Python offline tests, JavaScript browser-shell tests, 
 
 With **Add drink** open, choose **⚙ Manage liquid types**. The list supports **Edit** for built-in and custom types, **↑ / ↓** for order and **Delete** only for unused custom types. Enter a display name, MDI icon or uploaded safe SVG, and optional default volume. The original liquid ID is never changed; existing historical records remain associated with that type. Choose **Back to drink** when finished.
 
-Choose **⚙ Manage volume buttons** within the same Add/Edit popup. Add, change, remove or reorder any of the 0–24 presets, and save the new sequence. These profile-specific buttons override the original dashboard `quick_add` only after you save them. All choices persist across restarts and are included in the nine-tab Excel export.
+Choose **⚙ Manage volume buttons** within the same Add/Edit popup. Add, change, remove or reorder any of the 0–24 presets, and save the new sequence. These profile-specific buttons override the original dashboard `quick_add` only after you save them. All choices persist across restarts and are included in the four-tab Excel export.
 
 **Over-target:** The red dashed goal stays 15px below the rim; 100% fill meets that line, and when consumption exceeds the goal the blue fill is capped at the open top. The red target line and target label remain legible above the blue. The numeric intake remains uncapped.

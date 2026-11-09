@@ -1,0 +1,83 @@
+name: Publish jwDaily Hydration Log v1.1.0-beta.8
+on:
+  push:
+    branches: ["release/v1.1.0-beta.8"]
+    paths:
+      - .github/workflows/publish-beta-v1.1.0-beta.8.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jwdhl-release-v1.1.0-beta.8
+  cancel-in-progress: false
+
+jobs:
+  publish-beta:
+    name: Validate beta.8 and publish HACS prerelease
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python and run backend tests
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+      - name: Test customized four-sheet Excel reference
+        run: python tests/export_reference_qa.py
+      - name: Test frontend card, date selection and layout
+        run: node tests/frontend_qa.js
+      - name: Check release metadata, layout, and export contract
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('custom_components/jw_daily_hydration_log')
+          manifest=json.loads((root/'manifest.json').read_text())
+          constants=(root/'const.py').read_text()
+          card=(root/'www/jwdaily-hydration-log-card.js').read_text()
+          coordinator=(root/'coordinator.py').read_text()
+          excel=(root/'excel.py').read_text()
+          assert manifest['domain']=='jw_daily_hydration_log'
+          assert manifest['version']=='1.1.0-beta.8'
+          assert "VERSION = '1.1.0-beta.8'" in constants
+          assert 'v1.1.0-beta.8' in card
+          assert "VERSION = '1.1.0-beta.8'" in excel
+          assert 'day_summary' in card and 'def day_summary' in coordinator
+          assert 'container-type:inline-size' in card
+          assert 'class="glass-frame"' in card and 'class="hero-side"' in card
+          assert 'font-size:1.07rem' in card and 'font-size:1.05rem' in card
+          assert 'Manage liquid types' in card and 'Manage volume buttons' in card
+          assert 'manage-hide' in card and 'manage-restore' in card
+          assert 'Future dates are not allowed; a later time today is allowed.' in card
+          assert 'Drink date cannot be in the future' in coordinator
+          assert 'date-nav' in card and 'Export all data to Excel' in card
+          assert 'SHEETS = [' in excel and "'Hydration log'" in excel and "'Daily Totals'" in excel
+          assert 'export_filename(hass.config.time_zone)' in (root/'__init__.py').read_text()
+          assert (root/'brand/icon.png').is_file()
+          assert json.loads(pathlib.Path('hacs.json').read_text())['name']=='jwDaily Hydration Log'
+          assert pathlib.Path('RELEASE_NOTES_v1.1.0-beta.8.md').is_file()
+          print('BETA.8 METADATA, DATE-SUMMARY, LAYOUT, REFERENCE-EXCEL PASS')
+          PY
+      - uses: home-assistant/actions/hassfest@master
+      - name: HACS repository validation
+        uses: hacs/action@main
+        with:
+          category: integration
+      - name: Publish GitHub HACS pre-release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.1.0-beta.8 >/dev/null 2>&1; then
+            echo 'Release already exists; preserving original tag and content.'
+            gh release view v1.1.0-beta.8 --json tagName,isPrerelease,url
+            exit 0
+          fi
+          gh release create v1.1.0-beta.8 --target "$GITHUB_SHA" --title 'jwDaily Hydration Log v1.1.0-beta.8' --prerelease --latest=false --notes-file RELEASE_NOTES_v1.1.0-beta.8.md
+          gh release view v1.1.0-beta.8 --json tagName,isPrerelease,url

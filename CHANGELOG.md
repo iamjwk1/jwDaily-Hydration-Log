@@ -1,5 +1,15 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.8 (HACS pre-release)
+- Fixed responsive dashboard layout at 721px and 888px: glass and blue total grouped left, uncropped liquid breakdown on the right, compact Add directly below the chart, smaller Undo and Excel buttons, and left-aligned history/date controls.
+- Selecting an earlier date now updates every part of the daily summary: consumed volume, glass level, remaining amount, historic goal, drink count and per-liquid bars; no inconsistent today-only sensor values.
+- Increased history date and drink moment font sizes.
+- Rebuilt Excel export to match the supplied customized **four-sheet workbook**, including Excel-style table formatting, frozen rows, B2/B4/B11 positions, columns, liquid settings, volume button settings and native target-percentage formulas.
+- Export filenames now include Home Assistant-local date and time: `YYYYMMDD-HHMM jwDaily Hydration Log - All Data.xlsx`.
+- Included an independent reference workbook regression test and kept raw profile history/storage untouched.
+- Existing `v1.0.2` remains the stable public release.
+
+
 ## v1.1.0-beta.7 (HACS pre-release)
 - Permit future 24-hour CLOCK times when the selected date is TODAY; reject any calendar date later than TODAY.
 - Validate date using HA's configured local timezone in the backend and block future dates in the popup.

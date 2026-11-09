@@ -3,7 +3,7 @@ from __future__ import annotations
 
 DOMAIN = 'jw_daily_hydration_log'
 NAME = 'jwDaily Hydration Log'
-VERSION = '1.1.0-beta.7'
+VERSION = '1.1.0-beta.8'
 PLATFORMS = ['sensor', 'number']
 ENTITY_PREFIX = 'jwdhl'
 EVENT_DRINK = 'jw_daily_hydration_log_drink'
