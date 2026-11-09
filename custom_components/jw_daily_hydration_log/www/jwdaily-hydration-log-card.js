@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.5 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.6 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -204,7 +204,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.5')throw Error(`Frontend v1.1.0-beta.5 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.6')throw Error(`Frontend v1.1.0-beta.6 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -558,21 +558,62 @@ class JwDailyHydrationLogCard extends HTMLElement {
    .delete-warning{margin-top:15px;padding:10px;border:1px solid #b51f2d;border-radius:8px;color:#b51f2d;font-size:.87rem}
    @media(max-width:520px){.fields{grid-template-columns:repeat(2,minmax(0,165px))}}
    @media(max-width:380px){.root{padding:12px}.hero{grid-template-columns:minmax(64px,1fr) 145px;gap:5px}.fields{grid-template-columns:1fr}}
+
+   /* v1.1.0-beta.6: exact three-zone reference layout, no separate full-width Add row.
+      Allow chart labels AND numeric values to stay visible at normal dashboard widths. */
+   .root{gap:11px}
+   .hero{display:grid;grid-template-columns:88px 228px minmax(0,1fr);align-items:start;gap:12px;padding:0;width:100%;min-width:0;box-sizing:border-box}
+   .taken-wrap{height:194px;position:relative;min-width:0}
+   .taken{position:absolute;left:5px;right:auto;top:var(--fill-y);transform:translateY(-50%);font-size:clamp(1.4rem,2.5vw,1.75rem);font-weight:700;color:#168dd1;white-space:nowrap;text-align:left;z-index:1}
+   .glass-stack{width:160px;max-width:100%;min-width:0;align-self:start}
+   .glass-stack .glass{width:160px;max-width:100%;height:auto;margin:0;display:block}
+   .glass-stack .drink-count{margin:5px 0 0;text-align:center;white-space:nowrap;font-size:.84rem}
+   .hero-side{min-width:0;align-self:stretch;display:flex;flex-direction:column;padding-top:7px}
+   .hero-side .liquid-bars{align-self:stretch;width:100%;max-width:100%;min-width:0;overflow:visible;padding:0}
+   .hero-side .bars-title{font-size:.85rem;font-weight:650;margin:0 0 10px}
+   .hero-side .bar-line{display:grid;grid-template-columns:minmax(92px,1.15fr) minmax(44px,1fr) max-content;gap:6px;min-width:0;align-items:center;margin:7px 0;font-size:.8rem}
+   .hero-side .bar-line span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+   .hero-side .bar-line strong{white-space:nowrap;text-align:right;font-size:.78rem;font-variant-numeric:tabular-nums;min-width:0}
+   .hero-side .bar-track{height:11px;min-width:0}
+   .hero-actions{display:flex;flex-direction:column;align-items:flex-start;gap:7px;margin-top:auto;padding:16px 0 0 20px;min-width:0}
+   .hero-actions .add-drink{width:min(245px,100%);min-width:0;padding:10px 13px;border-radius:16px;font-size:.97rem;font-weight:650;white-space:nowrap}
+   .hero-actions .undo-drink{font-size:.75rem;padding:5px 9px;border-radius:10px}
+   .date-nav{justify-content:flex-start}
+   .export{margin-left:-12px;text-align:left}
+   @media(max-width:680px){
+    .hero{grid-template-columns:82px 184px minmax(0,1fr);gap:9px}
+    .hero-actions{padding-left:0}
+    .hero-side .bar-line{grid-template-columns:minmax(78px,1.1fr) minmax(30px,1fr) max-content;gap:4px;font-size:.75rem}
+   }
+   @media(max-width:510px){
+    .hero{grid-template-columns:80px minmax(0,1fr);gap:9px}
+    .hero-side{grid-column:1 / -1;padding-top:8px}
+    .hero-actions{padding:10px 0 0;margin-top:5px}
+    .taken{font-size:1.2rem}
+    .hero-side .bar-line{grid-template-columns:minmax(105px,1fr) minmax(50px,1.4fr) max-content}
+   }
+   @media(max-width:380px){.hero{grid-template-columns:68px minmax(0,1fr);gap:6px}.glass-stack .glass{width:148px}.glass-stack{width:148px}}
    </style><ha-card><div class="root">
    ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2></header>`:''}
-   <div class="hero"><div class="taken-wrap"><span class="taken" style="--fill-y:${(100*(pct>100?19:179-(179-39)*Math.min(100,Math.max(0,pct))/100)/200).toFixed(2)}%">${jdhlFmt(consumed)}</span></div>
-     ${this._config.show_cup!==false?this._glass(pct,remaining,target):''}
-     ${this._todayBarsHTML()}</div>
-   <div class="drink-count">◷ ${count} drink moments</div>
-   ${this._config.show_manual!==false?`<div class="divider"></div><div class="register">
-    <button class="add-drink" data-action="new" ${this._busy?'disabled':''}>+ Add drink</button>
-    ${this._undoId&&this._hass?.user?.is_admin?`<button class="secondary" data-action="undo" ${this._busy?'disabled':''}>Undo last drink</button>`:''}
-   </div>`:''}
+   <div class="hero">
+     <div class="taken-wrap"><span class="taken" style="--fill-y:${(100*(pct>100?19:179-(179-39)*Math.min(100,Math.max(0,pct))/100)/200).toFixed(2)}%">${jdhlFmt(consumed)}</span></div>
+     <div class="glass-stack">
+       ${this._config.show_cup!==false?this._glass(pct,remaining,target):''}
+       <div class="drink-count">◷ ${count} drink moments</div>
+     </div>
+     <div class="hero-side">
+       ${this._todayBarsHTML()}
+       ${this._config.show_manual!==false?`<div class="hero-actions">
+         <button class="add-drink" data-action="new" ${this._busy?'disabled':''}>+ Add drink</button>
+         ${this._undoId&&this._hass?.user?.is_admin?`<button class="secondary undo-drink" data-action="undo" ${this._busy?'disabled':''}>Undo last drink</button>`:''}
+       </div>`:''}
+     </div>
+   </div>
    ${this._error?`<div class="error" role="alert">${jdhlEscape(this._error)}</div>`:''}${this._status?`<div class="status" aria-live="polite">${jdhlEscape(this._status)}</div>`:''}
    ${this._historyHTML()}
    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.5</footer></div></ha-card>`;
+   <footer class="card-version">v1.1.0-beta.6</footer></div></ha-card>`;
  }
 }
 
@@ -606,4 +647,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.5');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.6');

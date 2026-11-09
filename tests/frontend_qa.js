@@ -1,4 +1,4 @@
-/* jwDaily beta5 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta6 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -23,11 +23,11 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.5',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.6',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:history.map(x=>({...x})),
    total_ml:history.reduce((a,r)=>a+r.volume_ml,0),liquid_types:catalog.map(x=>({...x})),
    today_breakdown:history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]),
-   volume_buttons:storedVolumes,backend_version:'1.1.0-beta.5'};
+   volume_buttons:storedVolumes,backend_version:'1.1.0-beta.6'};
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
      default_volume_ml:msg.default_volume_ml??null,custom:true};catalog.push(item);return item;
@@ -75,12 +75,19 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.5'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.6'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
- assert(c.shadowRoot.innerHTML.includes('justify-content:flex-end}.register .add-drink'));
- assert(c.shadowRoot.innerHTML.includes('justify-content:flex-start;gap:5px'));
- assert(c.shadowRoot.innerHTML.includes('padding-top:10px;text-align:left'));
- console.log('PASS: modified dashboard layout preserves right-aligned Add and left-aligned history/export controls');
+ const layout=c.shadowRoot.innerHTML;
+ assert(layout.includes('grid-template-columns:88px 228px minmax(0,1fr)'), 'Reference layout: blue intake / glass / right-side chart');
+ assert(layout.includes('<div class="glass-stack">') && layout.includes('<div class="hero-side">'), 'glass/count and bars/Add are grouped separately');
+ assert(layout.indexOf('class="hero-side"')<layout.indexOf('class="hero-actions"'),'Add below the chart');
+ assert(layout.includes('width:min(245px,100%)'), 'Add is compact');
+ assert(layout.includes('justify-content:flex-start;gap:5px'), 'History date left-aligned');
+ assert(layout.includes('margin-left:-12px;text-align:left'), 'Export button left');
+ assert(layout.includes('overflow:visible;padding:0'), 'Chart numbers cannot be clipped by parent overflow');
+ assert(layout.includes('grid-template-columns:minmax(92px,1.15fr) minmax(44px,1fr) max-content'), 'Bar has fixed place for volume numbers');
+ assert(!layout.includes('<div class="register">'), 'Obsolete full-width Add row removed');
+ console.log('PASS: reference hero placement, compact right Add, readable bars, count under cup, left history/export');
 
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));

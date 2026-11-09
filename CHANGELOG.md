@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.6 (HACS pre-release)
+- Matched the card's daily header to the user's reference screenshot: total close to a left-positioned open glass and a wider bar chart on the right, with readable, unclipped numeric volumes.
+- Moved the **+ Add drink** button under the chart and made it smaller; kept **Undo last drink** as a compact secondary action when appropriate.
+- Placed the drink-count below the glass; removed the full-width Add row that pushed the history down.
+- Kept the date selector and Excel export left-aligned. Narrow-card breakpoints adjusted.
+- No changes to drink history, stored data or backend service behavior.
+
+
 ## v1.1.0-beta.5 (HACS pre-release)
 - Added **Delete** to all installation-provided liquid types. Deleting a built-in removes its selection button, not its stable ID, history, historical totals or Excel data. A **Restore** control is provided in the manager. Changes persist by profile across HA restarts.
 - The manager provides a confirmation before deleting a type; custom types continue to be deleted physically only when unused.
