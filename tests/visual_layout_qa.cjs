@@ -11,7 +11,8 @@ const puppeteer=require('puppeteer-core');
    await page.setContent('<style>body{margin:0}ha-card{display:block}</style><div id="mount"></div>');
    await page.addScriptTag({path:path.resolve(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js')});
    await page.evaluate(width=>{
-    const holder=document.getElementById('mount');holder.style.width=width+'px';
+    if(!customElements.get('ha-card'))customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block';}});
+   const holder=document.getElementById('mount');holder.style.width=width+'px';
     const c=document.createElement('jwdaily-hydration-log-card');
     holder.appendChild(c);
     const today=new Date();const z=n=>String(n).padStart(2,'0');const d=`${today.getFullYear()}-${z(today.getMonth()+1)}-${z(today.getDate())}`;
