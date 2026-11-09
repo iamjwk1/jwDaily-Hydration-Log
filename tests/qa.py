@@ -141,6 +141,32 @@ async def test_coordinator():
           and reloaded.daily_archive['2026-11-06']['manual_ml']==225)
     check('Today breakdown derives from current day only',
           reloaded.today_breakdown()==[{'liquid_type':'milk','volume_ml':200.0}])
+    historical=reloaded.day_summary('2026-11-08')
+    check('Historical day summary uses saved snapshot and its own drink count',
+          historical['consumed_ml']==760 and historical['drink_count']==3
+          and historical['target_ml']>0 and historical['date']=='2026-11-08')
+    check('Historical day bars exclude drinks from other dates',
+          sum(x['volume_ml'] for x in historical['liquid_breakdown'])==760
+          and not any(x['liquid_type']=='milk' for x in historical['liquid_breakdown']))
+    current=reloaded.day_summary('2026-11-09')
+    check('Current day summary uses live sensor total and its own liquid breakdown',
+          current['consumed_ml']==200 and current['drink_count']==1
+          and current['liquid_breakdown']==[{'liquid_type':'milk','volume_ml':200.0}])
+    older=reloaded.day_summary('2026-11-06')
+    check('Backdated day without original snapshot uses stored drink record',
+          older['consumed_ml']==225 and older['drink_count']==1
+          and older['liquid_breakdown']==[{'liquid_type':'water','volume_ml':225.0}])
+    before=reloaded.daily_archive['2026-11-08'].copy()
+    reloaded.daily_archive['2026-11-08']['consumed_ml']=985
+    reloaded.daily_archive['2026-11-08']['target_ml']=2750
+    check('Historical day preserves sensor-inclusive totals and historical target',
+          reloaded.day_summary('2026-11-08')['consumed_ml']==985
+          and reloaded.day_summary('2026-11-08')['target_ml']==2750)
+    reloaded.daily_archive['2026-11-08']=before
+    try:
+        reloaded.day_summary('2026-11-10')
+    except ValueError: check('Future day history summary blocked', True)
+    else: check('Future day history summary blocked', False)
     wine=await reloaded.async_add_drink(75,'mL','dashboard','wine')
     check('Wine recorded as distinct type and appears in today breakdown',
           any(x['liquid_type']=='wine' and x['volume_ml']==75 for x in reloaded.today_breakdown()))

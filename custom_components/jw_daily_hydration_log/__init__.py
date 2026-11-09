@@ -153,9 +153,16 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
     except ServiceValidationError as exc:
         connection.send_error(msg['id'],'not_found',str(exc))
         return
-    records=c.get_history(msg.get('date'))
+    day=msg.get('date') or c._today()
+    try:
+        summary=c.day_summary(day)
+    except ValueError as exc:
+        connection.send_error(msg['id'],'invalid_date',str(exc))
+        return
+    records=c.get_history(day)
     connection.send_result(msg['id'],{
-        'profile':c.slug,'date':msg.get('date') or c._today(), 'entries':records,
+        'profile':c.slug,'date':day, 'entries':records,
+        'day_summary':summary,
         'count':len(records),'total_ml':round(sum(x['volume_ml'] for x in records),2),
         'consumed_ml':round(c.consumed_ml,2),'target_ml':c.target_ml,
         'liquid_types':c.get_liquid_definitions(),

@@ -613,20 +613,61 @@ class HydrationCoordinator:
                   for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
         return sorted(values, key=lambda r: (r['timestamp'],r['id']))
 
-    def today_breakdown(self) -> list[dict]:
-        """Fresh current-day totals by stored liquid type, independent of history pagination.
+    def liquid_breakdown(self, day: str) -> list[dict]:
+        """Recorded drinks grouped for ONE selected date, including hidden types.
 
-        Only individually logged drink moments can be attributed; never guess the
-        type of external source-sensor measurements or pre-v1.1.0 records.
+        Source-sensor measurements cannot be assigned a liquid type and are not
+        silently included in the typed breakdown.
         """
         totals: dict[str, float] = {}
         for record in self.records:
-            if record.get('kind') != 'drink' or record.get('timestamp', '')[:10] != self._today():
+            if record.get('kind') != 'drink' or record.get('timestamp', '')[:10] != day:
                 continue
             liquid = record.get('liquid_type', 'unknown')
             totals[liquid] = totals.get(liquid, 0.0) + float(record.get('volume_ml', 0))
         return [dict(liquid_type=key, volume_ml=round(volume, 3))
                 for key, volume in sorted(totals.items()) if volume > 0]
+
+    def today_breakdown(self) -> list[dict]:
+        """Backward-compatible current-day breakdown."""
+        return self.liquid_breakdown(self._today())
+
+    def day_summary(self, day: str) -> dict:
+        """Consistent historic or live totals for the selected HA-local date.
+
+        Closed days use their stored daily_archive snapshots, including past
+        sensor contribution and the target in force on that day. Dates without
+        a snapshot cannot reconstruct historic sensor readings: use their
+        manually logged drinks without inventing missing external volumes.
+        """
+        try:
+            parsed = datetime.strptime(day, '%Y-%m-%d').date()
+            if parsed.isoformat() != day:
+                raise ValueError()
+        except (TypeError, ValueError) as exc:
+            raise ValueError('History date must be YYYY-MM-DD') from exc
+        if day > self._today():
+            raise ValueError('History date cannot be in the future')
+        entries = self.get_history(day)
+        if day == self._today():
+            consumed = self.consumed_ml
+            target = self.target_ml
+            source = self.source_contribution_ml
+        else:
+            archived = self.daily_archive.get(day)
+            if archived is not None:
+                consumed = float(archived.get('consumed_ml', 0.0))
+                target = float(archived.get('target_ml') or self.target_ml)
+                source = float(archived.get('source_ml', 0.0))
+            else:
+                consumed = sum(float(item['volume_ml']) for item in entries)
+                target = self.target_ml
+                source = 0.0
+        return dict(date=day, consumed_ml=round(max(0.0, consumed), 3),
+                    target_ml=round(max(1.0, target), 3),
+                    source_ml=round(max(0.0, source), 3),
+                    drink_count=len(entries),
+                    liquid_breakdown=self.liquid_breakdown(day))
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
