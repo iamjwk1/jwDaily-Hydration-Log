@@ -254,30 +254,45 @@ async def test_coordinator():
           == '20260719-1528 jwDaily Hydration Log - All Data.xlsx')
     snap=reloaded.export_snapshot();payload=excel.export_xlsx([snap],'Europe/Amsterdam')
     with ZipFile(BytesIO(payload)) as z:
-        check('Excel container ZIP CRC',z.testzip() is None)
-        files=['xl/workbook.xml','xl/styles.xml']+[f'xl/worksheets/sheet{i}.xml' for i in range(1,10)]
-        check('Nine Excel worksheets present',all(k in z.namelist() for k in files))
+        check('Excel four-sheet ZIP CRC',z.testzip() is None)
+        names=z.namelist()
+        files=['xl/workbook.xml','xl/styles.xml','xl/theme/theme1.xml'] + [
+            f'xl/worksheets/sheet{i}.xml' for i in range(1,5)] + [
+            'xl/tables/table1.xml','xl/tables/table2.xml']
+        check('Reference Excel four sheets and two Excel tables',all(k in names for k in files) and
+              'xl/worksheets/sheet5.xml' not in names)
         for f in files:ET.fromstring(z.read(f))
-        check('Nine worksheets valid XML',True)
-        ws=z.read('xl/worksheets/sheet2.xml').decode()
-        check('Deleted old drinks absent from Excel',ids[1] not in ws and ids[2] not in ws)
-        check('Updated type and volume exported', 'soup' in ws and '<v>180' in ws)
-        breakdown=z.read('xl/worksheets/sheet7.xml').decode()
-        check('Liquid type breakdown exported with wine and unknown legacy', 'Unknown legacy mL' in breakdown and 'Wine mL' in breakdown)
-        catalog_sheet=z.read('xl/worksheets/sheet8.xml').decode()
-        check('Custom liquid catalog exported with SVG and default volume',
-              'Citroenwater XL' in catalog_sheet and 'circle' in catalog_sheet and '<v>275' in catalog_sheet)
-        pref_sheet=z.read('xl/worksheets/sheet9.xml').decode()
-        check('Saved volume button order exported to ninth sheet',
-              'Volume mL' in pref_sheet and '<v>333' in pref_sheet and '<v>120' in pref_sheet)
-        check('Visibility status included in Excel liquid catalog',
-              'Visible in picker' in catalog_sheet and 'Spring water' in catalog_sheet)
-        check('Edited built-in name, icon and order exported',
-              'Spring water' in catalog_sheet and 'mdi:water-plus' in catalog_sheet and 'Button order' in catalog_sheet)
-        workbook_rels=z.read('xl/_rels/workbook.xml.rels').decode()
-        check('Styles relationship distinct from all nine worksheet IDs',
-              'Id="rId10"' in workbook_rels)
-        check('Excel dates native with DD-MM-YYYY number format' , 's="4"' in breakdown and 'formatCode="dd-mm-yyyy"' in z.read('xl/styles.xml').decode())
+        check('All reference Excel components valid XML',True)
+        wb=z.read('xl/workbook.xml').decode()
+        check('Excel sheet names and order match reference',
+              all(f'name="{n}"' in wb for n in ('Hydration log','Daily Totals',
+              'Settings - Liquid Types','Settings - Volume Buttons')))
+        log=z.read('xl/worksheets/sheet1.xml').decode()
+        totals=z.read('xl/worksheets/sheet2.xml').decode()
+        catalog_sheet=z.read('xl/worksheets/sheet3.xml').decode()
+        pref_sheet=z.read('xl/worksheets/sheet4.xml').decode()
+        check('Hydration log follows B2 metadata and B11 table',
+              'Home Assistant jwDaily Hydration log - Hydration log' in log
+              and 'Drink log rows' in log and 'Liquid name' in log
+              and 'Citroenwater XL' in log)
+        check('Daily totals follow B2 metadata, B11 table and 7 types',
+              'Home Assistant jwDaily Hydration Log  - Daily totals' in totals
+              and 'Coffee' in totals and 'Wine' in totals
+              and 'Full day' in totals and '<f>I12/G12*100</f>' in totals)
+        check('Liquid settings exported in reference sheet 3',
+              'Citroenwater XL' in catalog_sheet and 'circle' in catalog_sheet
+              and '<v>275' in catalog_sheet and 'Visible in picker' in catalog_sheet
+              and 'Spring water' in catalog_sheet and 'mdi:water-plus' in catalog_sheet)
+        check('Volume settings exported in reference sheet 4',
+              'Volume mL' in pref_sheet and '<v>333' in pref_sheet
+              and '<v>120' in pref_sheet)
+        check('Both reference Excel tables have dynamic ranges',
+              'tblHydrationLog' in z.read('xl/tables/table1.xml').decode()
+              and 'tblDailyIntake' in z.read('xl/tables/table2.xml').decode())
+        check('Reference Excel date/time and date-only formats',
+              'dd\\-mmm\\-yyyy' in z.read('xl/styles.xml').decode())
+        check('Excel row 11 frozen in both detailed sheets',
+              'ySplit="11"' in log and 'ySplit="11"' in totals)
     restored=await reloaded.async_set_builtin_liquid_visibility('water',True)
     check('Restore re-enables built-in selection without losing custom display data',
           restored['hidden'] is False and restored['name']=='Spring water' and

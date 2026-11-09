@@ -1,0 +1,89 @@
+"""Standalone QA: user's four-sheet Excel export contract (stdlib only)."""
+from __future__ import annotations
+from datetime import datetime, timezone
+from io import BytesIO
+from pathlib import Path
+import importlib.util
+import math
+import sys
+import xml.etree.ElementTree as ET
+from zipfile import ZipFile
+
+ROOT = Path(__file__).resolve().parents[1]
+source = ROOT / 'custom_components' / 'jw_daily_hydration_log' / 'excel.py'
+spec = importlib.util.spec_from_file_location('jwdhl_excel_export_reference', source)
+excel = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(excel)
+
+N = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+NS = '{' + N['m'] + '}'
+when=datetime(2026,11,9,13,28,tzinfo=timezone.utc)
+assert excel.export_filename('Europe/Amsterdam',when)=='20261109-1428 jwDaily Hydration Log - All Data.xlsx'
+assert excel.export_filename('Europe/Amsterdam',datetime(2026,7,19,13,28,tzinfo=timezone.utc))=='20260719-1528 jwDaily Hydration Log - All Data.xlsx'
+
+profile={
+ 'config':{'name':'Test profile','age':42,'gender':'female'},
+ 'date':'2026-11-09','target_ml':2500,'consumed_ml':750,
+ 'liquid_definitions':[
+  {'id':'water','name':'Water (cup)','custom':False,'default_volume_ml':250,'icon_mdi':'mdi:water','hidden':False},
+  {'id':'coffee','name':'Coffee','custom':False,'default_volume_ml':180,'icon_mdi':'mdi:coffee','hidden':False},
+  {'id':'custom_abc','name':'Test juice','custom':True,'default_volume_ml':200,'icon_mdi':'mdi:glass-water','hidden':False},
+ ],
+ 'volume_buttons':[120,180,220,300,500],
+ 'daily_archive':{'2026-11-08':{'target_ml':2500,'consumed_ml':750,'drink_count':3}},
+ 'source_readings':[],
+ 'records':[
+  {'id':'id_1','kind':'drink','timestamp':'2026-11-08T12:00:00+01:00','volume_ml':250,'liquid_type':'water'},
+  {'id':'id_2','kind':'drink','timestamp':'2026-11-08T13:00:00+01:00','volume_ml':300,'liquid_type':'coffee'},
+  {'id':'id_3','kind':'drink','timestamp':'2026-11-08T14:00:00+01:00','volume_ml':200,'liquid_type':'custom_abc'},
+  {'id':'id_4','kind':'drink','timestamp':'2026-11-09T14:00:00+01:00','volume_ml':750,'liquid_type':'water'},
+  {'id':'id_set','kind':'set_target','timestamp':'2026-11-08T15:00:00+01:00','volume_ml':2500},
+ ],
+}
+raw=excel.export_xlsx([profile],'Europe/Amsterdam',when=when)
+with ZipFile(BytesIO(raw)) as zipf:
+ assert zipf.testzip() is None, 'ZIP CRC error'
+ names=set(zipf.namelist())
+ expected={f'xl/worksheets/sheet{i}.xml' for i in range(1,5)}
+ assert expected.issubset(names)
+ assert 'xl/worksheets/sheet5.xml' not in names
+ for name in names:
+  if name.endswith(('.xml','.rels')): ET.fromstring(zipf.read(name))
+ wb=ET.fromstring(zipf.read('xl/workbook.xml'))
+ assert [s.attrib['name'] for s in wb.find(NS+'sheets')] == [
+  'Hydration log','Daily Totals','Settings - Liquid Types','Settings - Volume Buttons']
+ def root(index): return ET.fromstring(zipf.read(f'xl/worksheets/sheet{index}.xml'))
+ def c(r,ref):
+  v=r.find(f'.//{NS}c[@r="{ref}"]'); assert v is not None,ref
+  vt=v.find(NS+'v');it=v.find(NS+'is');f=v.find(NS+'f')
+  return ((vt.text if vt is not None else ''.join((x.text or '') for x in it.iter(NS+'t')) if it is not None else None),
+          f.text if f is not None else None,v.attrib.get('s','0'))
+ log=root(1);day=root(2);types=root(3);buttons=root(4)
+ assert c(log,'B2')[0]=='Home Assistant jwDaily Hydration log - Hydration log'
+ assert c(log,'B4')[0]=='Export date' and c(log,'B11')[0]=='Date+time'
+ assert c(log,'C8')[0]=='4' and c(log,'F11')[0]=='Target\n(mL)'
+ assert c(log,'G12')[0]=='water', 'Built-in must show raw lowercase ID as user reference'
+ assert c(log,'G14')[0]=='Test juice', 'Custom must show configured display name'
+ assert c(log,'B12')[2]=='25' and c(log,'G11')[2]=='23'
+ assert c(day,'B2')[0]=='Home Assistant jwDaily Hydration Log  - Daily totals'
+ assert c(day,'C8')[0]=='2' and c(day,'K11')[0]=='Water\n(mL)'
+ assert c(day,'I12')[0]=='750.0' and c(day,'J12')[1]=='I12/G12*100'
+ assert c(day,'I13')[0]=='750.0' and c(day,'J13')[1]=='I13/G13*100'
+ assert c(day,'K12')[0]=='250.0' and c(day,'L12')[0]=='300.0'
+ assert c(day,'Q12')[0]=='0', 'Custom types must not be mislabeled as Other'
+ assert c(types,'C1')[0]=='Name' and c(types,'C4')[0]=='Test juice'
+ assert c(buttons,'C1')[0]=='Volume mL' and c(buttons,'C6')[0]=='500'
+ for sh in (log,day):
+  pane=sh.find('.//'+NS+'pane');assert pane is not None and pane.attrib['ySplit']=='11'
+ assert log.find(NS+'tableParts') is not None and day.find(NS+'tableParts') is not None
+ assert types.find(NS+'autoFilter') is not None and buttons.find(NS+'autoFilter') is not None
+ t1=ET.fromstring(zipf.read('xl/tables/table1.xml'))
+ t2=ET.fromstring(zipf.read('xl/tables/table2.xml'))
+ assert t1.attrib['name']=='tblHydrationLog' and t1.attrib['ref']=='B11:H15'
+ assert t2.attrib['name']=='tblDailyIntake' and t2.attrib['ref']=='B11:Q13'
+ styles=ET.fromstring(zipf.read('xl/styles.xml'))
+ assert len(styles.find(NS+'cellXfs'))>=30
+ # Date+time, color, header rows and percentage formulas follow the reference.
+ assert c(log,'B12')[2]=='25' and c(log,'H15')[2]=='32'
+ assert c(day,'J12')[2]=='18' and c(day,'J13')[2]=='22'
+ print('REFERENCE_EXCEL_QA_PASS: 4 sheets, exact row/column anchors, typography/styles, tables, formulas, custom liquids, filename & CRC')
