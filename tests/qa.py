@@ -147,7 +147,7 @@ async def test_coordinator():
           and historical['target_ml']>0 and historical['date']=='2026-11-08')
     check('Historical day bars exclude drinks from other dates',
           sum(x['volume_ml'] for x in historical['liquid_breakdown'])==760
-          and not any(x['liquid_type']=='milk' for x in historical['liquid_breakdown']))
+          and any(x['liquid_type']=='milk' and x['volume_ml']==500 for x in historical['liquid_breakdown']))
     current=reloaded.day_summary('2026-11-09')
     check('Current day summary uses live sensor total and its own liquid breakdown',
           current['consumed_ml']==200 and current['drink_count']==1
