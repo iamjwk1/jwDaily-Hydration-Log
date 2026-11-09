@@ -1,5 +1,14 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.9 — HACS pre-release
+- Repaired OOXML sheet1/sheet2 order for Excel desktop; added explicit regression test `pageMargins` before `tableParts`, XML illegal characters filtering.
+- Rebalanced glass/chart left-right layout, compact Add, readable history dates, fixed uniform drink-row heights.
+- Android numeric-only time entry normalized and validated without needing colon key.
+- Added 2 per-profile entities: hourly intake today and daily intake last 7 days, with stable ID based typed liquid breakdown; ApexCharts samples included.
+- Strengthened automated browser layout verification at 888/721/412/360 px.
+- Existing drink records, historical daily archive, profile settings and stable v1.0.2 unaffected.
+
+
 ## v1.1.0-beta.8 (HACS pre-release)
 - Fixed responsive dashboard layout at 721px and 888px: glass and blue total grouped left, uncropped liquid breakdown on the right, compact Add directly below the chart, smaller Undo and Excel buttons, and left-aligned history/date controls.
 - Selecting an earlier date now updates every part of the daily summary: consumed volume, glass level, remaining amount, historic goal, drink count and per-liquid bars; no inconsistent today-only sensor values.

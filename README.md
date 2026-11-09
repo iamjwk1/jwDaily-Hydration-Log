@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.8
+# jwDaily Hydration Log v1.1.0-beta.9
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,14 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.8
+## What's new in beta.9
+
+- **Excel desktop repair:** Fixed OOXML worksheet element ordering (`pageMargins` must precede `tableParts`) which caused Excel Desktop to repair or empty sheets 1 and 2. The four customized reference sheets, tab labels, formatting, formulas and timestamped filename remain intact. XML/ZIP/reference structure tested; final Microsoft Excel Desktop compatibility still requires a user-side open/save/reopen acceptance test.
+- **Card layout:** reference-aligned left blue total, glass moved left, wider right-hand bar chart, compact Add button under chart; equal-height drink-history rows, larger bold history date, and left-aligned Excel export.
+- **Android clock input:** numeric keypad accepts `930` → `09:30`, `1430` → `14:30`, `14.30` → `14:30`, optional seconds; invalid `2431` is rejected because 24:31 is not a valid time. Later times today remain allowed, future calendar days prohibited.
+- **ApexCharts integration:** two new per-profile chart-data sensors (24 clock-hour buckets today; seven calendar-day totals), typed series by persistent liquid ID. Working example Lovelace configurations in `examples/apexcharts-jwdhl-v1.1.0-beta.9.md`. Existing source sensor volume is not attributed to a liquid type without evidence.
+- **QA:** full backend/frontend regressions, XML order verification and real Chrome geometry checks on 888/721/412/360-px cards. No changes to history storage or existing sensor IDs.
+
 
 - **Reference-matched Excel:** Export now follows the user-edited four-sheet workbook: `Hydration log`, `Daily Totals`, `Settings - Liquid Types` and `Settings - Volume Buttons`, including the chosen B2 export header, B4–B8 metadata, B11 table header, frozen rows, original styles and native Excel percentage formulas. The workbook uses the literal file naming format `YYYYMMDD-HHMM jwDaily Hydration Log - All Data.xlsx`.
 - **The selected day controls everything:** the open glass, blue volume, remaining volume, red goal, count and drink-type bar chart now show the day chosen in history. Historical days read archived totals and their historic target when saved; missing external source values are not invented.
@@ -51,7 +58,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 
 1. Make a current full HA backup including the integration's `.storage` data, and check scripts and automations for the service change described below.
 2. Open **HACS → jwDaily Hydration Log → ⋮ → Redownload → Need a different version?**. If necessary enable pre-releases for the repository.
-3. Select **`v1.1.0-beta.8`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
+3. Select **`v1.1.0-beta.9`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
 4. Refresh the dashboard with `Ctrl+Shift+R` and verify that the card footer shows beta.5. Keep the existing profile `Jan-Willem` and existing dashboard configuration.
 5. Test Add with a built-in liquid and the new date picker, then a custom liquid (name, SVG icon, default amount), register a drink via Add popup, edit/delete only a **test entry**, verify all four Excel tabs. Do not delete valuable records to test the beta.
 

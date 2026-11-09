@@ -310,6 +310,10 @@ async def test_coordinator():
           restored['hidden'] is False and restored['name']=='Spring water' and
           len(reloaded.get_history())>0)
     await reloaded.async_delete_drink(custom_drink['id'])
+    check('Deleting drink updates hourly chart bins immediately',
+          not any(custom['id'] in b['liquids'] for b in reloaded.chart_hourly_today()['buckets']))
+    check('Deleting drink updates rolling seven-day chart immediately',
+          not any(custom['id'] in d['liquids'] for d in reloaded.chart_last_7_days()['days']))
     await reloaded.async_delete_liquid_type(custom['id'])
     check('Unused custom type can be permanently removed',not any(x['id']==custom['id'] for x in reloaded.custom_liquid_types))
     await reloaded.async_set_volume_buttons([])
