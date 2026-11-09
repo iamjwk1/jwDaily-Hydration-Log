@@ -47,6 +47,7 @@ const puppeteer=require('puppeteer-core');
       chart:rect('.liquid-bars'),button:rect('.add-drink'),date:rect('.date-nav input'),export:rect('.export button'),
       count:rect('.drink-count'),rows,bodyScroll:document.documentElement.scrollWidth,fontsize:getComputedStyle(root.querySelector('.date-nav input')).fontSize};
    });
+   console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
    assert(x.chart.left>=x.glass.left-15,'chart starts too far left');
    for(const part of ['glass','taken','chart','button','date','export']){
