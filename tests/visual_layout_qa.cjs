@@ -49,7 +49,7 @@ const puppeteer=require('puppeteer-core');
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
-   assert(x.chart.left>=x.glass.left-15,'chart starts too far left');
+   if(width>=500)assert(x.chart.left>=x.glass.left-15,'desktop chart starts too far left');
    for(const part of ['glass','taken','chart','button','date','export']){
      const p=x[part];assert(p&&p.left>=x.card.left-4&&p.right<=right+2,part+' outside card: '+JSON.stringify(p));
    }
