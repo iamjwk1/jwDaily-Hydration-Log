@@ -653,6 +653,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
    .history-table tbody td{height:56px;box-sizing:border-box;padding:8px 7px;line-height:1.25;vertical-align:middle;font-size:1.05rem}
    .history-table th{padding:9px 7px}
    .export{padding:9px 0}
+   /* Prevent blue intake text overlapping the glass on 721px cards. */
+   @container(max-width:740px){.glass-frame .taken{left:-13px}}
    @container(max-width:395px){
     .hero{grid-template-columns:minmax(0,40%) minmax(0,60%)}
     .glass-frame .taken{font-size:1.16rem}
