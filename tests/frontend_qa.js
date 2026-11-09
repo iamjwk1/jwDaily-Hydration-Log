@@ -1,4 +1,4 @@
-/* jwDaily beta8 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta9 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -23,14 +23,14 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.8',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.9',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history'){
    const breakdown=history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]);
    const total=history.reduce((a,r)=>a+r.volume_ml,0);
    return {date:msg.date,entries:history.map(x=>({...x})),
     total_ml:total,liquid_types:catalog.map(x=>({...x})),
     day_summary:{date:msg.date,consumed_ml:total,target_ml:3000,drink_count:history.length,liquid_breakdown:breakdown},
-    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.8'};
+    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.9'};
   }
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
@@ -79,7 +79,7 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.8'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.9'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'), 'Glass and taken amount share a frame');
@@ -91,7 +91,7 @@ async function main(){
  assert(layout.includes('white-space:nowrap;text-align:right'), 'Bar values never wrap');
  assert(layout.includes('margin-top:auto;padding:10px 0 0 9px'), 'Compact Add below chart');
  assert(layout.includes('font-size:1.07rem') && layout.includes('font-size:1.05rem'), 'History date and moments larger');
- assert(layout.includes('class="card-version">v1.1.0-beta.8'), 'New beta version footer');
+ assert(layout.includes('class="card-version">v1.1.0-beta.9'), 'New beta version footer');
  assert(!layout.includes('<div class="register">'), 'No full-width Add row');
  console.log('PASS: two-column container-responsive glass/chart, Add placement and larger history text');
 
@@ -139,6 +139,14 @@ async function main(){
  c._modal.date=c._todayPretty();c._modal.time='23:59:59';
  assert.strictEqual(c._payload().time,'23:59:59');
  c._modal.date=initialDate;
+ c._modal.time='930';assert.strictEqual(c._payload().time,'09:30');
+ c._modal.time='1430';assert.strictEqual(c._payload().time,'14:30');
+ c._modal.time='14.30';assert.strictEqual(c._payload().time,'14:30');
+ c._modal.time='2431';assert.throws(()=>c._payload(),/24-hour time/);
+ c._modal.time='1265';assert.throws(()=>c._payload(),/24-hour time/);
+ c._modal.time='23:59:59';
+ assert(c.shadowRoot.innerHTML.includes('inputmode="numeric"'),'Android time input uses numeric keyboard');
+ console.log('PASS: Android numeric-only 930 / 1430 / dotted time normalizes; 24:31 is rejected');
  console.log('PASS: future calendar date blocked, later clock time today allowed');
  console.log('PASS: standard types never prefill volume, type and amount are explicit');
  await c._click(click('manage-liquids'));assert(c._manageOpen);assert(c.shadowRoot.innerHTML.includes('Manage liquid types'));

@@ -19,7 +19,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.8'
+VERSION = '1.1.0-beta.9'
 SHEETS = ['Hydration log', 'Daily Totals', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -42,7 +42,12 @@ def export_filename(timezone_name: str = 'Europe/Amsterdam', when: datetime | No
 
 
 def _xml(value) -> str:
-    return escape(str(value), {'"':'&quot;', "'":'&apos;'})
+    """Remove XML 1.0-invalid control and surrogate code points before escaping."""
+    clean=''.join(c for c in str(value) if c in '\t\n\r' or
+                  (0x20 <= ord(c) <= 0xD7FF) or
+                  (0xE000 <= ord(c) <= 0xFFFD) or
+                  (0x10000 <= ord(c) <= 0x10FFFF))
+    return escape(clean, {'"':'&quot;', "'":'&apos;'})
 
 
 def _safe_text(value) -> str:
@@ -137,9 +142,11 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     parts.append('</sheetData>')
     if index in (3,4):
         parts.append(f'<autoFilter ref="A1:{last_cell}"/>')
+    # ECMA-376 worksheet schema: pageMargins MUST precede tableParts.
+    # beta.8 reversed these and desktop Excel removed sheets 1 and 2.
+    parts.append('<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>')
     if table:
         parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
-    parts.append('<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>')
     parts.append('</worksheet>')
     return ''.join(parts).encode('utf-8')
 

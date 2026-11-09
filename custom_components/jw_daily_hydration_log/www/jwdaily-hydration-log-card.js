@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.8 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.9 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -17,6 +17,14 @@ const jdhlDate=d=>`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+
 const jdhlIsoDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const jdhlDateToIso=v=>/^\d{2}-\d{2}-\d{4}$/.test(v)?`${v.slice(6)}-${v.slice(3,5)}-${v.slice(0,2)}`:null;
 const jdhlIsoToDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?`${v.slice(8)}-${v.slice(5,7)}-${v.slice(0,4)}`:null;
+const jdhlNormalizeTime=value=>{
+ const raw=String(value??'').trim().replace(/[.\s]/g,':');
+ let valueText=raw;
+ if(/^\d{3,4}$/.test(raw)){const v=raw.padStart(4,'0');valueText=`${v.slice(0,2)}:${v.slice(2)}`;}
+ else if(/^\d{5,6}$/.test(raw)){const v=raw.padStart(6,'0');valueText=`${v.slice(0,2)}:${v.slice(2,4)}:${v.slice(4)}`;}
+ else if(/^\d{1,2}:\d{1,2}(:\d{1,2})?$/.test(raw))valueText=raw.split(':').map(v=>v.padStart(2,'0')).join(':');
+ return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(valueText)?valueText:null;
+};
 
 class JwDailyHydrationLogCard extends HTMLElement {
  constructor(){
@@ -111,7 +119,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(Object.hasOwn(this._customDraft,field)){this._customDraft[field]=e.target.value;
     if(field==='icon_mdi'&&e.target.value)this._customDraft.icon_svg='';return;}
   }
-  if(this._modal){this._modal[field]=e.target.value;return;}
+  if(this._modal){
+   if(field==='time'&&e.type==='change'){
+    const normal=jdhlNormalizeTime(e.target.value);
+    if(normal){e.target.value=normal;this._modal.time=normal;}else this._modal.time=e.target.value;
+   }else this._modal[field]=e.target.value;
+   return;
+  }
   if(field==='history_date')this._typedHistoryDate=e.target.value;
  }
  _liquidDefs(){return this._history?.liquid_types?.length?this._history.liquid_types:
@@ -196,10 +210,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return {date:`${p.day}-${p.month}-${p.year}`,time:`${p.hour}:${p.minute}:${p.second}`};
  }
  _openNew(){this._modal={mode:'new',id:'',liquid_type:'',volume_ml:'',date:jdhlIsoToDate(this._viewDate||this._todayISO()),time:this._nowTime()};this._calendarOpen=false;this._calendarMonth=null;this._confirmDelete=false;this._render(true);}
- _payload(){const m=this._modal,volume=Number(m?.volume_ml),date=m?.date?.trim(),time=m?.time?.trim();
+ _payload(){const m=this._modal,volume=Number(m?.volume_ml),date=m?.date?.trim(),time=jdhlNormalizeTime(m?.time);
   if(!this._liquidInfo(m?.liquid_type) || (m.mode==='new' && this._liquidInfo(m.liquid_type)?.hidden))throw Error('Select a visible liquid type.');
   if(!Number.isFinite(volume)||volume<=0||volume>100000)throw Error('Enter a volume between 0 and 100,000 mL.');
-  if(!/^\d{2}-\d{2}-\d{4}$/.test(date)||!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw Error('Use DD-MM-YYYY and a 24-hour time HH:MM or HH:MM:SS.');
+  if(!/^\d{2}-\d{2}-\d{4}$/.test(date))throw Error('Use DD-MM-YYYY for the date.');
+  if(!time)throw Error('Enter a valid 24-hour time: 930 → 09:30, 1430 → 14:30. Hours must be 00–23 and minutes 00–59.');
   const iso=jdhlDateToIso(date);
   if(!iso||!Number.isFinite(Date.parse(`${iso}T12:00:00`))||jdhlIsoDate(new Date(`${iso}T12:00:00`))!==iso)throw Error('Use a valid calendar date.');
   if(iso>this._todayISO())throw Error('Future dates are not allowed; a later time today is allowed.');
@@ -208,7 +223,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.8')throw Error(`Frontend v1.1.0-beta.8 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.9')throw Error(`Frontend v1.1.0-beta.9 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -472,7 +487,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <div class="fields">
      <label>Custom amount (mL)<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${jdhlEscape(m.volume_ml)}" placeholder="Enter or select"/></label>
      <label>Date (DD-MM-YYYY)<div class="date-select"><button type="button" class="date-trigger secondary" data-action="calendar-toggle" aria-label="Choose date" aria-expanded="${this._calendarOpen}">${jdhlEscape(m.date)} <span aria-hidden="true">▦</span></button>${this._calendarHTML()}</div></label>
-     <label>Time (24-hour)<input data-field="time" inputmode="numeric" placeholder="HH:MM:SS" value="${jdhlEscape(m.time)}"/></label>
+     <label>Time (24-hour)<input data-field="time" type="text" inputmode="numeric" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="1430 → 14:30" title="Type 0930 for 09:30; colon is optional" value="${jdhlEscape(m.time)}"/></label>
     </div>
     ${this._confirmDelete?`<div class="delete-warning">Permanently delete this drink? This cannot be undone.</div>
      <div class="dialog-actions"><button data-action="delete-back" class="secondary">Cancel</button>
@@ -623,6 +638,31 @@ class JwDailyHydrationLogCard extends HTMLElement {
     .hero-actions{margin-top:10px;align-items:flex-start}
     .hero-side .bar-line{grid-template-columns:minmax(72px,1fr) minmax(65px,1.4fr) max-content}
    }
+   /* beta.9 visual reference: consumed left, glass center-left, chart to its right. */
+   .root{padding:18px 26px 14px;gap:9px}
+   .hero{grid-template-columns:minmax(0,40%) minmax(0,60%);gap:0}
+   .glass-frame .glass{width:74%;max-width:74%;margin:0 0 0 26%}
+   .glass-frame .taken{left:0;font-size:clamp(1.40rem,2.9vw,1.9rem)}
+   .glass-stack .drink-count{margin:-9px 0 0 26%;width:74%;font-size:.87rem}
+   .hero-side{padding:3px 0 0 14px}
+   .hero-actions{margin-top:auto;padding:12px 0 0 12px;align-items:flex-end}
+   .hero-actions .add-drink{padding:8px 16px;font-size:.95rem}
+   .hero-actions .undo-drink{padding:4px 9px;font-size:.73rem}
+   .date-nav input{font-size:1.28rem;font-weight:700;width:158px;max-width:52%}
+   .history-table tbody tr{height:56px;max-height:56px;box-sizing:border-box}
+   .history-table tbody td{height:56px;box-sizing:border-box;padding:8px 7px;line-height:1.25;vertical-align:middle;font-size:1.05rem}
+   .history-table th{padding:9px 7px}
+   .export{padding:9px 0}
+   @container(max-width:395px){
+    .hero{grid-template-columns:minmax(0,40%) minmax(0,60%)}
+    .glass-frame .taken{font-size:1.16rem}
+    .hero-side{padding-left:6px}
+    .hero-actions{padding-left:0}
+   }
+   @container(max-width:335px){
+    .hero{grid-template-columns:minmax(0,1fr)}
+    .hero-side{padding-left:0}
+   }
    </style><ha-card><div class="root">
    ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2></header>`:''}
    <div class="hero-shell">
@@ -643,7 +683,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    ${this._historyHTML()}
    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.8</footer></div></ha-card>`;
+   <footer class="card-version">v1.1.0-beta.9</footer></div></ha-card>`;
  }
 }
 
@@ -677,4 +717,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.8');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.9');

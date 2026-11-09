@@ -76,6 +76,14 @@ with ZipFile(BytesIO(raw)) as zipf:
  for sh in (log,day):
   pane=sh.find('.//'+NS+'pane');assert pane is not None and pane.attrib['ySplit']=='11'
  assert log.find(NS+'tableParts') is not None and day.find(NS+'tableParts') is not None
+ # Desktop Excel rejects worksheets with tableParts before pageMargins.
+ for sheet in (log,day):
+  names=[x.tag.removeprefix(NS) for x in sheet]
+  assert names.index('pageMargins') < names.index('tableParts'), names
+ for sheet_num in (1,2):
+  xml=zipf.read(f'xl/worksheets/sheet{sheet_num}.xml').decode()
+  assert xml.index('<pageMargins') < xml.index('<tableParts')
+ assert excel._xml('Valid\x01\ud800name')=='Validname'
  assert types.find(NS+'autoFilter') is not None and buttons.find(NS+'autoFilter') is not None
  t1=ET.fromstring(zipf.read('xl/tables/table1.xml'))
  t2=ET.fromstring(zipf.read('xl/tables/table2.xml'))
