@@ -229,7 +229,7 @@ async function main(){
  console.log('PASS: admin Excel export retained');
  const past='2026-11-07';
  c._viewDate=past;
- c._history={date:past,entries:[],day_summary:{date:past,consumed_ml:850,target_ml:2500,drink_count:2,
+ c._history={date:past,total_ml:850,entries:[],day_summary:{date:past,consumed_ml:850,target_ml:2500,drink_count:2,
     liquid_breakdown:[{liquid_type:'coffee',volume_ml:650},{liquid_type:'milk',volume_ml:200}]},
     liquid_types:catalog.map(x=>({...x})),volume_buttons:storedVolumes};
  c._render(true);
