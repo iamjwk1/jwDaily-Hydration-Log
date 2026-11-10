@@ -1,5 +1,11 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.19
+- Increase glass width by approximately 10-13% at normal and narrow card widths.
+- Reduce Excel export button height to 28 CSS px without changing its position.
+- Retain all beta.18 functions, records, styles and dynamic Excel exports.
+
+
 ## v1.1.0-beta.18
 - Consistent deterministic per-liquid colors across both charts; weekly scale and responsive axes improved.
 - Compact chart cards, five 28px history rows and smaller date/Excel controls.
