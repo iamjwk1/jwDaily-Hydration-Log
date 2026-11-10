@@ -123,7 +123,7 @@ const puppeteer=require('puppeteer-core');
      return {dialog:rect(dlg),rows:rows.map(rect),buttons:rows.flatMap(x=>[...x.querySelectorAll('button')].map(rect))};
    });
    assert(volumes.dialog.width<=451,'Volume manager too wide');
-   assert(volumes.rows.every(r=>r.height<80),'Volume manager rows too high');
+   assert(volumes.rows.every(r=>r.height<=44),'Volume manager must be one 38-44px line per volume');
    assert(volumes.buttons.every(a=>a.right<=volumes.dialog.right+1),'Volume button clipped outside dialog');
    console.log('VISUAL_MODAL_PASS',width,JSON.stringify({normal,liquids,volumes}));
    await page.screenshot({path:path.resolve(__dirname,'layout-beta12-'+width+'.png'),fullPage:true});
