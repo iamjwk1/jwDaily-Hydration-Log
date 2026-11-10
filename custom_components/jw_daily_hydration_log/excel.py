@@ -19,8 +19,8 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.11'
-SHEETS = ['Hydration log', 'Daily Totals', 'Settings - Liquid Types', 'Settings - Volume Buttons']
+VERSION = '1.1.0-beta.12'
+SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
 # extracted from the supplied Excel reference. Values contain no workbook cells.
