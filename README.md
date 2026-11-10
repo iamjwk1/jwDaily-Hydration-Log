@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.14
+# jwDaily Hydration Log v1.1.0-beta.15
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,14 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.14
+## What's new in beta.15
+
+- Unified responsive glass/chart grid with bars to the right whenever available card width permits.
+- Readable goal label, compact date field with native calendar popup, five 38px history rows.
+- Removed footer divider and extra whitespace; aligned Excel button and version.
+- No storage, Excel or functionality changes from beta.14.
+
+## Changes retained from beta.14
 
 - Preserve Office XML namespaces in styles.xml when generating orange historical-liquid headers; prevent desktop Excel repair warnings.
 - Use direct in-page Excel data download instead of blob:http links; browser origin security still depends on how Home Assistant is accessed.
