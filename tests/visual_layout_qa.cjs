@@ -22,6 +22,7 @@ const puppeteer=require('puppeteer-core');
      {id:'c',timestamp:d+'T14:00:00+01:00',liquid_type:'milk',volume_ml:180},
      {id:'d',timestamp:d+'T15:00:00+01:00',liquid_type:'water',volume_ml:500}
     ];
+    for(let i=0;i<5;i++)records.push({id:'older_'+i,timestamp:d+'T0'+(i+1)+':00:00+01:00',liquid_type:'tea',volume_ml:120});
     const defs=['water','coffee','tea','milk','soup','wine','other'].map(id=>({id,name:id,icon_mdi:'mdi:water',icon_svg:'',default_volume_ml:null,hidden:false,custom:false}));
     const summary={date:d,consumed_ml:1080,target_ml:2000,drink_count:4,liquid_breakdown:[
       {liquid_type:'water',volume_ml:720},{liquid_type:'coffee',volume_ml:180},{liquid_type:'milk',volume_ml:180}
@@ -38,14 +39,20 @@ const puppeteer=require('puppeteer-core');
     c.setConfig({profile:'jan_willem',title:'Vocht intake Jan-Willem'});
     c.hass=hass;
    },width);
-   await page.waitForFunction(()=>document.querySelector('jwdaily-hydration-log-card')?.shadowRoot?.querySelectorAll('.history-table tbody tr').length===4);
+   await page.waitForFunction(()=>document.querySelector('jwdaily-hydration-log-card')?.shadowRoot?.querySelectorAll('.history-table tbody tr').length===9);
    const x=await page.evaluate(()=>{
     const root=document.querySelector('jwdaily-hydration-log-card').shadowRoot;
     const rect=x=>{const el=root.querySelector(x);if(!el)return null;const a=el.getBoundingClientRect();return {left:a.left,right:a.right,top:a.top,bottom:a.bottom,width:a.width,height:a.height}};
-    const rows=[...root.querySelectorAll('.history-table tbody tr')].map(el=>el.getBoundingClientRect().height);
+    const trs=[...root.querySelectorAll('.history-table tbody tr')];
+    const rows=trs.map(el=>el.getBoundingClientRect().height);
+    const historyBox=root.querySelector('.history-table');
+    const viewport=historyBox.getBoundingClientRect();
+    const header=root.querySelector('.history-table thead').getBoundingClientRect();
+    const fifth=trs[4].getBoundingClientRect(),sixth=trs[5].getBoundingClientRect();
+    const histViewport={height:viewport.height,headerBottom:header.bottom,bottom:viewport.bottom,fifthBottom:fifth.bottom,sixthTop:sixth.top,scrollHeight:historyBox.scrollHeight,clientHeight:historyBox.clientHeight};
     return {card:rect('ha-card'),hero:rect('.hero'),glass:rect('.glass-frame .glass'),taken:rect('.taken'),
       chart:rect('.liquid-bars'),button:rect('.add-drink'),date:rect('.date-nav input'),export:rect('.export button'),
-      count:rect('.drink-count'),rows,bodyScroll:document.documentElement.scrollWidth,
+      count:rect('.drink-count'),rows,histViewport,bodyScroll:document.documentElement.scrollWidth,
       fontsize:getComputedStyle(root.querySelector('.date-nav input')).fontSize,
       intakeFont:getComputedStyle(root.querySelector('.taken')).fontSize,
       activeButtons:[...root.querySelectorAll('button.secondary:not(:disabled)')].length,
@@ -63,6 +70,11 @@ const puppeteer=require('puppeteer-core');
    assert(x.button.width<235,'Add button must be compact');
    assert(x.chart.left<x.button.left+10,'Add belongs under chart, not outside it');
    assert(x.rows.every(h=>Math.abs(h-38)<1),'History rows not uniformly 38px: '+x.rows);
+   assert(x.histViewport.height<=226 && x.histViewport.height>=224,'History viewport must be header + five rows');
+   assert(x.histViewport.fifthBottom<=x.histViewport.bottom+1,'Fifth data row must be fully visible');
+   assert(x.histViewport.sixthTop>=x.histViewport.bottom-1,'Sixth data row must be hidden until scrolling');
+   assert(x.histViewport.scrollHeight>x.histViewport.clientHeight,'Older drinks must remain scrollable');
+   assert(x.histViewport.headerBottom<x.histViewport.bottom,'Header must be visible');
    assert(Number.parseFloat(x.fontsize)>=18,'History date too small: '+x.fontsize);
    assert(parseFloat(x.intakeFont)>=17&&parseFloat(x.intakeFont)<=24.2,'Blue intake font outside responsive range: '+x.intakeFont);
    assert(x.activeButtons>=2,'Enabled secondary controls are unexpectedly absent/disabled');
