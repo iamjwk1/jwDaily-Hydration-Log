@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.11
+# jwDaily Hydration Log v1.1.0-beta.12
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,15 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.11
+## What's new in beta.12
+
+- Fix card breakpoint and position liquid chart to the right of the glass on sufficiently wide cards.
+- Reduce actual history row height and prevent vertical padding expansion.
+- Make volume manager a true one-line input/action layout.
+- Rename the second Excel worksheet to Daily intake.
+- Preserve all profile data, history and choices.
+
+## Changes retained from beta.11
 
 - **FIX-01:** side-by-side chart to the right of the open glass and selected-day total on cards with sufficient room, stacking only on small cards; percentage line, bar totals and water animation unchanged.
 - **FIX-02:** removed Undo last drink button from the card, with no empty placeholder; Add/Edit/Delete are unchanged.
