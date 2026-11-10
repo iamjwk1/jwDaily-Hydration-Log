@@ -277,7 +277,7 @@ async def test_coordinator():
         check('All reference Excel components valid XML',True)
         wb=z.read('xl/workbook.xml').decode()
         check('Excel sheet names and order match reference',
-              all(f'name="{n}"' in wb for n in ('Hydration log','Daily Totals',
+              all(f'name="{n}"' in wb for n in ('Hydration log','Daily intake',
               'Settings - Liquid Types','Settings - Volume Buttons')))
         log=z.read('xl/worksheets/sheet1.xml').decode()
         totals=z.read('xl/worksheets/sheet2.xml').decode()
