@@ -522,11 +522,11 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 /* The glass and charts form ONE two-column hero; a width-dependent glass scale
    replaces the former fixed 274px glass and premature 455px stacking. */
 .hero-shell{container:jdhl-card / inline-size;width:100%;min-width:0}
-.hero{display:grid;grid-template-columns:clamp(195px,36%,274px) minmax(0,1fr);column-gap:10px;align-items:start;width:100%;min-width:0}
+.hero{display:grid;grid-template-columns:clamp(155px,42%,274px) minmax(0,1fr);column-gap:10px;align-items:start;width:100%;min-width:0}
 .glass-side{grid-column:1;grid-row:1;min-width:0;width:100%}
 .glass-stack{display:grid;grid-template-columns:minmax(77px,40%) minmax(0,60%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
 .taken-slot{position:relative;grid-column:1;grid-row:1;height:100%;min-width:0}
-.taken{position:absolute;right:2px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:clamp(17px,2.4vw,24px);font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
+.taken{position:absolute;right:2px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
 .glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%}
 .glass{display:block;width:100%;height:auto;aspect-ratio:4/5;margin:0}
 .drink-count{grid-column:2;grid-row:2;min-width:0;width:100%;margin:0;text-align:center;white-space:nowrap;font-size:.76rem;line-height:1.4}
@@ -628,20 +628,20 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
 .status{font-size:.82rem;color:var(--secondary-text-color)}
 /* Keep charts beside glass at 400+ CSS-pixel container widths, including zoomed HA views. */
-@container jdhl-card (max-width:399px){
+@container jdhl-card (max-width:279px){
  .hero{grid-template-columns:minmax(0,1fr);row-gap:6px}
  .glass-side{grid-column:1;grid-row:1;width:min(274px,100%);margin:0 auto}
  .hero-side{grid-column:1;grid-row:2;min-height:0}
  .hero-actions{margin-top:8px}
 }
-@container jdhl-card (min-width:400px) and (max-width:560px){
- .hero{grid-template-columns:195px minmax(0,1fr);gap:8px}
+@container jdhl-card (min-width:280px) and (max-width:560px){
+ .hero{grid-template-columns:clamp(155px,42%,195px) minmax(0,1fr);gap:8px}
  .hero-side{min-height:185px}
  .bars-title{margin-bottom:6px}
  .bar-line{grid-template-columns:minmax(56px,1.1fr) minmax(20px,1fr) max-content;gap:4px;font-size:.72rem;margin:6px 0}
  .bar-line strong{font-size:.71rem}
  .drink-count{font-size:.70rem}
- .taken{font-size:19px}
+ .taken{font-size:clamp(17px,5cqw,24px)}
 }
 @container jdhl-card (max-width:350px){
  .bar-line{grid-template-columns:minmax(66px,1fr) minmax(28px,1fr) max-content}
