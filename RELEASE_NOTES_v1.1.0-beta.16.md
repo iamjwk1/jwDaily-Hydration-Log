@@ -1,0 +1,3 @@
+# jwDaily Hydration Log v1.1.0-beta.16
+
+Full HACS beta release built from v1.1.0-beta.15. Fixes the card switching to a stacked layout on the user's zoomed 720px dashboard. Glass and Today by liquid remain side by side down to 280 CSS pixels; narrower widths stack. Retains 5×38px scrollable Drink history rows, compact date field with manual entry and calendar popup, left-aligned Excel export, right-aligned version, compact Add drink, readable blue total and red target. Excel Daily intake header row 11 is exactly **44 pt**; Hydration log header stays 34 pt and Date+time width 19. Dynamic drink-type columns, orange historical-only headers, browser-safe XLSX export and two chart cards remain. No destructive migrations.
