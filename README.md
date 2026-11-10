@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.9
+# jwDaily Hydration Log v1.1.0-beta.10
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,12 +6,19 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.9
+## What's new in beta.10
+
+- **Reference-aligned compact dashboard:** one consistent card-width layout with a 24px blue intake total, fixed non-overlapping separation from the glass, wider right-side chart, smaller and lower Add drink button, and *Drink moments kept directly under the glass*. On narrow cards the chart stacks below the glass.
+- **History rows now 40 CSS px high**, uniform and vertically centered; the large bold date selector remains. No persistent `Drink saved` / `Saving…` status row or wasted gap. Excel export stays compact and flush left.
+- **Enabled buttons are unmistakably active:** pale blue background/border/focus for date, volume, liquid and secondary controls, unlike disabled controls.
+- **Excel readability:** four-sheet export is sorted **oldest → newest** and uses wider columns for `SVG Image`, `Default volume mL`, `Volume mL` and `Custom configured`; native formulas and Excel desktop OOXML compatibility fix retained.
+- **No changes to stored data or backend API.** Profiles, historical records, water animation, target, custom liquids, Android time parsing, date selection and ApexCharts outputs all preserved.
+
 
 - **Excel desktop repair:** Fixed OOXML worksheet element ordering (`pageMargins` must precede `tableParts`) which caused Excel Desktop to repair or empty sheets 1 and 2. The four customized reference sheets, tab labels, formatting, formulas and timestamped filename remain intact. XML/ZIP/reference structure tested; final Microsoft Excel Desktop compatibility still requires a user-side open/save/reopen acceptance test.
 - **Card layout:** reference-aligned left blue total, glass moved left, wider right-hand bar chart, compact Add button under chart; equal-height drink-history rows, larger bold history date, and left-aligned Excel export.
 - **Android clock input:** numeric keypad accepts `930` → `09:30`, `1430` → `14:30`, `14.30` → `14:30`, optional seconds; invalid `2431` is rejected because 24:31 is not a valid time. Later times today remain allowed, future calendar days prohibited.
-- **ApexCharts integration:** two new per-profile chart-data sensors (24 clock-hour buckets today; seven calendar-day totals), typed series by persistent liquid ID. Working example Lovelace configurations in `examples/apexcharts-jwdhl-v1.1.0-beta.9.md`. Existing source sensor volume is not attributed to a liquid type without evidence.
+- **ApexCharts integration:** two new per-profile chart-data sensors (24 clock-hour buckets today; seven calendar-day totals), typed series by persistent liquid ID. Working example Lovelace configurations in `examples/apexcharts-jwdhl-v1.1.0-beta.10.md`. Existing source sensor volume is not attributed to a liquid type without evidence.
 - **QA:** full backend/frontend regressions, XML order verification and real Chrome geometry checks on 888/721/412/360-px cards. No changes to history storage or existing sensor IDs.
 
 
@@ -58,7 +65,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 
 1. Make a current full HA backup including the integration's `.storage` data, and check scripts and automations for the service change described below.
 2. Open **HACS → jwDaily Hydration Log → ⋮ → Redownload → Need a different version?**. If necessary enable pre-releases for the repository.
-3. Select **`v1.1.0-beta.9`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
+3. Select **`v1.1.0-beta.10`**, download, then **restart Home Assistant Core** (browser refresh alone cannot load new backend commands).
 4. Refresh the dashboard with `Ctrl+Shift+R` and verify that the card footer shows beta.5. Keep the existing profile `Jan-Willem` and existing dashboard configuration.
 5. Test Add with a built-in liquid and the new date picker, then a custom liquid (name, SVG icon, default amount), register a drink via Add popup, edit/delete only a **test entry**, verify all four Excel tabs. Do not delete valuable records to test the beta.
 

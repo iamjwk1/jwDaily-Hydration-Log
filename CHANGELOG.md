@@ -1,5 +1,14 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.10 — HACS pre-release
+- Matched user-edited visual reference: fixed 24px blue intake next to left glass without overlap; wider right chart; smaller Add control anchored at the lower right.
+- Kept dynamic *Drink moments* directly beneath glass. Removed only persistent success/status text beneath the hero.
+- Uniform compact 40px history table rows; big bold selected date retained; Excel export aligned left and close to table.
+- Enabled secondary and picker buttons have blue active states distinct from truly disabled buttons.
+- Four-sheet Excel export is chronologically sorted and has readable expanded headers for liquid settings, volume buttons and drink log.
+- Regression browser geometry tests strengthened at 888/721/412/360px. Existing history, profile settings, WebSocket interface, Android time normalization and ApexCharts entities unaffected.
+
+
 ## v1.1.0-beta.9 — HACS pre-release
 - Repaired OOXML sheet1/sheet2 order for Excel desktop; added explicit regression test `pageMargins` before `tableParts`, XML illegal characters filtering.
 - Rebalanced glass/chart left-right layout, compact Add, readable history dates, fixed uniform drink-row heights.
