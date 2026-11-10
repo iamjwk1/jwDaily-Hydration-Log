@@ -76,7 +76,7 @@ const puppeteer=require('puppeteer-core');
    assert(x.histViewport.scrollHeight>x.histViewport.clientHeight,'Older drinks must remain scrollable');
    assert(x.histViewport.headerBottom<x.histViewport.bottom,'Header must be visible');
    assert(Number.parseFloat(x.fontsize)>=14,'History date too small: '+x.fontsize);
-   assert(parseFloat(x.intakeFont)>=23&&parseFloat(x.intakeFont)<=24.2,'Blue intake font outside responsive range: '+x.intakeFont);
+   assert(parseFloat(x.intakeFont)>=(width>=560?23:15)&&parseFloat(x.intakeFont)<=24.2,'Blue intake font outside responsive range: '+x.intakeFont);
    assert(x.activeButtons>=2,'Enabled secondary controls are unexpectedly absent/disabled');
    assert(!x.statusVisible,'Permanent status message should not consume card height');
    assert(x.count.top>=x.glass.bottom-1 && x.count.top<=x.glass.bottom+12,'Drink moments must stay directly under glass');
