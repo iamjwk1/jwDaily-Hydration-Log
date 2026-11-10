@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.16
+# jwDaily Hydration Log v1.1.0-beta.17
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
