@@ -1,6 +1,13 @@
 # jwDaily Hydration Log — changelog
 
-## v1.1.0-beta.13
+## v1.1.0-beta.14
+- Office styles XML prefix preservation fixes corrupt XLSX export.
+- Excel in-page download and 2 selectable self-contained HACS Lovelace chart cards.
+- Revised card layout, calendar input and aligned Excel/version footer.
+- Retains five-row history, profiles, history and settings without data migration.
+
+
+## v1.1.0-beta.14
 - Rebuilt card's complete stylesheet for fluid side-by-side layout and five-row history viewport.
 - Dynamic Excel Daily intake columns for current and historical-only types, flagged orange.
 - Hydration log Date+time column width 19.
