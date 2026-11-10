@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.15 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.16 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -224,7 +224,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.15')throw Error(`Frontend v1.1.0-beta.15 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.16')throw Error(`Frontend v1.1.0-beta.16 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -553,7 +553,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(!force&&this._lastRender===k)return;this._lastRender=k;
   this.shadowRoot.innerHTML=`<style>
 
-/* beta.15 unified responsive layout with stable 2-column hero and compact history/footer */
+/* beta.16 unified responsive layout with stable 2-column hero and compact history/footer */
 :host{display:block;min-width:0;width:100%;max-width:100%}
 ha-card{display:block;box-sizing:border-box;max-width:100%;overflow:hidden}
 .root{box-sizing:border-box;display:flex;flex-direction:column;gap:4px;min-width:0;padding:18px 20px 12px;color:var(--primary-text-color,#202a32)}
@@ -679,22 +679,22 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
 .delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
 .status{font-size:.82rem;color:var(--secondary-text-color)}
-/* One deliberate breakpoint: stack only if the card content itself is too narrow.
-   Never use a 555px breakpoint: Home Assistant can render cards at browser zoom. */
-@container jdhl-card (max-width:379px){
+/* A 720px screenshot may correspond to only 360 CSS pixels when the browser is zoomed.
+   Keep the charts alongside the cup at all practical dashboard card widths. */
+@container jdhl-card (max-width:279px){
  .hero{grid-template-columns:minmax(0,1fr);row-gap:6px}
  .glass-side{grid-column:1;grid-row:1;width:min(260px,100%);margin:0 auto}
  .hero-side{grid-column:1;grid-row:2;min-height:0}
  .hero-actions{margin-top:6px}
 }
-@container jdhl-card (min-width:380px) and (max-width:560px){
- .hero{grid-template-columns:clamp(177px,42%,208px) minmax(0,1fr);column-gap:7px}
- .glass-stack{grid-template-columns:minmax(69px,39%) minmax(0,61%)}
+@container jdhl-card (min-width:280px) and (max-width:560px){
+ .hero{grid-template-columns:clamp(132px,40%,208px) minmax(0,1fr);column-gap:7px}
+ .glass-stack{grid-template-columns:minmax(48px,38%) minmax(0,62%)}
  .hero-side{min-height:185px}
- .bar-line{grid-template-columns:minmax(50px,1.0fr) minmax(20px,.85fr) max-content;gap:4px;margin:6px 0;font-size:.72rem}
- .bar-line strong{font-size:.71rem}
- .taken{font-size:clamp(17px,4.6cqw,24px)}
- .drink-count{font-size:.71rem}
+ .bar-line{grid-template-columns:minmax(43px,.95fr) minmax(24px,.85fr) max-content;gap:3px;margin:6px 0;font-size:.72rem}
+ .bar-line strong{font-size:.69rem}
+ .taken{font-size:clamp(15px,4.6cqw,24px)}
+ .drink-count{font-size:clamp(.62rem,1.9cqw,.75rem)}
 }
 @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
 @media(max-width:475px){
@@ -705,7 +705,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .volume-edit-row input{width:65px}
  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@container jdhl-card (max-width:355px){.history-date-selector input{width:104px;flex-basis:104px;font-size:.80rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}}
+@container jdhl-card (max-width:355px){.history-date-selector input{width:104px;flex-basis:104px;font-size:.80rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}.bar-line{grid-template-columns:minmax(33px,.85fr) minmax(17px,.65fr) max-content;gap:2px}.bar-line strong{font-size:.64rem}}
 @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
 
    </style><ha-card><div class="root">
@@ -729,7 +729,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.15</span>
+    <span class="card-version">v1.1.0-beta.16</span>
    </footer></div></ha-card>`;
  }
 }
@@ -803,7 +803,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
     .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:10px;text-align:right}
     @container(max-width:400px){.axis span{font-size:.53rem}}
    </style>`;
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.15</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.16</div></ha-card>`;return;}
   const colors=new Map(keys.map((k,i)=>[k,JDHL_PALETTE[i%JDHL_PALETTE.length]]));
   const bars=records.map(r=>{
    const height=100*Math.max(0,r.total)/max;
@@ -814,7 +814,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
    return `<div class="bar-col" title="${jdhlEscape(r.label)}: ${Math.round(r.total)} mL"><div class="stack" style="--pct:${Math.min(100,height).toFixed(3)}">${portions}</div></div>`;
   }).join('');
   const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}</span>`).join('');
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><div class="plot">${bars}</div><div class="axis">${records.map(r=>`<span>${jdhlEscape(r.label)}</span>`).join('')}</div><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.15</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><div class="plot">${bars}</div><div class="axis">${records.map(r=>`<span>${jdhlEscape(r.label)}</span>`).join('')}</div><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.16</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -829,4 +829,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.15');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.16');
