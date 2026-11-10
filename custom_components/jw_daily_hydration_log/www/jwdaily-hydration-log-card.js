@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.14 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.15 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -224,7 +224,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.14')throw Error(`Frontend v1.1.0-beta.14 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.15')throw Error(`Frontend v1.1.0-beta.15 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -405,7 +405,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
        <animate attributeName="d" values="${w0};${w1};${w0}" dur="2.7s" repeatCount="indefinite"/></path></g>`:''}
    <path d="M38 ${targetY} L122 ${targetY}" stroke="#fff" stroke-opacity=".95" stroke-width="5" stroke-dasharray="4 5" stroke-linecap="round"/>
    <path d="M38 ${targetY} L122 ${targetY}" stroke="#e04444" stroke-width="2.6" stroke-dasharray="4 5" stroke-linecap="round"/>
-   <text x="80" y="30" text-anchor="middle" font-size="19" fill="#e03535" font-weight="650" stroke="#fff" stroke-width="3" paint-order="stroke">${jdhlFmt(target)}</text>
+   <text x="80" y="30" text-anchor="middle" font-size="17" fill="#e03535" font-weight="650" stroke="#fff" stroke-width="3" paint-order="stroke">${jdhlFmt(target)}</text>
    ${p<96?`<text x="80" y="${remainingY}" text-anchor="middle" font-size="16" fill="var(--primary-text-color,#172b3b)" font-weight="500" stroke="var(--card-background-color,#fff)" stroke-width="2" paint-order="stroke">${jdhlFmt(remaining)}</text>`:''}
   </svg>`;
  }
@@ -553,10 +553,10 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(!force&&this._lastRender===k)return;this._lastRender=k;
   this.shadowRoot.innerHTML=`<style>
 
-/* beta.13 clean-sheet layout: card-internal breakpoints, no earlier CSS overrides */
+/* beta.15 unified responsive layout with stable 2-column hero and compact history/footer */
 :host{display:block;min-width:0;width:100%;max-width:100%}
 ha-card{display:block;box-sizing:border-box;max-width:100%;overflow:hidden}
-.root{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 20px 12px;color:var(--primary-text-color,#202a32)}
+.root{box-sizing:border-box;display:flex;flex-direction:column;gap:4px;min-width:0;padding:18px 20px 12px;color:var(--primary-text-color,#202a32)}
 header h2{font-size:1.15rem;font-weight:650;margin:0}
 .muted{color:var(--secondary-text-color,#63717d)}
 .error{color:var(--error-color,#b52027);font-size:.86rem}
@@ -564,14 +564,14 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 /* The glass and charts form ONE two-column hero; a width-dependent glass scale
    replaces the former fixed 274px glass and premature 455px stacking. */
 .hero-shell{container:jdhl-card / inline-size;width:100%;min-width:0}
-.hero{display:grid;grid-template-columns:clamp(155px,42%,274px) minmax(0,1fr);column-gap:10px;align-items:start;width:100%;min-width:0}
+.hero{display:grid;grid-template-columns:clamp(186px,40%,274px) minmax(0,1fr);column-gap:9px;align-items:start;width:100%;min-width:0}
 .glass-side{grid-column:1;grid-row:1;min-width:0;width:100%}
-.glass-stack{display:grid;grid-template-columns:minmax(77px,40%) minmax(0,60%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
+.glass-stack{display:grid;grid-template-columns:minmax(72px,38%) minmax(0,62%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
 .taken-slot{position:relative;grid-column:1;grid-row:1;height:100%;min-width:0}
 .taken{position:absolute;right:8px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
 .glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%}
 .glass{display:block;width:100%;height:auto;aspect-ratio:4/5;margin:0}
-.drink-count{grid-column:2;grid-row:2;min-width:0;width:100%;margin:0;text-align:center;white-space:nowrap;font-size:.76rem;line-height:1.4}
+.drink-count{grid-column:2;grid-row:2;min-width:0;width:100%;margin:0;text-align:center;white-space:nowrap;font-size:.80rem;line-height:1.4}
 .hero-side{grid-column:2;grid-row:1;min-width:0;width:100%;min-height:224px;display:flex;flex-direction:column;padding:1px 0 0;box-sizing:border-box}
 .liquid-bars{align-self:stretch;width:100%;min-width:0;overflow:visible}
 .bars-title{font-size:.88rem;font-weight:650;margin:0 0 9px;line-height:1.3}
@@ -586,16 +586,16 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .day-loading{font-size:.93rem;color:var(--secondary-text-color);padding:22px 8px;min-height:140px}
 /* Exactly five 38px data rows are visible, with a separately sticky 35px header.
    Older records scroll inside the table, without clipping the first or last row. */
-.history{border-top:1px solid var(--divider-color,#ddd);padding-top:11px;margin-top:1px;min-width:0}
+.history{border-top:1px solid var(--divider-color,#ddd);padding-top:8px;margin-top:0;min-width:0}
 .history-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .history h3{font-size:1.05rem;font-weight:650;margin:0}
 .history-head .muted{font-size:.88rem}
-.date-nav{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin:7px 0}
+.date-nav{display:flex;align-items:center;justify-content:flex-start;gap:5px;margin:5px 0 6px}
 .date-nav input{width:160px;max-width:48%;box-sizing:border-box;text-align:center;font:inherit;font-size:1.23rem;font-weight:700;line-height:1.2;padding:7px 8px;color:var(--primary-text-color);background:#fff;border:1px solid var(--divider-color,#bbb);border-radius:9px}
 .date-nav button{font-size:1rem;padding:6px 10px;min-height:34px}
 .history-date-selector{position:relative;display:flex;align-items:stretch;min-width:0;flex:0 0 auto}
-.history-date-selector input{border-radius:9px 0 0 9px;width:145px;flex:0 0 145px;max-width:none;font-size:.95rem;padding:6px 6px;font-weight:650}
-.history-calendar-button{border-radius:0 9px 9px 0;min-width:32px;flex:0 0 32px;font-size:1.1rem;padding:5px}
+.history-date-selector input{border-radius:9px 0 0 9px;width:118px;flex:0 0 118px;max-width:none;font-size:.89rem;padding:6px 4px;font-weight:650}
+.history-calendar-button{border-radius:0 9px 9px 0;min-width:30px;flex:0 0 30px;font-size:1rem;padding:5px}
 .history-calendar{position:absolute;top:100%;left:0;z-index:20;width:258px;padding:10px;box-sizing:border-box;border:1px solid #b5c2cb;border-radius:11px;background:var(--card-background-color,#fff);box-shadow:0 8px 24px #0003}
 .history-cal-nav{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:.85rem;margin-bottom:8px}
 .history-cal-nav button{padding:4px 7px;min-height:28px}
@@ -614,7 +614,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .history-table td.right,.history-table th.right{text-align:right;white-space:nowrap}
 .history-table tr[data-action]{cursor:pointer}
 .history-table tr[data-action]:hover{background:color-mix(in srgb,#b3e5fc 30%,white)}
-.card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--divider-color,#ddd);padding:9px 0 0;min-height:42px}.export{margin:0;padding:0;text-align:left}
+.card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;padding:2px 0 0;min-height:0}.export{margin:0;padding:0;text-align:left}
 .export button{font-size:.79rem;padding:6px 10px}
 .card-version{margin-left:auto;align-self:center;font-size:.72rem;color:var(--secondary-text-color,#666)}
 /* Centralized controls. Disabled and manage actions are deliberately different. */
@@ -679,20 +679,22 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
 .delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
 .status{font-size:.82rem;color:var(--secondary-text-color)}
-/* Only stack when a true two-column layout cannot fit. */
-@container jdhl-card (max-width:555px){
+/* One deliberate breakpoint: stack only if the card content itself is too narrow.
+   Never use a 555px breakpoint: Home Assistant can render cards at browser zoom. */
+@container jdhl-card (max-width:379px){
  .hero{grid-template-columns:minmax(0,1fr);row-gap:6px}
- .glass-side{grid-column:1;grid-row:1;width:260px;margin:0 auto}
+ .glass-side{grid-column:1;grid-row:1;width:min(260px,100%);margin:0 auto}
  .hero-side{grid-column:1;grid-row:2;min-height:0}
- .hero-actions{margin-top:8px}
+ .hero-actions{margin-top:6px}
 }
-@container jdhl-card (min-width:556px) and (max-width:690px){
- .hero{grid-template-columns:235px minmax(0,1fr);column-gap:9px}
- .glass-side{width:235px}
- .glass-stack{grid-template-columns:87px 148px;width:235px;grid-template-rows:185px 24px}
- .glass-frame,.drink-count{width:148px}
- .glass{width:148px;height:185px}
- .bar-line{grid-template-columns:minmax(65px,1.1fr) minmax(40px,1fr) max-content;font-size:.75rem}
+@container jdhl-card (min-width:380px) and (max-width:560px){
+ .hero{grid-template-columns:clamp(177px,42%,208px) minmax(0,1fr);column-gap:7px}
+ .glass-stack{grid-template-columns:minmax(69px,39%) minmax(0,61%)}
+ .hero-side{min-height:185px}
+ .bar-line{grid-template-columns:minmax(50px,1.0fr) minmax(20px,.85fr) max-content;gap:4px;margin:6px 0;font-size:.72rem}
+ .bar-line strong{font-size:.71rem}
+ .taken{font-size:clamp(17px,4.6cqw,24px)}
+ .drink-count{font-size:.71rem}
 }
 @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
 @media(max-width:475px){
@@ -703,7 +705,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .volume-edit-row input{width:65px}
  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@container jdhl-card (max-width:355px){.history-date-selector input{width:112px;flex-basis:112px;font-size:.82rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}}
+@container jdhl-card (max-width:355px){.history-date-selector input{width:104px;flex-basis:104px;font-size:.80rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}}
 @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
 
    </style><ha-card><div class="root">
@@ -727,7 +729,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.14</span>
+    <span class="card-version">v1.1.0-beta.15</span>
    </footer></div></ha-card>`;
  }
 }
@@ -801,7 +803,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
     .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:10px;text-align:right}
     @container(max-width:400px){.axis span{font-size:.53rem}}
    </style>`;
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.14</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.15</div></ha-card>`;return;}
   const colors=new Map(keys.map((k,i)=>[k,JDHL_PALETTE[i%JDHL_PALETTE.length]]));
   const bars=records.map(r=>{
    const height=100*Math.max(0,r.total)/max;
@@ -812,7 +814,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
    return `<div class="bar-col" title="${jdhlEscape(r.label)}: ${Math.round(r.total)} mL"><div class="stack" style="--pct:${Math.min(100,height).toFixed(3)}">${portions}</div></div>`;
   }).join('');
   const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}</span>`).join('');
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><div class="plot">${bars}</div><div class="axis">${records.map(r=>`<span>${jdhlEscape(r.label)}</span>`).join('')}</div><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.14</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><div class="plot">${bars}</div><div class="axis">${records.map(r=>`<span>${jdhlEscape(r.label)}</span>`).join('')}</div><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.15</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -827,4 +829,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.14');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.15');
