@@ -55,8 +55,8 @@ jobs:
           coord=(root/'coordinator.py').read_text()
           sensors=(root/'sensor.py').read_text()
           assert manifest['domain']=='jw_daily_hydration_log'
-          assert manifest['version']=='1.1.0-beta.14'
-          assert "VERSION = '1.1.0-beta.14'" in const and "VERSION = '1.1.0-beta.14'" in excel
+          assert manifest['version']=='1.1.0-beta.15'
+          assert "VERSION = '1.1.0-beta.15'" in const and "VERSION = '1.1.0-beta.15'" in excel
           assert 'v1.1.0-beta.15' in card
           assert 'jwdaily-hydration-hourly-card' in card and 'jwdaily-hydration-weekly-card' in card
           assert 'history-calendar-toggle' in card and 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' in card
