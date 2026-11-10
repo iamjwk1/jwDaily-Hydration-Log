@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.11 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.12 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -223,7 +223,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.11')throw Error(`Frontend v1.1.0-beta.11 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.11')throw Error(`Frontend v1.1.0-beta.12 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -517,8 +517,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
   .muted{color:var(--secondary-text-color,#63717d)}
   .error{color:var(--error-color,#b52027);font-size:.86rem}
   .center{text-align:center}
-  .hero-shell{container-type:inline-size;max-width:100%;min-width:0}
-  .hero{display:grid;grid-template-columns:274px minmax(0,1fr);gap:9px;min-width:0;align-items:start}
+  .hero-shell{container:jdhl-card / inline-size;width:100%;max-width:100%;min-width:0}
+  .hero{display:grid;grid-template-columns:274px minmax(0,1fr);gap:12px;min-width:0;width:100%;align-items:start}
   .glass-side{width:274px;max-width:100%;min-width:0}
   .glass-stack{display:grid;grid-template-columns:108px 160px;grid-template-rows:200px 24px;column-gap:6px;width:274px;max-width:100%;align-items:start}
   .taken-slot{position:relative;grid-column:1;grid-row:1;height:200px;min-width:0}
@@ -526,7 +526,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   .glass-frame{grid-column:2;grid-row:1;width:160px;min-width:0}
   .glass{display:block;width:160px;height:200px;margin:0;max-width:100%}
   .drink-count{grid-column:2;grid-row:2;margin:0;width:160px;text-align:center;white-space:nowrap;font-size:.85rem;line-height:1.4}
-  .hero-side{min-width:0;width:100%;max-width:100%;height:224px;display:flex;flex-direction:column;overflow:hidden;padding:1px 0 0;box-sizing:border-box}
+  .hero-side{grid-column:2;grid-row:1;min-width:0;width:100%;max-width:100%;min-height:224px;display:flex;flex-direction:column;overflow:visible;padding:1px 0 0;box-sizing:border-box}
   .liquid-bars{align-self:stretch;min-width:0;max-width:100%;width:100%;overflow:hidden}
   .bars-title{font-size:.88rem;font-weight:650;margin:0 0 11px;line-height:1.3}
   .bars-date{font-size:.74rem;font-weight:450}
@@ -548,8 +548,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
   .history-table{max-height:360px;overflow-y:auto;overflow-x:hidden}
   .history-table table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:0}
   .history-table th{padding:7px 6px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.91rem;font-weight:500;color:var(--secondary-text-color,#667);text-align:left}
-  .history-table tr{height:38px}
-  .history-table td{height:38px;box-sizing:border-box;padding:4px 6px;line-height:1.15;font-size:1rem;vertical-align:middle;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--divider-color,#ddd)}
+  .history-table tbody tr{height:38px;max-height:38px;min-height:38px}
+  .history-table tbody td{height:38px;box-sizing:border-box;padding:0 6px;line-height:20px;font-size:.88rem;vertical-align:middle;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap}
   .history-table th:first-child,.history-table td:first-child{width:27%}
   .history-table th:last-child,.history-table td:last-child{width:29%}
   .history-table td.right,.history-table th.right{text-align:right;white-space:nowrap}
@@ -618,24 +618,26 @@ class JwDailyHydrationLogCard extends HTMLElement {
   .manage-form-grid .svg-field{grid-column:1/-1}
   .manage-form-grid input[type=file]{font-size:.8rem;padding:6px}
   .volume-rows{display:flex;flex-direction:column;gap:2px}
-  .volume-edit-row{display:grid;grid-template-columns:minmax(100px,1fr) 32px 32px 75px;gap:5px;align-items:end;border-bottom:1px solid var(--divider-color,#ddd);padding:3px 0 5px}
-  .volume-edit-row label{font-size:.85rem;display:flex;flex-direction:column;gap:3px;min-width:0}
-  .volume-edit-row input{width:100%;max-width:130px;min-width:0;box-sizing:border-box;border:1px solid #bbb;border-radius:8px;background:#fff;color:#222;font:inherit;font-size:1rem;padding:6px}
-  .volume-edit-row button{padding:5px 4px!important;font-size:.78rem!important}
+  .volume-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 32px 32px 75px;gap:5px;align-items:center;border-bottom:1px solid var(--divider-color,#ddd);padding:3px 0;min-height:38px}
+  .volume-edit-row label{font-size:.78rem;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;min-width:0;white-space:nowrap}
+  .volume-edit-row input{width:78px;max-width:48%;height:32px;min-width:0;box-sizing:border-box;border:1px solid #bbb;border-radius:8px;background:#fff;color:#222;font:inherit;font-size:.9rem;padding:4px 6px}
+  .volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
   .delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
   .status{font-size:.82rem;color:var(--secondary-text-color)}
-  @container(max-width:510px){
+  @container jdhl-card (max-width:455px){
     .hero{grid-template-columns:minmax(0,1fr);gap:5px}
     .glass-side{margin:0 auto}
-    .hero-side{height:auto;min-height:0}
+    .hero-side{grid-column:1;grid-row:2;min-height:0}
     .hero-actions{margin-top:6px}
   }
-  @container(max-width:320px){.bar-line{grid-template-columns:minmax(60px,1fr) minmax(35px,1fr) max-content;gap:4px}}
+  @container jdhl-card (max-width:320px){.bar-line{grid-template-columns:minmax(60px,1fr) minmax(35px,1fr) max-content;gap:4px}}
   @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
   @media(max-width:475px){
     .saved-liquid{grid-template-columns:25px minmax(90px,1fr) minmax(65px,auto);row-gap:4px}
     .saved-liquid button{grid-row:2}
     .volume-edit-row{grid-template-columns:minmax(95px,1fr) 32px 32px 70px}
+    .volume-edit-row label{font-size:.73rem}
+    .volume-edit-row input{width:65px}
     .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
   @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
@@ -660,7 +662,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    ${this._historyHTML()}
    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.11</footer></div></ha-card>`;
+   <footer class="card-version">v1.1.0-beta.12</footer></div></ha-card>`;
  }
 }
 
@@ -694,4 +696,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.11');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.12');
