@@ -644,7 +644,8 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .taken{font-size:clamp(17px,5cqw,24px)}
 }
 @container jdhl-card (max-width:350px){
- .bar-line{grid-template-columns:minmax(66px,1fr) minmax(28px,1fr) max-content}
+ .bar-line{grid-template-columns:minmax(40px,1fr) minmax(15px,.7fr) max-content;gap:3px;font-size:.68rem}
+ .bar-line strong{font-size:.65rem}
 }
 @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
 @media(max-width:475px){
