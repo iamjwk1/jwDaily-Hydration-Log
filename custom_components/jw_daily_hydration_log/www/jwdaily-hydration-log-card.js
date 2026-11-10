@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.9 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.10 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -223,7 +223,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.9')throw Error(`Frontend v1.1.0-beta.9 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.10')throw Error(`Frontend v1.1.0-beta.10 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -586,106 +586,109 @@ class JwDailyHydrationLogCard extends HTMLElement {
    @media(max-width:520px){.fields{grid-template-columns:repeat(2,minmax(0,165px))}}
    @media(max-width:380px){.root{padding:12px}.hero{grid-template-columns:minmax(64px,1fr) 145px;gap:5px}.fields{grid-template-columns:1fr}}
 
-   /* beta.8: size to CARD container, never to desktop viewport or intrinsic bar widths. */
+   /* beta.10: one coherent geometry system, driven by card container width.
+      Glass+volume form one 274px unit; chart consumes every remaining pixel. */
    :host{display:block;min-width:0;max-width:100%}
    ha-card{box-sizing:border-box;width:100%;max-width:100%;overflow:hidden}
-   .root{box-sizing:border-box;width:100%;max-width:100%;min-width:0;padding:20px;gap:10px}
+   .root{box-sizing:border-box;width:100%;max-width:100%;min-width:0;padding:18px 22px 12px;gap:6px}
    .hero-shell{container-type:inline-size;width:100%;max-width:100%;min-width:0}
-   .hero{display:grid;grid-template-columns:minmax(0,min(320px,50%)) minmax(0,1fr);align-items:start;gap:9px;box-sizing:border-box;width:100%;max-width:100%;min-width:0;padding:0}
-   .glass-side,.glass-stack,.glass-frame{min-width:0;width:100%}
-   .glass-stack{display:flex;flex-direction:column;align-items:stretch;gap:3px}
-   .glass-frame{position:relative}
-   .glass-frame .glass{display:block;box-sizing:border-box;width:69%;max-width:69%;height:auto;margin:0 0 0 31%}
-   .glass-frame .taken{position:absolute;left:2px;right:auto;top:var(--fill-y);transform:translateY(-50%);font-size:clamp(1.22rem,2.9vw,1.80rem);font-weight:700;color:#168dd1;text-align:left;white-space:nowrap;z-index:1}
-   .glass-stack .drink-count{width:69%;margin:3px 0 0 31%;text-align:center;white-space:nowrap;font-size:.84rem;line-height:1.3}
-   .hero-side{width:100%;max-width:100%;min-width:0;min-height:100%;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;padding:2px 0 0 0}
-   .hero-side .liquid-bars{width:100%;max-width:100%;min-width:0;overflow:hidden;padding:0;align-self:stretch}
-   .hero-side .bars-title{font-size:.87rem;font-weight:650;line-height:1.35;white-space:normal;margin:0 0 10px}
+   .hero{display:grid;grid-template-columns:274px minmax(0,1fr);gap:8px;
+     width:100%;max-width:100%;min-width:0;box-sizing:border-box;align-items:start;padding:0}
+   .glass-side{width:274px;min-width:0;max-width:100%}
+   .glass-stack{width:274px;min-width:0;display:grid;
+     grid-template-columns:108px 160px;grid-template-rows:200px 24px;column-gap:6px;align-items:start}
+   .taken-slot{position:relative;grid-column:1;grid-row:1;height:200px;min-width:0}
+   .taken-slot .taken{position:absolute;right:0;left:auto;top:var(--fill-y);
+     transform:translateY(-50%);font-size:24px;line-height:1.13;
+     color:#168dd1;font-weight:700;white-space:nowrap;text-align:right;z-index:2}
+   .glass-frame{grid-column:2;grid-row:1;width:160px;min-width:0}
+   .glass-frame .glass{display:block;width:160px;max-width:160px;height:200px;margin:0}
+   .glass-stack .drink-count{grid-column:2;grid-row:2;white-space:nowrap;
+     width:160px;margin:0;text-align:center;font-size:.85rem;line-height:1.4}
+   .hero-side{min-width:0;max-width:100%;width:100%;min-height:224px;
+     display:flex;flex-direction:column;overflow:hidden;padding:3px 0 0;box-sizing:border-box}
+   .hero-side .liquid-bars{align-self:stretch;overflow:hidden;min-width:0;
+     max-width:100%;width:100%;padding:0}
+   .hero-side .bars-title{font-size:.88rem;font-weight:650;margin:0 0 10px;line-height:1.35}
    .bars-date{font-size:.74rem;font-weight:450;white-space:nowrap}
-   .hero-side .bar-line{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(18px,.75fr) max-content;align-items:center;gap:6px;width:100%;min-width:0;margin:9px 0;font-size:.80rem}
-   .hero-side .bar-line span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-   .hero-side .bar-line strong{min-width:0;white-space:nowrap;text-align:right;font-size:.78rem;font-variant-numeric:tabular-nums}
-   .hero-side .bar-track{height:11px;min-width:0}
-   .hero-actions{display:flex;flex-direction:column;align-items:flex-start;gap:7px;margin-top:auto;padding:10px 0 0 9px;min-width:0}
-   .hero-actions .add-drink{font-size:.94rem;font-weight:650;width:auto;max-width:100%;min-width:0;padding:10px 15px;border-radius:17px;white-space:nowrap}
-   .hero-actions .undo-drink{font-size:.71rem;max-width:100%;min-width:0;white-space:normal;padding:5px 8px;border-radius:9px}
-   .day-loading{font-size:.93rem;color:var(--secondary-text-color);padding:34px 8px;min-height:180px}
-   .history{margin-top:8px}
+   .hero-side .bar-line{display:grid;grid-template-columns:minmax(75px,1.15fr) minmax(40px,1fr) max-content;
+     min-width:0;width:100%;align-items:center;gap:7px;margin:9px 0;font-size:.82rem}
+   .hero-side .bar-line span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+   .hero-side .bar-line strong{min-width:0;white-space:nowrap;text-align:right;
+     font-size:.80rem;font-variant-numeric:tabular-nums}
+   .hero-side .bar-track{min-width:0;height:11px}
+   .hero-actions{display:flex;flex-direction:column;align-items:flex-end;gap:4px;
+     margin-top:auto;padding:8px 0 0;min-width:0}
+   .hero-actions .add-drink{width:auto;max-width:100%;min-width:0;padding:7px 12px;
+     font-size:.86rem;font-weight:650;line-height:1.2;border-radius:14px;white-space:nowrap}
+   .hero-actions .undo-drink{max-width:100%;font-size:.72rem;line-height:1.2;
+     padding:5px 8px;border-radius:10px;white-space:normal}
+   .day-loading{font-size:.9rem;color:var(--secondary-text-color);padding:28px 8px;min-height:150px}
+   .history{border-top:1px solid var(--divider-color);padding-top:11px;margin-top:2px}
    .history h3{font-size:1.05rem}
-   .history-head .muted{font-size:.89rem}
-   .date-nav{justify-content:flex-start;gap:6px;margin:10px 0}
-   .date-nav input{box-sizing:border-box;width:143px;max-width:48%;font-size:1.07rem;font-weight:550;padding:9px 7px;line-height:1.25}
-   .date-nav button{font-size:1.02rem;min-height:37px;padding:7px 11px}
-   .history-table{max-height:390px;overflow-y:auto;overflow-x:hidden}
-   .history-table table{width:100%;min-width:0}
-   .history-table th{font-size:.94rem;line-height:1.35}
-   .history-table td{font-size:1.05rem;line-height:1.42}
-   .history-table th,.history-table td{padding:11px 6px}
-   .export{margin-left:0;padding:10px 0;text-align:left}
-   .export button{font-size:.77rem;padding:7px 11px}
-   @container(max-width:395px){
-    .hero{grid-template-columns:minmax(0,50%) minmax(0,1fr);gap:6px}
-    .glass-frame .taken{font-size:1.18rem}
-    .hero-actions{padding-left:0}
-    .hero-side .bar-line{gap:4px;font-size:.73rem}
-    .hero-side .bar-line strong{font-size:.71rem}
-    .hero-side .bars-title{font-size:.79rem}
+   .history-head .muted{font-size:.86rem}
+   .date-nav{justify-content:flex-start;gap:6px;margin:7px 0}
+   .date-nav input{box-sizing:border-box;width:160px;max-width:50%;padding:7px 8px;
+     font-size:1.25rem;font-weight:700;line-height:1.2}
+   .date-nav button{font-size:1.02rem;min-height:36px;padding:6px 10px}
+   .history-table{max-height:360px;overflow-y:auto;overflow-x:hidden}
+   .history-table table{width:100%;border-collapse:collapse;table-layout:fixed}
+   .history-table th{font-size:.94rem;padding:7px 6px;line-height:1.3}
+   .history-table tbody tr{height:40px!important;max-height:40px!important;min-height:40px!important}
+   .history-table tbody td{height:40px!important;max-height:40px!important;
+     padding:4px 6px!important;line-height:1.15!important;
+     vertical-align:middle;font-size:1.0rem;box-sizing:border-box}
+   .history-table th:first-child,.history-table td:first-child{width:27%}
+   .history-table th:last-child,.history-table td:last-child{width:28%}
+   .history-table td.right{white-space:nowrap}
+   .export{border-top:1px solid var(--divider-color);margin:0;
+     padding:7px 0 0;text-align:left;align-self:flex-start;width:100%}
+   .export button{font-size:.78rem;padding:6px 10px;border-radius:12px}
+   .card-version{align-self:flex-end;margin:0;font-size:.72rem}
+   /* Enabled secondary actions are pale blue with a readable blue edge, not grey/disabled. */
+   button.secondary:not(:disabled),.liquid-choice:not(:disabled):not(.selected),
+   .volume-choices .amount:not(:disabled):not(.selected){
+     background:color-mix(in srgb,var(--primary-color,#009dcc) 11%,var(--card-background-color,#fff));
+     color:var(--primary-text-color,#1a2733);
+     border:1px solid color-mix(in srgb,var(--primary-color,#009dcc) 42%,transparent)}
+   button.secondary:not(:disabled):hover,.liquid-choice:not(:disabled):hover,
+   .volume-choices .amount:not(:disabled):hover{
+     background:color-mix(in srgb,var(--primary-color,#009dcc) 20%,var(--card-background-color,#fff))}
+   button:focus-visible{outline:2px solid var(--primary-color,#009dcc);outline-offset:2px}
+   button:disabled{opacity:.37;cursor:not-allowed;filter:grayscale(.35)}
+   @container(max-width:585px){
+     .hero{grid-template-columns:minmax(0,1fr);gap:5px}
+     .glass-side{margin:0 auto}
+     .hero-side{min-height:0;padding:3px 0 0}
+     .hero-actions{margin-top:5px}
+     .hero-side .bar-line{grid-template-columns:minmax(100px,1.15fr) minmax(40px,1fr) max-content}
    }
-   @container(max-width:335px){
-    .hero{grid-template-columns:minmax(0,1fr);gap:9px}
-    .hero-side{grid-column:1;min-height:0}
-    .glass-side{width:min(100%,330px)}
-    .hero-actions{margin-top:10px;align-items:flex-start}
-    .hero-side .bar-line{grid-template-columns:minmax(72px,1fr) minmax(65px,1.4fr) max-content}
-   }
-   /* beta.9 visual reference: consumed left, glass center-left, chart to its right. */
-   .root{padding:18px 26px 14px;gap:9px}
-   .hero{grid-template-columns:minmax(0,40%) minmax(0,60%);gap:0}
-   .glass-frame .glass{width:74%;max-width:74%;margin:0 0 0 26%}
-   .glass-frame .taken{left:0;font-size:clamp(1.40rem,2.9vw,1.9rem)}
-   .glass-stack .drink-count{margin:-9px 0 0 26%;width:74%;font-size:.87rem}
-   .hero-side{padding:3px 0 0 14px}
-   .hero-actions{margin-top:auto;padding:12px 0 0 12px;align-items:flex-end}
-   .hero-actions .add-drink{padding:8px 16px;font-size:.95rem}
-   .hero-actions .undo-drink{padding:4px 9px;font-size:.73rem}
-   .date-nav input{font-size:1.28rem;font-weight:700;width:158px;max-width:52%}
-   .history-table tbody tr{height:56px;max-height:56px;box-sizing:border-box}
-   .history-table tbody td{height:56px;box-sizing:border-box;padding:8px 7px;line-height:1.25;vertical-align:middle;font-size:1.05rem}
-   .history-table th{padding:9px 7px}
-   .export{padding:9px 0}
-   /* Prevent blue intake text overlapping the glass on 721px cards. */
-   @container(max-width:740px){.glass-frame .taken{left:-13px}}
-   @container(max-width:395px){
-    .hero{grid-template-columns:minmax(0,40%) minmax(0,60%)}
-    .glass-frame .taken{font-size:1.16rem}
-    .hero-side{padding-left:6px}
-    .hero-actions{padding-left:0}
-   }
-   @container(max-width:335px){
-    .hero{grid-template-columns:minmax(0,1fr)}
-    .hero-side{padding-left:0}
+   @container(max-width:330px){
+     .hero-side .bar-line{grid-template-columns:minmax(70px,1fr) minmax(28px,1fr) max-content;gap:4px}
+     .hero-side .bar-line strong{font-size:.74rem}
    }
    </style><ha-card><div class="root">
    ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2></header>`:''}
    <div class="hero-shell">
     ${pendingPast?`<p class="day-loading">Loading ${jdhlEscape(jdhlIsoToDate(selectedDate))}…</p>`:`
     <div class="hero">
-     <div class="glass-side"><div class="glass-stack"><div class="glass-frame">
-       <span class="taken" style="--fill-y:${(100*(pct>100?19:179-(179-39)*Math.min(100,Math.max(0,pct))/100)/200).toFixed(2)}%">${jdhlFmt(consumed)}</span>
-       ${this._config.show_cup!==false?this._glass(pct,remaining,target):''}
-     </div><div class="drink-count">◷ ${count} drink moments</div></div></div>
-     <div class="hero-side">${this._dayBarsHTML()}
-       ${this._config.show_manual!==false?`<div class="hero-actions">
-         <button class="add-drink" data-action="new" ${this._busy?'disabled':''}>+ Add drink</button>
-         ${this._undoId&&this._hass?.user?.is_admin?`<button class="secondary undo-drink" data-action="undo" ${this._busy?'disabled':''}>Undo last drink</button>`:''}
-       </div>`:''}
-     </div>
+      <div class="glass-side"><div class="glass-stack">
+        <div class="taken-slot"><span class="taken" style="--fill-y:${(100*(pct>100?19:179-(179-39)*Math.min(100,Math.max(0,pct))/100)/200).toFixed(2)}%">${jdhlFmt(consumed)}</span></div>
+        <div class="glass-frame">${this._config.show_cup!==false?this._glass(pct,remaining,target):''}</div>
+        <div class="drink-count">◷ ${count} drink moments</div>
+      </div></div>
+      <div class="hero-side">${this._dayBarsHTML()}
+        ${this._config.show_manual!==false?`<div class="hero-actions">
+          <button class="add-drink" data-action="new" ${this._busy?'disabled':''}>+ Add drink</button>
+          ${this._undoId&&this._hass?.user?.is_admin?`<button class="secondary undo-drink" data-action="undo" ${this._busy?'disabled':''}>Undo last drink</button>`:''}
+        </div>`:''}
+      </div>
     </div>`}</div>
-   ${this._error?`<div class="error" role="alert">${jdhlEscape(this._error)}</div>`:''}${this._status?`<div class="status" aria-live="polite">${jdhlEscape(this._status)}</div>`:''}
+   ${this._error?`<div class="error" role="alert">${jdhlEscape(this._error)}</div>`:''}
    ${this._historyHTML()}
    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.9</footer></div></ha-card>`;
+   <footer class="card-version">v1.1.0-beta.10</footer></div></ha-card>`;
  }
 }
 
@@ -719,4 +722,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.9');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.10');
