@@ -62,7 +62,7 @@ const puppeteer=require('puppeteer-core');
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
-   if(width>=610)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
+   if(width>=560)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
  else assert(x.chart.top>=x.glass.bottom,'narrow cards should stack the chart below glass');
    for(const part of ['glass','taken','chart','button','date','export']){
      const p=x[part];assert(p&&p.left>=x.card.left-4&&p.right<=right+2,part+' outside card: '+JSON.stringify(p));
@@ -83,7 +83,7 @@ const puppeteer=require('puppeteer-core');
    assert(x.export.left>=x.history.left-2 && x.export.left<=x.history.left+2,'Excel button not aligned left with history');
    assert(x.button.bottom<=x.hero.bottom+2 && x.hero.bottom-x.button.bottom<15,'Add drink too high above hero bottom');
    for(const bar of x.barVolumes)assert(bar.left>=x.chart.left && bar.right<=x.card.right+1,'Chart volume clipped');
-   if(width>=610){
+   if(width>=560){
     assert(x.taken.right<=x.glass.left-6,'Blue intake overlaps or is too close to glass: '+JSON.stringify({taken:x.taken,glass:x.glass}));
     assert(x.glass.left-x.taken.right<=18,'Blue intake too far from glass');
     assert(x.chart.left>=x.glass.right,'Graph not to right of glass');
