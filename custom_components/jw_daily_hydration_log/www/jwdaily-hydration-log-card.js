@@ -526,7 +526,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .glass-side{grid-column:1;grid-row:1;min-width:0;width:100%}
 .glass-stack{display:grid;grid-template-columns:minmax(77px,40%) minmax(0,60%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
 .taken-slot{position:relative;grid-column:1;grid-row:1;height:100%;min-width:0}
-.taken{position:absolute;right:2px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
+.taken{position:absolute;right:8px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
 .glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%}
 .glass{display:block;width:100%;height:auto;aspect-ratio:4/5;margin:0}
 .drink-count{grid-column:2;grid-row:2;min-width:0;width:100%;margin:0;text-align:center;white-space:nowrap;font-size:.76rem;line-height:1.4}
