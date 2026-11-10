@@ -618,7 +618,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   .manage-form-grid .svg-field{grid-column:1/-1}
   .manage-form-grid input[type=file]{font-size:.8rem;padding:6px}
   .volume-rows{display:flex;flex-direction:column;gap:2px}
-  .volume-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 32px 32px 75px;gap:5px;align-items:center;border-bottom:1px solid var(--divider-color,#ddd);padding:3px 0;min-height:38px}
+  .volume-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 32px 32px 75px;gap:5px;align-items:center;border-bottom:1px solid var(--divider-color,#ddd);padding:2px 0;height:42px;min-height:42px;max-height:42px;box-sizing:border-box}
   .volume-edit-row label{font-size:.78rem;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;min-width:0;white-space:nowrap}
   .volume-edit-row input{width:78px;max-width:48%;height:32px;min-width:0;box-sizing:border-box;border:1px solid #bbb;border-radius:8px;background:#fff;color:#222;font:inherit;font-size:.9rem;padding:4px 6px}
   .volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
