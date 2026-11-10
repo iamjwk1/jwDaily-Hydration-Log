@@ -1,4 +1,4 @@
-/* jwDaily beta10 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta11 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -23,14 +23,14 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.10',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.11',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history'){
    const breakdown=history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]);
    const total=history.reduce((a,r)=>a+r.volume_ml,0);
    return {date:msg.date,entries:history.map(x=>({...x})),
     total_ml:total,liquid_types:catalog.map(x=>({...x})),
     day_summary:{date:msg.date,consumed_ml:total,target_ml:3000,drink_count:history.length,liquid_breakdown:breakdown},
-    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.10'};
+    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.11'};
   }
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
@@ -79,22 +79,24 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.10'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.11'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
- assert(layout.includes('class="taken-slot"'), 'Blue intake has separate fixed-height slot');
- assert(layout.includes('grid-template-columns:108px 160px'), 'Blue intake and glass fixed columns');
- assert(layout.includes('grid-template-columns:274px minmax(0,1fr)'), 'Graph uses remaining card width');
- assert(layout.includes('font-size:24px'), 'Blue intake is 24px on both desktop sizes');
- assert(layout.includes('class="hero-side"') && layout.includes('class="hero-actions"'));
- assert(layout.includes('height:40px!important'), 'Every history row is compact and consistent');
- assert(layout.includes('class="drink-count"') && layout.includes('drink moments'), 'Count remains below glass');
- assert(layout.includes('button.secondary:not(:disabled)'), 'Enabled buttons have active styling');
- assert(layout.includes('class="card-version">v1.1.0-beta.10'));
- assert(!layout.includes('aria-live="polite"'), 'No persistent status row');
- assert(!layout.includes('<div class="register">'));
- console.log('PASS: beta10 fixed blue/cup gap, 40px rows, compact controls, active buttons, preserved count');
+ assert(layout.includes('grid-template-columns:274px minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
+ assert(layout.includes('@container(max-width:510px)'), 'mobile stacks only when card is narrow');
+ assert(layout.includes('font-size:24px'), 'intake blue remains 24px on desktops');
+ assert(layout.includes('height:38px'), 'all history rows compact 38px');
+ assert(layout.includes('class="drink-count"') && layout.includes('drink moments'), 'count below glass preserved');
+ assert(layout.includes('background:#B3E5FC'), 'single normal button color');
+ assert(layout.includes('background:#EEEEEE'), 'separate manage button styling');
+ assert(layout.includes('background:#FFFFFF'), 'date picker remains white');
+ assert(layout.includes('.liquid-choice,.volume-choices .amount{font-size:.93rem!important'), 'liquid and amount same text size');
+ assert(layout.includes('class="card-version">v1.1.0-beta.11'), 'version footer');
+ assert(!layout.includes('Undo last drink'), 'Undo removed from card');
+ assert(!layout.includes('data-action="undo"'), 'no invisible Undo control');
+ assert(!layout.includes('aria-live="polite"'), 'no persistent drink-saved placeholder');
+ console.log('PASS: beta11 hero two columns, no Undo, 38px history, uniform blue controls, neutral Manage, white date');
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));
  assert(c._glass(10,2700,3000).includes('attributeName="y"'));
@@ -150,6 +152,11 @@ async function main(){
  console.log('PASS: future calendar date blocked, later clock time today allowed');
  console.log('PASS: standard types never prefill volume, type and amount are explicit');
  await c._click(click('manage-liquids'));assert(c._manageOpen);assert(c.shadowRoot.innerHTML.includes('Manage liquid types'));
+ assert(c.shadowRoot.innerHTML.includes('dialog-manage-liquids'),'liquid manager has compact dialog');
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-up"'),'liquid reorder up');
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-down"'),'liquid reorder down');
+ assert(c.shadowRoot.innerHTML.includes('data-action="manage-edit"'),'liquid editing');
+
  assert(c.shadowRoot.innerHTML.includes('data-action="manage-edit"'));
  assert(c.shadowRoot.innerHTML.includes('data-action="manage-hide"'), 'Built-ins have a Delete button');
  await c._click(click('manage-hide','milk'));
@@ -196,6 +203,10 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('Fresh juice'));
  assert(c.shadowRoot.innerHTML.includes('data:image/svg+xml'));
  await c._click(click('manage-volumes'));assert(c._volumeManageOpen);
+ assert(c.shadowRoot.innerHTML.includes('dialog-manage-volumes'), 'volume manager has compact dialog');
+ assert(c.shadowRoot.innerHTML.includes('data-action="volume-up"'));
+ assert(c.shadowRoot.innerHTML.includes('data-action="volume-down"'));
+ assert(c.shadowRoot.innerHTML.includes('data-action="volume-remove"'));
  assert(c.shadowRoot.innerHTML.includes('data-action="volume-remove"'));
  c._volumeDraft=['333','120','250'];await c._click(click('volume-save'));
  assert(!c._volumeManageOpen);assert.deepStrictEqual(storedVolumes,[333,120,250]);
