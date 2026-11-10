@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.18
+# jwDaily Hydration Log v1.1.0-beta.19
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,14 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.18
+## What's new in beta.19
+
+- Enlarge the glass in the main card by approximately 10-13%, maintaining side-by-side charts and avoiding collisions with the blue volume and red target label.
+- Make the Excel export button only 28 CSS pixels high, keeping its bottom-left position and the version number at bottom-right.
+- Strict browser regression assertions for cup dimensions and exact button height.
+- Preserve all graph, Excel/OOXML, storage, calendar, profile and Add/Edit/Delete functionality from beta.18.
+
+## Changes retained from beta.18
 
 - Unified stable chart colors: the same liquid type uses the same color on both chart cards, even if its data appears in a different order.
 - Responsive charts with more legible y-axis labels, a compact card height and version bottom-right.
