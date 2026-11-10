@@ -11,15 +11,17 @@ from __future__ import annotations
 
 import base64
 import collections
+import copy
 from datetime import datetime, date, timezone
 from io import BytesIO
 import math
+import xml.etree.ElementTree as ET
 import zlib
 from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.12'
+VERSION = '1.1.0-beta.13'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -151,17 +153,18 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     return ''.join(parts).encode('utf-8')
 
 
-def _table(table_number: int, bottom: int) -> bytes:
+def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None) -> bytes:
     """Structured Excel tables, including table filters and header layout."""
     if table_number==1:
         label='tblHydrationLog'; right='H'
         headers=['Date+time','Profile','Age','Gender','Target_x000a_(mL)','Liquid name','Volume_x000a_(mL)']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
     else:
-        label='tblDailyIntake';right='Q'
-        headers=['Date','Profile','Age','Gender','Full day','Target_x000a_(mL)','Drink_x000a_count','Volume_x000a_(mL)','%',
-                 'Water_x000a_(mL)','Coffee_x000a_(mL)','Tea_x000a_(mL)','Milk_x000a_(mL)',
-                 'Soup_x000a_(mL)','Wine_x000a_(mL)','Other_x000a_(mL)']
+        label='tblDailyIntake'
+        assert liquid_headers is not None
+        right=_col(10+len(liquid_headers))
+        headers=['Date','Profile','Age','Gender','Full day','Target_x000a_(mL)','Drink_x000a_count','Volume_x000a_(mL)','%']
+        headers += [name.replace('\n','_x000a_') for name in liquid_headers]
         attrs='headerRowDxfId="0" dataDxfId="32" headerRowBorderDxfId="30" tableBorderDxfId="31" totalsRowBorderDxfId="29"'
     # Excel tables must have at least one row below their header in the table range.
     rng=f'B11:{right}{max(12,bottom)}'
@@ -171,6 +174,30 @@ def _table(table_number: int, bottom: int) -> bytes:
        f'<autoFilter ref="{rng}"/>'
        f'<tableColumns count="{len(headers)}">' + ''.join(f'<tableColumn id="{i}" name="{_xml(head)}"/>' for i,head in enumerate(headers,1))
        + '</tableColumns><tableStyleInfo showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>').encode('utf-8')
+
+
+
+def _styles_with_legacy_header() -> tuple[bytes,int]:
+    """Append a solid-orange header style without changing original style IDs."""
+    ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    ET.register_namespace('',ns)
+    root=ET.fromstring(STYLES)
+    fills=root.find(f'{{{ns}}}fills')
+    xfs=root.find(f'{{{ns}}}cellXfs')
+    if fills is None or xfs is None or len(xfs)<=6:
+        raise ValueError('Unexpected Excel reference style structure')
+    idx=len(xfs)
+    new_fill=ET.SubElement(fills,f'{{{ns}}}fill')
+    pattern=ET.SubElement(new_fill,f'{{{ns}}}patternFill',{'patternType':'solid'})
+    ET.SubElement(pattern,f'{{{ns}}}fgColor',{'rgb':'FFFFA500'})
+    ET.SubElement(pattern,f'{{{ns}}}bgColor',{'indexed':'64'})
+    fills.set('count',str(len(fills)))
+    clone=copy.deepcopy(xfs[6])
+    clone.set('fillId',str(len(fills)-1))
+    clone.set('applyFill','1')
+    xfs.append(clone)
+    xfs.set('count',str(len(xfs)))
+    return ET.tostring(root,encoding='utf-8',xml_declaration=True),idx
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
@@ -200,15 +227,32 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
 def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', when: datetime | None = None) -> bytes:
     """Match the supplied four-sheet reference, retaining ALL drink records.
 
-    Built-in liquid totals occupy the exact fixed seven categories used by the
-    reference. Custom liquids remain visible individually in Hydration log and
-    count towards the day's total. They are NOT silently relabeled as 'Other'.
+    All configured liquid IDs receive Daily intake columns. Historical-only
+    liquid IDs remain as orange-header columns, never merged into Other.
     """
     try: tz=ZoneInfo(timezone_name)
     except (KeyError,ValueError): tz=ZoneInfo('UTC')
     now=when.astimezone(tz) if when is not None else datetime.now(tz)
     today=now.date().isoformat()
     records=_record_table(profiles,tz)
+    current={}
+    for profile in profiles:
+        for typ in (profile.get('liquid_definitions') or profile.get('custom_liquid_types') or []):
+            lid=str(typ.get('id') or '').strip()
+            if lid and lid not in current:
+                current[lid]=str(typ.get('name') or lid)
+    historic={}
+    for item in records:
+        lid=str(item[9])
+        if lid not in current and lid not in historic:
+            historic[lid]=str(item[6]) if str(item[6]) not in ('Unknown (legacy)','') else lid
+    ordered_types=[(lid,name,False) for lid,name in current.items()]
+    ordered_types += [(lid,name,True) for lid,name in historic.items()]
+    if not current:
+        ordered_types=[(lid,lid.title(),False) for lid in _BUILTIN]
+        ordered_types += [(lid,name,True) for lid,name in historic.items() if lid not in _BUILTIN]
+    liquid_headers=[f'{name}\n(mL)' for _,name,_ in ordered_types]
+    styles_xml,legacy_header_style=_styles_with_legacy_header()
     days=[]
     for p in profiles:
         dates={row[8] for row in records if row[0] is p}
@@ -257,19 +301,18 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         logrows[12]=[]
 
     drows=summary('Home Assistant jwDaily Hydration Log  - Daily totals','Daily total rows',len(days),second=True)
-    dheads=['Date','Profile','Age','Gender','Full day','Target\n(mL)','Drink\ncount','Volume\n(mL)','%',
-            'Water\n(mL)','Coffee\n(mL)','Tea\n(mL)','Milk\n(mL)','Soup\n(mL)','Wine\n(mL)','Other\n(mL)']
-    dhstyles=[10,11,11,11,12,13,13,13,14]+[6]*7
+    dheads=['Date','Profile','Age','Gender','Full day','Target\n(mL)','Drink\ncount','Volume\n(mL)','%']+liquid_headers
+    dhstyles=[10,11,11,11,12,13,13,13,14]+[legacy_header_style if legacy else 6 for _,_,legacy in ordered_types]
     drows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(dheads,dhstyles),2)]
     for rnum,row in enumerate(days,12):
         values=[_serial(date.fromisoformat(row['day'])),row['cfg']['name'],row['cfg'].get('age'),
                 row['cfg'].get('gender'),'Yes' if row['day']<today else 'No',
                 row['target'],row['count'],row['consumed'],
                 round(row['consumed']/row['target']*100,12) if row['target']>0 else 0]
-        values += [round(row['types'].get(t,0),3) for t in _BUILTIN]
-        styles=[15,16,27,27,17,16,16,16,18]+[0]*7
+        values += [round(row['types'].get(lid,0),3) for lid,_,_ in ordered_types]
+        styles=[15,16,27,27,17,16,16,16,18]+[0]*len(ordered_types)
         if rnum==len(days)+11:
-            styles=[19,20,27,27,21,20,20,20,22]+[0]*7
+            styles=[19,20,27,27,21,20,20,20,22]+[0]*len(ordered_types)
         drows[rnum]=[(col,value,styles[col-2],f'I{rnum}/G{rnum}*100' if col==10 and row['target']>0 else None)
                      for col,value in enumerate(values,2)]
     if not days:drows[12]=[]
@@ -294,8 +337,8 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             buttonsrows[row]=[(i,value,0,None) for i,value in enumerate(vals,1)]
 
     content=[
-     _worksheet(1,logrows,[4,25,16,6,9,9,17,11],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
-     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6,10,10,10,10,10,10,10],f'Q{max(12,11+len(days))}',max(12,11+len(days)),True),
+     _worksheet(1,logrows,[4,19,16,6,9,9,17,11],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
      _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25],f'I{max(1,len(typesrows))}',len(typesrows)),
      _worksheet(4,buttonsrows,[16,14,18,25],f'D{max(1,len(buttonsrows))}',len(buttonsrows)),
     ]
@@ -317,11 +360,11 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         z.writestr('_rels/.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}officeDocument" Target="xl/workbook.xml"/></Relationships>')
         z.writestr('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="'+main+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>'+''.join(f'<sheet name="{_xml(n)}" sheetId="{i}" r:id="rId{i}"/>' for i,n in enumerate(SHEETS,1))+'</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>')
         z.writestr('xl/_rels/workbook.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,5))+f'<Relationship Id="rId5" Type="{relbase}styles" Target="styles.xml"/><Relationship Id="rId6" Type="{relbase}theme" Target="theme/theme1.xml"/></Relationships>')
-        z.writestr('xl/styles.xml',STYLES)
+        z.writestr('xl/styles.xml',styles_xml)
         z.writestr('xl/theme/theme1.xml',THEME)
         for i,s in enumerate(content,1):
             z.writestr(f'xl/worksheets/sheet{i}.xml',s)
             if i<=2:
                 z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/></Relationships>')
-                z.writestr(f'xl/tables/table{i}.xml',_table(i,max(12,11+(len(records) if i==1 else len(days)))))
+                z.writestr(f'xl/tables/table{i}.xml',_table(i,max(12,11+(len(records) if i==1 else len(days))),liquid_headers if i==2 else None))
     return buffer.getvalue()
