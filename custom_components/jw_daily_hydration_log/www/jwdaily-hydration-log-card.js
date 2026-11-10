@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.12 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.13 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -223,7 +223,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.12')throw Error(`Frontend v1.1.0-beta.12 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.13')throw Error(`Frontend v1.1.0-beta.13 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -510,139 +510,154 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const k=JSON.stringify([target,consumed,this._history,this._modal,this._calendarOpen,this._calendarMonth,this._manageOpen,this._customDraft,this._volumeManageOpen,this._volumeDraft,this._confirmDelete,this._busy,this._error,this._status,this._viewDate,this._undoId,this._config]);
   if(!force&&this._lastRender===k)return;this._lastRender=k;
   this.shadowRoot.innerHTML=`<style>
-  :host{display:block;min-width:0;max-width:100%}
-  ha-card{display:block;max-width:100%;box-sizing:border-box;overflow:hidden}
-  .root{box-sizing:border-box;display:flex;flex-direction:column;gap:7px;min-width:0;padding:18px 20px 12px;color:var(--primary-text-color,#202a32)}
-  header h2{font-size:1.15rem;font-weight:650;margin:0}
-  .muted{color:var(--secondary-text-color,#63717d)}
-  .error{color:var(--error-color,#b52027);font-size:.86rem}
-  .center{text-align:center}
-  .hero-shell{container:jdhl-card / inline-size;width:100%;max-width:100%;min-width:0}
-  .hero{display:grid;grid-template-columns:274px minmax(0,1fr);gap:12px;min-width:0;width:100%;align-items:start}
-  .glass-side{width:274px;max-width:100%;min-width:0}
-  .glass-stack{display:grid;grid-template-columns:108px 160px;grid-template-rows:200px 24px;column-gap:6px;width:274px;max-width:100%;align-items:start}
-  .taken-slot{position:relative;grid-column:1;grid-row:1;height:200px;min-width:0}
-  .taken{position:absolute;right:0;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
-  .glass-frame{grid-column:2;grid-row:1;width:160px;min-width:0}
-  .glass{display:block;width:160px;height:200px;margin:0;max-width:100%}
-  .drink-count{grid-column:2;grid-row:2;margin:0;width:160px;text-align:center;white-space:nowrap;font-size:.85rem;line-height:1.4}
-  .hero-side{grid-column:2;grid-row:1;min-width:0;width:100%;max-width:100%;min-height:224px;display:flex;flex-direction:column;overflow:visible;padding:1px 0 0;box-sizing:border-box}
-  .liquid-bars{align-self:stretch;min-width:0;max-width:100%;width:100%;overflow:hidden}
-  .bars-title{font-size:.88rem;font-weight:650;margin:0 0 11px;line-height:1.3}
-  .bars-date{font-size:.74rem;font-weight:450}
-  .bar-line{display:grid;grid-template-columns:minmax(74px,1.15fr) minmax(42px,1fr) max-content;gap:7px;align-items:center;min-width:0;width:100%;margin:9px 0;font-size:.82rem}
-  .bar-line span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-  .bar-line strong{font-size:.8rem;font-weight:600;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
-  .bar-track{height:11px;min-width:0;border-radius:8px;background:var(--secondary-background-color,#e5e7eb);overflow:hidden}
-  .bar-fill{height:100%;background:#34a5dc;border-radius:8px;min-width:2px}
-  .hero-actions{margin-top:auto;display:flex;justify-content:flex-end;padding:4px 0 0;min-width:0}
-  .hero-actions .add-drink{font-size:.86rem;font-weight:650;min-width:0;max-width:100%;padding:7px 12px;line-height:1.2;border-radius:13px;white-space:nowrap}
-  .day-loading{font-size:.93rem;color:var(--secondary-text-color);padding:22px 8px;min-height:140px}
-  .history{border-top:1px solid var(--divider-color,#ddd);padding-top:11px;margin-top:1px}
-  .history-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
-  .history h3{font-size:1.05rem;font-weight:650;margin:0}
-  .history-head .muted{font-size:.88rem}
-  .date-nav{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin:7px 0}
-  .date-nav input{width:160px;max-width:48%;box-sizing:border-box;text-align:center;font:inherit;font-size:1.23rem;font-weight:700;line-height:1.2;padding:7px 8px;color:var(--primary-text-color);background:#fff;border:1px solid var(--divider-color,#bbb);border-radius:9px}
-  .date-nav button{font-size:1rem;padding:6px 10px;min-height:34px}
-  .history-table{max-height:360px;overflow-y:auto;overflow-x:hidden}
-  .history-table table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:0}
-  .history-table th{padding:7px 6px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.91rem;font-weight:500;color:var(--secondary-text-color,#667);text-align:left}
-  .history-table tbody tr{height:38px;max-height:38px;min-height:38px}
-  .history-table tbody td{height:38px;box-sizing:border-box;padding:0 6px;line-height:20px;font-size:.88rem;vertical-align:middle;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap}
-  .history-table th:first-child,.history-table td:first-child{width:27%}
-  .history-table th:last-child,.history-table td:last-child{width:29%}
-  .history-table td.right,.history-table th.right{text-align:right;white-space:nowrap}
-  .history-table tr[data-action]{cursor:pointer}
-  .history-table tr[data-action]:hover{background:color-mix(in srgb,#b3e5fc 30%,white)}
-  .export{border-top:1px solid var(--divider-color,#ddd);margin:0;padding:7px 0 0;text-align:left;align-self:stretch}
-  .export button{font-size:.79rem;padding:6px 10px}
-  .card-version{align-self:flex-end;margin:0;font-size:.72rem;color:var(--secondary-text-color,#666)}
-  /* Centralized normal button palette: also applies to liquid/volume selections and modal actions. */
-  button,button.secondary,button.small,button.liquid-choice,button.amount,button.danger{
-    font:inherit;cursor:pointer;background:#B3E5FC;color:#18374b;
-    border:1px solid #71b4d2;border-radius:11px;padding:6px 10px;
-    box-sizing:border-box;transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease}
-  button:hover:not(:disabled){background:#95d9f9;border-color:#3e96c2}
-  button:active:not(:disabled){background:#80cfee}
-  button:focus-visible{outline:2px solid #0578b3;outline-offset:2px}
-  button.selected,button.liquid-choice.selected,button.amount.selected{
-    background:#B3E5FC;color:#092e48;border-color:#046eac;
-    box-shadow:inset 0 0 0 2px #046eac;font-weight:650}
-  button:disabled{opacity:.39;filter:grayscale(.32);cursor:not-allowed;box-shadow:none}
-  button.small{padding:5px 8px;border-radius:9px;font-size:.85rem}
-  button.danger{color:#9a2525;border-color:#bd7a7a}
-  button.manage-control,button.manage-control:not(:disabled){background:#EEEEEE;border-color:#c8ccd0;color:#242a30}
-  button.manage-control:hover:not(:disabled){background:#dcdcdc;border-color:#9e9e9e}
-  .overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box}
-  .dialog{width:min(660px,100%);box-sizing:border-box;max-height:calc(100vh - 28px);overflow-y:auto;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border-radius:15px;padding:18px;box-shadow:0 15px 45px #0004}
-  .dialog.dialog-manage-liquids{width:min(555px,100%)}
-  .dialog.dialog-manage-volumes{width:min(450px,100%)}
-  .dialog h3{margin:0 0 11px;font-size:1.19rem}
-  .modal-heading{font-size:.95rem;font-weight:650;margin:11px 0 6px}
-  .liquid-choices,.volume-choices{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .liquid-choice,.volume-choices .amount{font-size:.93rem!important;line-height:1.2;min-height:34px;padding:5px 9px!important}
-  .liquid-choice{display:inline-flex;align-items:center;gap:5px}
-  .liquid-icon{width:23px;height:23px;min-width:23px;--mdc-icon-size:23px;display:inline-block;object-fit:contain}
-  .volume-choices{margin-bottom:8px}
-  .add-type,.manage-volumes{margin-top:7px;font-size:.86rem}
-  .fields{display:grid;grid-template-columns:repeat(3,minmax(0,165px));gap:10px;justify-content:start;margin-top:8px}
-  .fields label{min-width:0;display:flex;flex-direction:column;gap:5px;font-size:.91rem}
-  .fields input,.fields select{min-width:0;width:100%;box-sizing:border-box;background:#fff;color:#222;border:1px solid #b8c4cc;border-radius:8px;padding:9px 8px;font:inherit;font-size:1.08rem}
-  .date-select{position:relative}
-  button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover:not(:disabled){
-    display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;
-    background:#FFFFFF;color:#222;border:1px solid #b8c4cc;border-radius:8px;
-    text-align:left;font-size:1.08rem;padding:9px 8px;line-height:1.3}
-  .cal-popover{position:relative;margin-top:7px;z-index:10100;background:#fff;border:1px solid #bbb;border-radius:10px;padding:10px;min-width:240px;box-shadow:0 8px 26px #0003}
-  .cal-title{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;font-size:.9rem}
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
-  .cal-weekday{text-align:center;color:#67717a;font-size:.75rem;padding:5px 0}
-  .cal-day{font-size:.82rem!important;padding:5px 2px!important;border-radius:6px!important}
-  .cal-day.current{box-shadow:inset 0 0 0 2px #046eac}
-  .dialog-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:12px}
-  .dialog-actions button:first-child.danger{margin-right:auto}
-  .manage-intro{font-size:.82rem;line-height:1.35;color:var(--secondary-text-color,#667);margin:2px 0 9px}
-  .saved-liquids{display:flex;flex-direction:column;gap:0;margin-top:5px}
-  .saved-liquid{display:grid;grid-template-columns:27px minmax(78px,1fr) minmax(60px,auto) 30px 30px 43px 58px;gap:5px;align-items:center;padding:4px 0;border-bottom:1px solid var(--divider-color,#ddd);min-width:0}
-  .saved-liquid .muted{font-size:.81rem;white-space:nowrap;text-align:right}
-  .saved-liquid strong{font-size:.91rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .saved-liquid button{min-width:0;max-width:100%;padding:4px 4px;font-size:.78rem}
-  .hidden-liquid{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--divider-color,#ddd)}
-  .hidden-liquid button{margin-left:auto}
-  .manage h4{font-size:.94rem;margin:12px 0 5px}
-  .manage-editor{border-top:1px solid var(--divider-color,#ddd);padding-top:7px}
-  .manage-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
-  .manage-form-grid label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:.88rem}
-  .manage-form-grid input{width:100%;min-width:0;box-sizing:border-box;padding:8px;background:#fff;border:1px solid #bbb;border-radius:8px;font:inherit}
-  .manage-form-grid .svg-field{grid-column:1/-1}
-  .manage-form-grid input[type=file]{font-size:.8rem;padding:6px}
-  .volume-rows{display:flex;flex-direction:column;gap:2px}
-  .volume-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 32px 32px 75px;gap:5px;align-items:center;border-bottom:1px solid var(--divider-color,#ddd);padding:2px 0;height:42px;min-height:42px;max-height:42px;box-sizing:border-box}
-  .volume-edit-row label{font-size:.78rem;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;min-width:0;white-space:nowrap}
-  .volume-edit-row input{width:78px;max-width:48%;height:32px;min-width:0;box-sizing:border-box;border:1px solid #bbb;border-radius:8px;background:#fff;color:#222;font:inherit;font-size:.9rem;padding:4px 6px}
-  .volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
-  .delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
-  .status{font-size:.82rem;color:var(--secondary-text-color)}
-  @container jdhl-card (max-width:455px){
-    .hero{grid-template-columns:minmax(0,1fr);gap:5px}
-    .glass-side{margin:0 auto}
-    .hero-side{grid-column:1;grid-row:2;min-height:0}
-    .hero-actions{margin-top:6px}
-  }
-  @container jdhl-card (max-width:320px){.bar-line{grid-template-columns:minmax(60px,1fr) minmax(35px,1fr) max-content;gap:4px}}
-  @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
-  @media(max-width:475px){
-    .saved-liquid{grid-template-columns:25px minmax(90px,1fr) minmax(65px,auto);row-gap:4px}
-    .saved-liquid button{grid-row:2}
-    .volume-edit-row{grid-template-columns:minmax(95px,1fr) 32px 32px 70px}
-    .volume-edit-row label{font-size:.73rem}
-    .volume-edit-row input{width:65px}
-    .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
-  }
-  @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
 
-  </style><ha-card><div class="root">
+/* beta.13 clean-sheet layout: card-internal breakpoints, no earlier CSS overrides */
+:host{display:block;min-width:0;width:100%;max-width:100%}
+ha-card{display:block;box-sizing:border-box;max-width:100%;overflow:hidden}
+.root{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 20px 12px;color:var(--primary-text-color,#202a32)}
+header h2{font-size:1.15rem;font-weight:650;margin:0}
+.muted{color:var(--secondary-text-color,#63717d)}
+.error{color:var(--error-color,#b52027);font-size:.86rem}
+.center{text-align:center}
+/* The glass and charts form ONE two-column hero; a width-dependent glass scale
+   replaces the former fixed 274px glass and premature 455px stacking. */
+.hero-shell{container:jdhl-card / inline-size;width:100%;min-width:0}
+.hero{display:grid;grid-template-columns:clamp(195px,36%,274px) minmax(0,1fr);column-gap:10px;align-items:start;width:100%;min-width:0}
+.glass-side{grid-column:1;grid-row:1;min-width:0;width:100%}
+.glass-stack{display:grid;grid-template-columns:minmax(77px,40%) minmax(0,60%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
+.taken-slot{position:relative;grid-column:1;grid-row:1;height:100%;min-width:0}
+.taken{position:absolute;right:2px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:clamp(17px,2.4vw,24px);font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
+.glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%}
+.glass{display:block;width:100%;height:auto;aspect-ratio:4/5;margin:0}
+.drink-count{grid-column:2;grid-row:2;min-width:0;width:100%;margin:0;text-align:center;white-space:nowrap;font-size:.76rem;line-height:1.4}
+.hero-side{grid-column:2;grid-row:1;min-width:0;width:100%;min-height:224px;display:flex;flex-direction:column;padding:1px 0 0;box-sizing:border-box}
+.liquid-bars{align-self:stretch;width:100%;min-width:0;overflow:visible}
+.bars-title{font-size:.88rem;font-weight:650;margin:0 0 9px;line-height:1.3}
+.bars-date{font-size:.74rem;font-weight:450}
+.bar-line{display:grid;grid-template-columns:minmax(64px,1.05fr) minmax(25px,1fr) max-content;gap:5px;align-items:center;width:100%;min-width:0;margin:8px 0;font-size:.77rem}
+.bar-line span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.bar-line strong{font-size:.76rem;font-weight:600;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.bar-track{height:11px;min-width:0;border-radius:8px;background:var(--secondary-background-color,#e5e7eb);overflow:hidden}
+.bar-fill{height:100%;background:#34a5dc;border-radius:8px;min-width:2px}
+.hero-actions{margin-top:auto;display:flex;justify-content:flex-end;padding:5px 0 0;min-width:0}
+.hero-actions .add-drink{font-size:.86rem;font-weight:650;min-width:0;max-width:100%;padding:7px 12px;line-height:1.2;border-radius:13px;white-space:nowrap}
+.day-loading{font-size:.93rem;color:var(--secondary-text-color);padding:22px 8px;min-height:140px}
+/* Exactly five 38px data rows are visible, with a separately sticky 35px header.
+   Older records scroll inside the table, without clipping the first or last row. */
+.history{border-top:1px solid var(--divider-color,#ddd);padding-top:11px;margin-top:1px;min-width:0}
+.history-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.history h3{font-size:1.05rem;font-weight:650;margin:0}
+.history-head .muted{font-size:.88rem}
+.date-nav{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin:7px 0}
+.date-nav input{width:160px;max-width:48%;box-sizing:border-box;text-align:center;font:inherit;font-size:1.23rem;font-weight:700;line-height:1.2;padding:7px 8px;color:var(--primary-text-color);background:#fff;border:1px solid var(--divider-color,#bbb);border-radius:9px}
+.date-nav button{font-size:1rem;padding:6px 10px;min-height:34px}
+.history-table{max-height:225px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#aab0b5 transparent}
+.history-table table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;min-width:0}
+.history-table thead tr{height:35px}
+.history-table th{height:35px;box-sizing:border-box;position:sticky;top:0;z-index:2;padding:0 6px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.88rem;font-weight:500;color:var(--secondary-text-color,#667);text-align:left;background:var(--card-background-color,#fff)}
+.history-table tbody tr{height:38px;max-height:38px;min-height:38px}
+.history-table tbody td{height:38px;box-sizing:border-box;padding:0 6px;line-height:20px;font-size:.88rem;vertical-align:middle;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-table th:first-child,.history-table td:first-child{width:27%}
+.history-table th:last-child,.history-table td:last-child{width:29%}
+.history-table td.right,.history-table th.right{text-align:right;white-space:nowrap}
+.history-table tr[data-action]{cursor:pointer}
+.history-table tr[data-action]:hover{background:color-mix(in srgb,#b3e5fc 30%,white)}
+.export{border-top:1px solid var(--divider-color,#ddd);margin:0;padding:7px 0 0;text-align:left;align-self:stretch}
+.export button{font-size:.79rem;padding:6px 10px}
+.card-version{align-self:flex-end;margin:0;font-size:.72rem;color:var(--secondary-text-color,#666)}
+/* Centralized controls. Disabled and manage actions are deliberately different. */
+button,button.secondary,button.small,button.liquid-choice,button.amount,button.danger{
+ font:inherit;cursor:pointer;background:#B3E5FC;color:#18374b;
+ border:1px solid #71b4d2;border-radius:11px;padding:6px 10px;
+ box-sizing:border-box;transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease}
+button:hover:not(:disabled){background:#95d9f9;border-color:#3e96c2}
+button:active:not(:disabled){background:#80cfee}
+button:focus-visible{outline:2px solid #0578b3;outline-offset:2px}
+button.selected,button.liquid-choice.selected,button.amount.selected{background:#B3E5FC;color:#092e48;border-color:#046eac;box-shadow:inset 0 0 0 2px #046eac;font-weight:650}
+button:disabled{opacity:.39;filter:grayscale(.32);cursor:not-allowed;box-shadow:none}
+button.small{padding:5px 8px;border-radius:9px;font-size:.85rem}
+button.danger{color:#9a2525;border-color:#bd7a7a}
+button.manage-control,button.manage-control:not(:disabled){background:#EEEEEE;border-color:#c8ccd0;color:#242a30}
+button.manage-control:hover:not(:disabled){background:#dcdcdc;border-color:#9e9e9e}
+/* Modal and compact managers */
+.overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box}
+.dialog{width:min(660px,100%);box-sizing:border-box;max-height:calc(100vh - 28px);overflow-y:auto;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border-radius:15px;padding:18px;box-shadow:0 15px 45px #0004}
+.dialog.dialog-manage-liquids{width:min(555px,100%)}
+.dialog.dialog-manage-volumes{width:min(450px,100%)}
+.dialog h3{margin:0 0 11px;font-size:1.19rem}
+.modal-heading{font-size:.95rem;font-weight:650;margin:11px 0 6px}
+.liquid-choices,.volume-choices{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.liquid-choice,.volume-choices .amount{font-size:.93rem!important;line-height:1.2;min-height:34px;padding:5px 9px!important}
+.liquid-choice{display:inline-flex;align-items:center;gap:5px}
+.liquid-icon{width:23px;height:23px;min-width:23px;--mdc-icon-size:23px;display:inline-block;object-fit:contain}
+.volume-choices{margin-bottom:8px}
+.add-type,.manage-volumes{margin-top:7px;font-size:.86rem}
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,165px));gap:10px;justify-content:start;margin-top:8px}
+.fields label{min-width:0;display:flex;flex-direction:column;gap:5px;font-size:.91rem}
+.fields input,.fields select{min-width:0;width:100%;box-sizing:border-box;background:#fff;color:#222;border:1px solid #b8c4cc;border-radius:8px;padding:9px 8px;font:inherit;font-size:1.08rem}
+.date-select{position:relative}
+button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover:not(:disabled){display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;background:#FFFFFF;color:#222;border:1px solid #b8c4cc;border-radius:8px;text-align:left;font-size:1.08rem;padding:9px 8px;line-height:1.3}
+.cal-popover{position:relative;margin-top:7px;z-index:10100;background:#fff;border:1px solid #bbb;border-radius:10px;padding:10px;min-width:240px;box-shadow:0 8px 26px #0003}
+.cal-title{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;font-size:.9rem}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-weekday{text-align:center;color:#67717a;font-size:.75rem;padding:5px 0}
+.cal-day{font-size:.82rem!important;padding:5px 2px!important;border-radius:6px!important}
+.cal-day.current{box-shadow:inset 0 0 0 2px #046eac}
+.dialog-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:12px}
+.dialog-actions button:first-child.danger{margin-right:auto}
+.manage-intro{font-size:.82rem;line-height:1.35;color:var(--secondary-text-color,#667);margin:2px 0 9px}
+.saved-liquids{display:flex;flex-direction:column;gap:0;margin-top:5px}
+.saved-liquid{display:grid;grid-template-columns:27px minmax(78px,1fr) minmax(60px,auto) 30px 30px 43px 58px;gap:5px;align-items:center;padding:4px 0;border-bottom:1px solid var(--divider-color,#ddd);min-width:0}
+.saved-liquid .muted{font-size:.81rem;white-space:nowrap;text-align:right}
+.saved-liquid strong{font-size:.91rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.saved-liquid button{min-width:0;max-width:100%;padding:4px 4px;font-size:.78rem}
+.hidden-liquid{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--divider-color,#ddd)}
+.hidden-liquid button{margin-left:auto}
+.manage h4{font-size:.94rem;margin:12px 0 5px}
+.manage-editor{border-top:1px solid var(--divider-color,#ddd);padding-top:7px}
+.manage-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.manage-form-grid label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:.88rem}
+.manage-form-grid input{width:100%;min-width:0;box-sizing:border-box;padding:8px;background:#fff;border:1px solid #bbb;border-radius:8px;font:inherit}
+.manage-form-grid .svg-field{grid-column:1/-1}
+.manage-form-grid input[type=file]{font-size:.8rem;padding:6px}
+.volume-rows{display:flex;flex-direction:column;gap:2px}
+.volume-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 32px 32px 75px;gap:5px;align-items:center;border-bottom:1px solid var(--divider-color,#ddd);padding:2px 0;height:42px;min-height:42px;max-height:42px;box-sizing:border-box}
+.volume-edit-row label{font-size:.78rem;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;min-width:0;white-space:nowrap}
+.volume-edit-row input{width:78px;max-width:48%;height:32px;min-width:0;box-sizing:border-box;border:1px solid #bbb;border-radius:8px;background:#fff;color:#222;font:inherit;font-size:.9rem;padding:4px 6px}
+.volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
+.delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
+.status{font-size:.82rem;color:var(--secondary-text-color)}
+/* Keep charts beside glass at 400+ CSS-pixel container widths, including zoomed HA views. */
+@container jdhl-card (max-width:399px){
+ .hero{grid-template-columns:minmax(0,1fr);row-gap:6px}
+ .glass-side{grid-column:1;grid-row:1;width:min(274px,100%);margin:0 auto}
+ .hero-side{grid-column:1;grid-row:2;min-height:0}
+ .hero-actions{margin-top:8px}
+}
+@container jdhl-card (min-width:400px) and (max-width:560px){
+ .hero{grid-template-columns:195px minmax(0,1fr);gap:8px}
+ .hero-side{min-height:185px}
+ .bars-title{margin-bottom:6px}
+ .bar-line{grid-template-columns:minmax(56px,1.1fr) minmax(20px,1fr) max-content;gap:4px;font-size:.72rem;margin:6px 0}
+ .bar-line strong{font-size:.71rem}
+ .drink-count{font-size:.70rem}
+ .taken{font-size:19px}
+}
+@container jdhl-card (max-width:350px){
+ .bar-line{grid-template-columns:minmax(66px,1fr) minmax(28px,1fr) max-content}
+}
+@media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
+@media(max-width:475px){
+ .saved-liquid{grid-template-columns:25px minmax(90px,1fr) minmax(65px,auto);row-gap:4px}
+ .saved-liquid button{grid-row:2}
+ .volume-edit-row{grid-template-columns:minmax(95px,1fr) 32px 32px 70px}
+ .volume-edit-row label{font-size:.73rem}
+ .volume-edit-row input{width:65px}
+ .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
+
+   </style><ha-card><div class="root">
    ${this._config.show_title!==false?`<header><h2>${jdhlEscape(title)}</h2></header>`:''}
    <div class="hero-shell">
     ${pendingPast?`<p class="day-loading">Loading ${jdhlEscape(jdhlIsoToDate(selectedDate))}…</p>`:`
@@ -662,7 +677,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    ${this._historyHTML()}
    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.12</footer></div></ha-card>`;
+   <footer class="card-version">v1.1.0-beta.13</footer></div></ha-card>`;
  }
 }
 
@@ -696,4 +711,4 @@ if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydration
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.12');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.13');
