@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.10
+# jwDaily Hydration Log v1.1.0-beta.11
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,19 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.10
+## What's new in beta.11
+
+- **FIX-01:** side-by-side chart to the right of the open glass and selected-day total on cards with sufficient room, stacking only on small cards; percentage line, bar totals and water animation unchanged.
+- **FIX-02:** removed Undo last drink button from the card, with no empty placeholder; Add/Edit/Delete are unchanged.
+- **FIX-03:** all history entries use compact, consistent **38px** rows with edit icons and separator lines.
+- **FIX-04/08:** normal action and selection buttons use **#B3E5FC** background; selected, hover, focus, disabled styles differ without looking disabled by default; liquid and volume quick-selection controls are shorter and use the same font size.
+- **FIX-05:** the date picker button remains pure white **#FFFFFF**, with calendar icon and existing DD-MM-YYYY validation.
+- **FIX-06/07:** compact Manage liquid types and Manage volume buttons dialogs, aligned reorder/edit/delete controls and right-aligned footer actions.
+- **FIX-09:** Manage liquid types and Manage volume buttons controls use neutral **#EEEEEE**.
+- **Excel:** exact requested Excel column widths on Hydration log and Daily Totals, with tall wrapped two-line header cells and existing four-sheet metadata, data, date formats and formulas intact.
+- **Packaging:** complete integration release ZIP with SHA-256 and ZIP CRC inspection, published as an asset on the HACS beta release.
+- **Preserved:** user profiles, saved drink moments, custom liquids and quick buttons, historic selected-day data, Android 24-hour clock parsing, chart-data sensors, HACS installation.
+
 
 - **Reference-aligned compact dashboard:** one consistent card-width layout with a 24px blue intake total, fixed non-overlapping separation from the glass, wider right-side chart, smaller and lower Add drink button, and *Drink moments kept directly under the glass*. On narrow cards the chart stacks below the glass.
 - **History rows now 40 CSS px high**, uniform and vertically centered; the large bold date selector remains. No persistent `Drink saved` / `Saving…` status row or wasted gap. Excel export stays compact and flush left.

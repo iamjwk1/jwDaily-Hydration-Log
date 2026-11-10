@@ -1,0 +1,112 @@
+name: Publish jwDaily Hydration Log v1.1.0-beta.11
+on:
+  push:
+    branches: ["release/v1.1.0-beta.11"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jwdhl-v1.1.0-beta.11
+  cancel-in-progress: false
+
+jobs:
+  publish-beta:
+    name: Full QA, visual regression and HACS pre-release
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python syntax and integration behavior
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+      - name: Custom Excel reference and OOXML element order checks
+        run: python tests/export_reference_qa.py
+      - name: Frontend interactions and Android clock parser
+        run: node tests/frontend_qa.js
+      - name: Real Chrome layout acceptance
+        run: |
+          npm install --no-save --no-package-lock puppeteer-core@24
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)" node tests/visual_layout_qa.cjs
+      - name: Preserve real-browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jwdhl-beta11-layout-screenshots
+          path: tests/layout-beta11-*.png
+          if-no-files-found: ignore
+      - name: Verify release metadata and API contract
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          root=pathlib.Path('custom_components/jw_daily_hydration_log')
+          manifest=json.loads((root/'manifest.json').read_text())
+          const=(root/'const.py').read_text()
+          card=(root/'www/jwdaily-hydration-log-card.js').read_text()
+          excel=(root/'excel.py').read_text()
+          coord=(root/'coordinator.py').read_text()
+          sensors=(root/'sensor.py').read_text()
+          assert manifest['domain']=='jw_daily_hydration_log'
+          assert manifest['version']=='1.1.0-beta.10'
+          assert "VERSION = '1.1.0-beta.10'" in const and "VERSION = '1.1.0-beta.10'" in excel
+          assert 'v1.1.0-beta.11' in card
+          assert 'jdhlNormalizeTime' in card and 'inputmode="numeric"' in card
+          assert 'class="taken-slot"' in card and 'class="drink-count"' in card
+          assert 'font-size:24px' in card
+          assert 'height:38px' in card
+          assert 'background:#B3E5FC' in card
+          assert 'background:#EEEEEE' in card
+          assert 'background:#FFFFFF' in card
+          assert 'Undo last drink' not in card
+          assert '@container(max-width:510px)' in card
+          assert 'button.manage-control' in card
+          assert 'class="status" aria-live="polite"' not in card
+          assert 'result.sort(key=lambda row:' in excel
+          assert '[4,25,16,6,9,9,17,11]' in excel
+          assert '[4.285,16,15,7,9,6,10,9,11,6,10,10,10,10,10,10,10]' in excel
+          assert "chart_hourly_today" in coord and "chart_last_7_days" in coord
+          assert "HourlyIntakeToday" in sensors and "DailyIntakeLast7Days" in sensors
+          assert "pageMargins MUST precede tableParts" in excel
+          assert (root/'brand/icon.png').is_file()
+          assert json.loads(pathlib.Path('hacs.json').read_text())['name']=='jwDaily Hydration Log'
+          assert pathlib.Path('examples/apexcharts-jwdhl-v1.1.0-beta.11.md').is_file()
+          assert pathlib.Path('RELEASE_NOTES_v1.1.0-beta.11.md').is_file()
+          print('BETA10 QA CONTRACT PASS')
+          PY
+      - uses: home-assistant/actions/hassfest@master
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+      - name: Build and CRC/SHA-256 validate full install ZIP
+        run: python scripts/package_release_beta11.py
+      - name: Archive verified installation ZIP and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: jwDaily-Hydration-Log-v1.1.0-beta.11-package
+          path: |
+            dist/20261110 jwDaily Hydration Log v1.1.0-beta.11.zip
+            dist/20261110 jwDaily Hydration Log v1.1.0-beta.11.sha256
+          retention-days: 90
+          if-no-files-found: error
+      - name: Publish GitHub HACS prerelease and full ZIP assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.1.0-beta.11 >/dev/null 2>&1; then
+            echo "Release already exists. Do not silently overwrite an existing tag/assets."
+            exit 1
+          fi
+          gh release create v1.1.0-beta.11 --target "$GITHUB_SHA" --title 'jwDaily Hydration Log v1.1.0-beta.11' --prerelease --latest=false --notes-file RELEASE_NOTES_v1.1.0-beta.11.md
+          gh release upload v1.1.0-beta.11 \
+            "dist/20261110 jwDaily Hydration Log v1.1.0-beta.11.zip" \
+            "dist/20261110 jwDaily Hydration Log v1.1.0-beta.11.sha256"
+          gh release view v1.1.0-beta.11 --json tagName,isPrerelease,url,assets

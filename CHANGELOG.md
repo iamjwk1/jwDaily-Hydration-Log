@@ -1,5 +1,18 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.11 — HACS pre-release
+- FIX-01: right-aligned daily-by-liquid chart on normal/wide cards, responsive stack only on small screens.
+- FIX-02: removed Undo last drink button, keeping existing Add/Edit/Delete behavior.
+- FIX-03: reduced history rows to equal 38px heights.
+- FIX-04: centralized enabled button style with #B3E5FC background and clear selected/hover/focus/disabled states.
+- FIX-05: date picker remains #FFFFFF with calendar icon.
+- FIX-06/07: compact Manage liquid types and Manage volume buttons modals and aligned actions.
+- FIX-08: more compact choice buttons using the same font size for both liquid and volume.
+- FIX-09: distinct neutral #EEEEEE Manage controls.
+- Excel: mandated 7 Hydration log and 16 Daily Totals column widths, native two-line wrapped headers (mL/count), pre-existing formulas and history unchanged.
+- Release: full integration ZIP, ZIP CRC/SHA-256 checks and browser-modal geometry regression gates.
+
+
 ## v1.1.0-beta.10 — HACS pre-release
 - Matched user-edited visual reference: fixed 24px blue intake next to left glass without overlap; wider right chart; smaller Add control anchored at the lower right.
 - Kept dynamic *Drink moments* directly beneath glass. Removed only persistent success/status text beneath the hero.
