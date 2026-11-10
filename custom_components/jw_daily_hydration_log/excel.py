@@ -136,7 +136,7 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
     for row in sorted(rows):
-        rowheight=' ht="34" customHeight="1"' if row==11 and index in (1,2) else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')
+        rowheight=(' ht="44" customHeight="1"' if index==2 else ' ht="34" customHeight="1"') if row==11 and index in (1,2) else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
