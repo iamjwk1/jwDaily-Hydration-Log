@@ -62,7 +62,7 @@ const puppeteer=require('puppeteer-core');
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
-   if(width>=310)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
+   if(width>=340)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
  else assert(x.chart.top>=x.glass.bottom,'narrow cards should stack the chart below glass');
    for(const part of ['glass','taken','chart','button','date','export']){
      const p=x[part];assert(p&&p.left>=x.card.left-4&&p.right<=right+2,part+' outside card: '+JSON.stringify(p));
