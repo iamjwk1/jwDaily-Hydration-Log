@@ -1,5 +1,11 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.12 (HACS pre-release)
+- Correct side-by-side bar-chart layout on wider cards with named container query.
+- Enforce 38px history rows and single-line volume manager rows.
+- Rename second export worksheet to Daily intake; existing data unchanged.
+
+
 ## v1.1.0-beta.11 — HACS pre-release
 - FIX-01: right-aligned daily-by-liquid chart on normal/wide cards, responsive stack only on small screens.
 - FIX-02: removed Undo last drink button, keeping existing Add/Edit/Delete behavior.
