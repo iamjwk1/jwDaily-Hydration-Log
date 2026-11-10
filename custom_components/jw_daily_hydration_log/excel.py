@@ -21,7 +21,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.13'
+VERSION = '1.1.0-beta.14'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -178,26 +178,45 @@ def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = No
 
 
 def _styles_with_legacy_header() -> tuple[bytes,int]:
-    """Append a solid-orange header style without changing original style IDs."""
-    ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
-    ET.register_namespace('',ns)
-    root=ET.fromstring(STYLES)
-    fills=root.find(f'{{{ns}}}fills')
-    xfs=root.find(f'{{{ns}}}cellXfs')
-    if fills is None or xfs is None or len(xfs)<=6:
-        raise ValueError('Unexpected Excel reference style structure')
-    idx=len(xfs)
-    new_fill=ET.SubElement(fills,f'{{{ns}}}fill')
-    pattern=ET.SubElement(new_fill,f'{{{ns}}}patternFill',{'patternType':'solid'})
-    ET.SubElement(pattern,f'{{{ns}}}fgColor',{'rgb':'FFFFA500'})
-    ET.SubElement(pattern,f'{{{ns}}}bgColor',{'indexed':'64'})
-    fills.set('count',str(len(fills)))
-    clone=copy.deepcopy(xfs[6])
-    clone.set('fillId',str(len(fills)-1))
-    clone.set('applyFill','1')
-    xfs.append(clone)
-    xfs.set('count',str(len(xfs)))
-    return ET.tostring(root,encoding='utf-8',xml_declaration=True),idx
+    """Extend the original Office XML *without serializing it with ElementTree*.
+
+    ElementTree discarded x14ac/x16r2/xr prefix declarations while leaving
+    mc:Ignorable names intact. Desktop Excel then removed xl/styles.xml and
+    repaired every table. Preserve original namespace declarations verbatim.
+    """
+    import re
+    original = STYLES.decode('utf-8')
+    root = ET.fromstring(original)
+    ns = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+    fills = root.find(ns+'fills')
+    xfs = root.find(ns+'cellXfs')
+    if fills is None or xfs is None or len(xfs) < 7:
+        raise ValueError('Unexpected Office style structure')
+    new_fill_id = len(fills)
+    new_style_id = len(xfs)
+    fill = '<fill><patternFill patternType="solid"><fgColor rgb="FFFFA500"/><bgColor indexed="64"/></patternFill></fill>'
+    # Original header style has wrapText and border/number format settings.
+    base = ET.tostring(xfs[6], encoding='unicode').replace('ns0:', '').replace(' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','')
+    base = re.sub(r'\bfillId="[^"]*"', f'fillId="{new_fill_id}"', base)
+    if 'applyFill=' in base:
+        base = re.sub(r'\bapplyFill="[^"]*"', 'applyFill="1"', base)
+    else:
+        base = base.replace('<xf ', '<xf applyFill="1" ', 1)
+    # Do not allow reserialization to change the original xmlns prefix mapping.
+    def inject(match, content, count):
+        attrs, inside = match.group(1), match.group(2)
+        attrs = re.sub(r'\bcount="[^"]+"', f'count="{count}"', attrs)
+        return f'<{content[0]}{attrs}>{inside}{content[1]}</{content[0]}>'
+    fmatch = re.search(r'<fills([^>]*)>(.*?)</fills>', original, re.S)
+    xmatch = re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
+    if fmatch is None or xmatch is None:
+        raise ValueError('Original styles missing required collections')
+    # Edit the last group first to retain original positions for earlier group.
+    original = original[:xmatch.start()] + inject(xmatch, ('cellXfs',base),new_style_id+1) + original[xmatch.end():]
+    fmatch = re.search(r'<fills([^>]*)>(.*?)</fills>', original, re.S)
+    original = original[:fmatch.start()] + inject(fmatch, ('fills',fill),new_fill_id+1) + original[fmatch.end():]
+    ET.fromstring(original)  # XML and namespace syntax gate; Excel structure gate in QA.
+    return original.encode('utf-8'),new_style_id
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
