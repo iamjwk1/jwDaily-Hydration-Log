@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.17
+# jwDaily Hydration Log v1.1.0-beta.18
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,16 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.16
+## What's new in beta.18
+
+- Unified stable chart colors: the same liquid type uses the same color on both chart cards, even if its data appears in a different order.
+- Responsive charts with more legible y-axis labels, a compact card height and version bottom-right.
+- Weekly chart scale adapts to actual volumes: 2,550 mL highest day → 3,000 mL maximum instead of 4,000 mL.
+- Main card: day total closer to cup; drink moments larger; history date narrower; five uniform 28px history rows and shortened Excel export button.
+- Existing Excel export (44pt Daily intake header, dynamic liquid types, orange historical headers, exact column widths) preserved with all stored data.
+- Excel download from unsecured local HTTP may still be blocked by Chrome; use HTTPS/Nabu Casa.
+
+## Changes retained from beta.16
 
 - One responsive two-column hero that keeps Today by liquid to the right even in a 720px screenshot at browser zoom (card ~360 CSS pixels).
 - Beverage total, glass, target, and drink moments retain consistent alignment.
