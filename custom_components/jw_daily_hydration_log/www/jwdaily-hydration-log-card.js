@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.18 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.19 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -224,7 +224,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.18')throw Error(`Frontend v1.1.0-beta.18 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.19')throw Error(`Frontend v1.1.0-beta.19 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -566,7 +566,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .hero-shell{container:jdhl-card / inline-size;width:100%;min-width:0}
 .hero{display:grid;grid-template-columns:clamp(186px,40%,274px) minmax(0,1fr);column-gap:9px;align-items:start;width:100%;min-width:0}
 .glass-side{grid-column:1;grid-row:1;min-width:0;width:100%}
-.glass-stack{display:grid;grid-template-columns:minmax(72px,38%) minmax(0,62%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
+.glass-stack{display:grid;grid-template-columns:minmax(72px,30%) minmax(0,70%);grid-template-rows:auto 24px;align-items:start;width:100%;min-width:0}
 .taken-slot{position:relative;grid-column:1;grid-row:1;height:100%;min-width:0}
 .taken{position:absolute;right:6px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
 .glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%}
@@ -617,6 +617,8 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .card-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;border:0;padding:2px 0 0;min-height:0}.export{margin:0;padding:0;text-align:left}
 .export button{font-size:.72rem;padding:4px 8px;line-height:1.25;min-height:28px;max-width:100%}
 .card-version{margin-left:auto;align-self:flex-end;font-size:.72rem;color:var(--secondary-text-color,#666)}
+/* beta.19: the base button rule follows the export rule; make the compact footer geometry authoritative. */
+.card-footer .export button.secondary{font-size:.76rem;line-height:1.05;height:28px;min-height:28px;max-height:28px;padding:3px 8px;box-sizing:border-box;border-radius:9px;white-space:nowrap}
 /* Centralized controls. Disabled and manage actions are deliberately different. */
 button,button.secondary,button.small,button.liquid-choice,button.amount,button.danger{
  font:inherit;cursor:pointer;background:#B3E5FC;color:#18374b;
@@ -689,7 +691,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 }
 @container jdhl-card (min-width:280px) and (max-width:560px){
  .hero{grid-template-columns:clamp(132px,40%,208px) minmax(0,1fr);column-gap:7px}
- .glass-stack{grid-template-columns:minmax(48px,38%) minmax(0,62%)}
+ .glass-stack{grid-template-columns:minmax(48px,32%) minmax(0,68%)}
  .hero-side{min-height:185px}
  .bar-line{grid-template-columns:minmax(43px,.95fr) minmax(24px,.85fr) max-content;gap:3px;margin:6px 0;font-size:.72rem}
  .bar-line strong{font-size:.69rem}
@@ -729,7 +731,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" aria-label="Export all data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.18</span>
+    <span class="card-version">v1.1.0-beta.19</span>
    </footer></div></ha-card>`;
  }
 }
@@ -843,7 +845,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.18</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.19</div></ha-card>`;return;}
   const colors=new Map(keys.map(key=>[key,jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
      24 x-axis hours (1-24) or seven local day labels, plus daily sum labels. */
@@ -878,7 +880,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.18</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.19</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -893,4 +895,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.18');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.19');
