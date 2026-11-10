@@ -92,6 +92,26 @@ with ZipFile(BytesIO(raw)) as zipf:
   xml=zipf.read(f'xl/worksheets/sheet{sheet_num}.xml').decode()
   assert xml.index('<pageMargins') < xml.index('<tableParts')
  assert excel._xml('Valid\x01\ud800name')=='Validname'
+ # FIX-10/11 exact Excel column widths, in Excel units, including leading A.
+ expected_log=[4,25,16,6,9,9,17,11]
+ expected_daily=[4.285,16,15,7,9,6,10,9,11,6,10,10,10,10,10,10,10]
+ def widths(sheet):
+  return [float(x.attrib['width']) for x in sheet.find(NS+'cols').findall(NS+'col')]
+ assert widths(log)==expected_log,('Hydration log',widths(log))
+ assert widths(day)==expected_daily,('Daily Totals',widths(day))
+ assert c(log,'F11')[0]=='Target\n(mL)' and c(log,'H11')[0]=='Volume\n(mL)'
+ assert c(day,'H11')[0]=='Drink\ncount' and c(day,'I11')[0]=='Volume\n(mL)'
+ assert c(day,'G11')[0]=='Target\n(mL)'
+ assert all(c(day,k+'11')[0].endswith('\n(mL)') for k in 'KLMNOPQ')
+ for sheet in (log,day):
+  assert float(sheet.find(NS+'sheetData').find(f'{NS}row[@r="11"]').attrib['ht'])>=30
+ # Reference header-cell styles have wrapText enabled; without it line breaks clip.
+ xfs=ET.fromstring(zipf.read('xl/styles.xml')).find(NS+'cellXfs')
+ for idx in sorted(set(int(c(sh,ref)[2]) for sh,ref in [
+   (log,'F11'),(log,'H11'),(day,'G11'),(day,'H11'),(day,'I11'),
+   (day,'K11'),(day,'Q11')])):
+  xf=xfs[idx];alignment=xf.find(NS+'alignment')
+  assert alignment is not None and alignment.attrib.get('wrapText')=='1',('No wrapText',idx)
  # Every settings header must fit within its configured worksheet column.
  def col_widths(sheet):
   cols=sheet.find(NS+'cols')
@@ -109,4 +129,4 @@ with ZipFile(BytesIO(raw)) as zipf:
  # Date+time, color, header rows and percentage formulas follow the reference.
  assert c(log,'B12')[2]=='25' and c(log,'H15')[2]=='32'
  assert c(day,'J12')[2]=='18' and c(day,'J13')[2]=='22'
- print('REFERENCE_EXCEL_QA_PASS: 4 sheets, exact row/column anchors, typography/styles, tables, formulas, custom liquids, filename & CRC')
+ print('REFERENCE_EXCEL_QA_PASS: 4 sheets, exact requested Excel widths, wrapped headers, date/formulas, table integrity and CRC')
