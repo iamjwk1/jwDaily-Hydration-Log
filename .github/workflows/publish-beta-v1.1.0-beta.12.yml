@@ -66,7 +66,7 @@ jobs:
           assert 'background:#EEEEEE' in card
           assert 'background:#FFFFFF' in card
           assert 'Undo last drink' not in card
-          assert '@container(max-width:510px)' in card
+          assert '@container jdhl-card (max-width:455px)' in card
           assert 'button.manage-control' in card
           assert 'class="status" aria-live="polite"' not in card
           assert 'result.sort(key=lambda row:' in excel
@@ -79,7 +79,7 @@ jobs:
           assert json.loads(pathlib.Path('hacs.json').read_text())['name']=='jwDaily Hydration Log'
           assert pathlib.Path('examples/apexcharts-jwdhl-v1.1.0-beta.12.md').is_file()
           assert pathlib.Path('RELEASE_NOTES_v1.1.0-beta.12.md').is_file()
-          print('BETA11 QA CONTRACT PASS')
+          print('BETA12 QA CONTRACT PASS')
           PY
       - uses: home-assistant/actions/hassfest@master
       - name: HACS validation
