@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.13 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.14 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -34,13 +34,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._manageOpen=false;this._customDraft=null;this._editingLiquidId=null;
   this._volumeManageOpen=false;this._volumeDraft=null;this._glassPrevY=179;
   this._managePendingDelete=null;
-  this._calendarOpen=false;this._calendarMonth=null;
+  this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
   this._fetching=false;this._fetchAgain=false;this._tickTimer=null;
   this.shadowRoot.addEventListener('click',e=>this._click(e));
   this.shadowRoot.addEventListener('input',e=>this._field(e));
   this.shadowRoot.addEventListener('change',e=>this._field(e));
   this.shadowRoot.addEventListener('keydown',e=>{
+   if(e.key==='Escape'&&this._historyCalendarOpen){this._historyCalendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._calendarOpen){this._calendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._modal){this._modal=null;this._confirmDelete=false;this._render(true);}
    if(e.key==='Enter'&&e.target?.dataset?.action==='edit'){e.preventDefault();this._openEdit(e.target.dataset.id);}
@@ -58,7 +59,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._manageOpen=false;this._customDraft=null;this._editingLiquidId=null;
   this._volumeManageOpen=false;this._volumeDraft=null;this._glassPrevY=179;
   this._managePendingDelete=null;
-  this._calendarOpen=false;this._calendarMonth=null;
+  this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._history=null;this._lastState='';this._lastRender='';this._render(true);this._fetchHistory();
  }
  set hass(h){this._hass=h;
@@ -201,7 +202,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  _openEdit(id){const r=this._selectedRecord(id);if(!r)return;
   const d=new Date(r.timestamp);const parts=this._timeParts(d);this._modal={mode:'edit',id:r.id,liquid_type:r.liquid_type==='unknown'?'':r.liquid_type,
    volume_ml:String(r.volume_ml),date:parts.date,time:parts.time};
-  this._calendarOpen=false;this._calendarMonth=null;this._confirmDelete=false;this._render(true);
+  this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;this._confirmDelete=false;this._render(true);
  }
  _timeParts(d){
   const tz=this._hass?.config?.time_zone||'Europe/Amsterdam';
@@ -209,7 +210,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const p=Object.fromEntries(pts.map(x=>[x.type,x.value]));
   return {date:`${p.day}-${p.month}-${p.year}`,time:`${p.hour}:${p.minute}:${p.second}`};
  }
- _openNew(){this._modal={mode:'new',id:'',liquid_type:'',volume_ml:'',date:jdhlIsoToDate(this._viewDate||this._todayISO()),time:this._nowTime()};this._calendarOpen=false;this._calendarMonth=null;this._confirmDelete=false;this._render(true);}
+ _openNew(){this._modal={mode:'new',id:'',liquid_type:'',volume_ml:'',date:jdhlIsoToDate(this._viewDate||this._todayISO()),time:this._nowTime()};this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;this._confirmDelete=false;this._render(true);}
  _payload(){const m=this._modal,volume=Number(m?.volume_ml),date=m?.date?.trim(),time=jdhlNormalizeTime(m?.time);
   if(!this._liquidInfo(m?.liquid_type) || (m.mode==='new' && this._liquidInfo(m.liquid_type)?.hidden))throw Error('Select a visible liquid type.');
   if(!Number.isFinite(volume)||volume<=0||volume>100000)throw Error('Enter a volume between 0 and 100,000 mL.');
@@ -223,7 +224,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.13')throw Error(`Frontend v1.1.0-beta.13 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.14')throw Error(`Frontend v1.1.0-beta.14 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -318,6 +319,23 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(this._viewDate===this._todayISO())this._viewDate=null;
    this._history=null;this._render(true);this._fetchHistory();return;
   }
+  if(action==='history-calendar-toggle'){
+   this._historyCalendarOpen=!this._historyCalendarOpen;
+   this._historyCalendarMonth=(this._viewDate||this._todayISO()).slice(0,7);
+   this._render(true);return;
+  }
+  if(action==='history-calendar-prev'||action==='history-calendar-next'){
+   const [y,m]=(this._historyCalendarMonth||this._todayISO().slice(0,7)).split('-').map(Number);
+   const d=new Date(y,m-1+(action==='history-calendar-prev'?-1:1),1);
+   this._historyCalendarMonth=jdhlIsoDate(d).slice(0,7);this._render(true);return;
+  }
+  if(action==='history-calendar-day'){
+   const date=el.dataset.value;
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>this._todayISO())return;
+   this._historyCalendarOpen=false;this._typedHistoryDate=jdhlIsoToDate(date);
+   this._viewDate=date===this._todayISO()?null:date;
+   this._history=null;this._error='';this._render(true);this._fetchHistory();return;
+  }
   if(action==='date-go'){
    const date=jdhlDateToIso(this._typedHistoryDate||'');
    if(!date||!Number.isFinite(Date.parse(`${date}T12:00:00`))||jdhlIsoDate(new Date(`${date}T12:00:00`))!==date){this._alert('Use a real date in DD-MM-YYYY format.');return;}
@@ -357,10 +375,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  async _export(){this._busy=true;this._status='Preparing Excel export…';this._error='';this._render(true);
   try{const response=await this._hass.callWS({type:'jw_daily_hydration_log/export'});
-   const data=Uint8Array.from(atob(response.base64),c=>c.charCodeAt(0));
-   const blob=new Blob([data],{type:response.mime_type});const url=URL.createObjectURL(blob);
-   const link=document.createElement('a');link.href=url;link.download=response.filename||'jwDaily Hydration Log - All Data.xlsx';
-   this.shadowRoot.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
+   if(!/^UEs/.test(response.base64||''))throw Error('Invalid Excel payload from Home Assistant.');
+   /* Use a locally generated data URL; this avoids blob:http mixed-download flags
+      in Chromium when HA is accessed through a reverse proxy. No external URL. */
+   const link=document.createElement('a');
+   link.href='data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,'+response.base64;
+   link.download=response.filename||'jwDaily Hydration Log - All Data.xlsx';
+   this.shadowRoot.appendChild(link);link.click();link.remove();
    this._status='Excel export started';
   }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
  }
@@ -384,7 +405,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
        <animate attributeName="d" values="${w0};${w1};${w0}" dur="2.7s" repeatCount="indefinite"/></path></g>`:''}
    <path d="M38 ${targetY} L122 ${targetY}" stroke="#fff" stroke-opacity=".95" stroke-width="5" stroke-dasharray="4 5" stroke-linecap="round"/>
    <path d="M38 ${targetY} L122 ${targetY}" stroke="#e04444" stroke-width="2.6" stroke-dasharray="4 5" stroke-linecap="round"/>
-   <text x="80" y="30" text-anchor="middle" font-size="15" fill="#e03535" font-weight="650" stroke="#fff" stroke-width="3" paint-order="stroke">${jdhlFmt(target)}</text>
+   <text x="80" y="30" text-anchor="middle" font-size="19" fill="#e03535" font-weight="650" stroke="#fff" stroke-width="3" paint-order="stroke">${jdhlFmt(target)}</text>
    ${p<96?`<text x="80" y="${remainingY}" text-anchor="middle" font-size="16" fill="var(--primary-text-color,#172b3b)" font-weight="500" stroke="var(--card-background-color,#fff)" stroke-width="2" paint-order="stroke">${jdhlFmt(remaining)}</text>`:''}
   </svg>`;
  }
@@ -402,6 +423,25 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <div class="bar-track"><div class="bar-fill" style="width:${(100*Number(x.volume_ml)/high).toFixed(2)}%"></div></div>
       <strong>${jdhlFmt(Number(x.volume_ml))}</strong></div>`).join('')}</div>`;
  }
+ _historyCalendarHTML(){
+  if(!this._historyCalendarOpen)return '';
+  const today=this._todayISO();
+  const selected=this._viewDate||today;
+  const ym=this._historyCalendarMonth||selected.slice(0,7);
+  const [year,month]=ym.split('-').map(Number);
+  const first=(new Date(year,month-1,1).getDay()+6)%7;
+  const days=new Date(year,month,0).getDate();
+  const monthTitle=new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric'}).format(new Date(year,month-1,1));
+  const cells=['Mo','Tu','We','Th','Fr','Sa','Su'].map(v=>`<span class="history-cal-weekday">${v}</span>`);
+  for(let i=0;i<first;i++)cells.push('<span></span>');
+  for(let n=1;n<=days;n++){
+    const iso=`${ym}-${String(n).padStart(2,'0')}`;
+    cells.push(`<button type="button" class="history-cal-day ${iso===selected?'selected':''}" data-action="history-calendar-day" data-value="${iso}" ${iso>today?'disabled':''}>${n}</button>`);
+  }
+  return `<div class="history-calendar" role="dialog" aria-label="Select drink history date">
+    <div class="history-cal-nav"><button data-action="history-calendar-prev" aria-label="Previous month">‹</button><strong>${jdhlEscape(monthTitle)}</strong><button data-action="history-calendar-next" aria-label="Next month" ${ym>=today.slice(0,7)?'disabled':''}>›</button></div>
+    <div class="history-cal-grid">${cells.join('')}</div></div>`;
+ }
  _historyHTML(){if(this._config.show_history===false)return '';
   const iso=this._viewDate||this._todayISO(),rows=Array.isArray(this._history?.entries)?[...this._history.entries].reverse():[];
   const total=this._history?jdhlFmt(this._history.total_ml,this._config.unit):'—';
@@ -413,7 +453,9 @@ class JwDailyHydrationLogCard extends HTMLElement {
    </tbody></table></div>`:`<p class="muted center">${this._history?'No drinks recorded on this date.':'Loading drink history…'}</p>`;
   return `<section class="history"><div class="history-head"><h3>Drink history</h3><span class="muted">${rows.length} entries</span></div>
    <div class="date-nav"><button data-action="prev" class="small secondary" aria-label="Previous day">‹</button>
-   <input aria-label="History date" data-field="history_date" value="${jdhlEscape(jdhlIsoToDate(iso)||iso)}" placeholder="DD-MM-YYYY" inputmode="numeric"/>
+   <div class="history-date-selector"><input aria-label="History date, DD-MM-YYYY" data-field="history_date" value="${jdhlEscape(jdhlIsoToDate(iso)||iso)}" placeholder="DD-MM-YYYY" inputmode="numeric" />
+   <button type="button" class="history-calendar-button" data-action="history-calendar-toggle" aria-label="Open history calendar" aria-expanded="${this._historyCalendarOpen}">▦</button>
+   ${this._historyCalendarHTML()}</div>
    <button data-action="date-go" class="small secondary">Go</button><button data-action="next" class="small secondary" ${iso>=this._todayISO()?'disabled':''} aria-label="Next day">›</button></div>
    ${table}</section>`;
  }
@@ -507,7 +549,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const remaining=Math.max(0,target-consumed),pct=target?consumed/target*100:0;
   const title=this._config.title||'jwDaily Hydration Log';
   const count=Number(daySummary?.drink_count??(isToday?jdhlNum(this._state('drink_count_today')?.state):0));
-  const k=JSON.stringify([target,consumed,this._history,this._modal,this._calendarOpen,this._calendarMonth,this._manageOpen,this._customDraft,this._volumeManageOpen,this._volumeDraft,this._confirmDelete,this._busy,this._error,this._status,this._viewDate,this._undoId,this._config]);
+  const k=JSON.stringify([target,consumed,this._history,this._modal,this._calendarOpen,this._calendarMonth,this._historyCalendarOpen,this._historyCalendarMonth,this._manageOpen,this._customDraft,this._volumeManageOpen,this._volumeDraft,this._confirmDelete,this._busy,this._error,this._status,this._viewDate,this._undoId,this._config]);
   if(!force&&this._lastRender===k)return;this._lastRender=k;
   this.shadowRoot.innerHTML=`<style>
 
@@ -551,6 +593,16 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .date-nav{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin:7px 0}
 .date-nav input{width:160px;max-width:48%;box-sizing:border-box;text-align:center;font:inherit;font-size:1.23rem;font-weight:700;line-height:1.2;padding:7px 8px;color:var(--primary-text-color);background:#fff;border:1px solid var(--divider-color,#bbb);border-radius:9px}
 .date-nav button{font-size:1rem;padding:6px 10px;min-height:34px}
+.history-date-selector{position:relative;display:flex;align-items:stretch;min-width:0;flex:0 0 auto}
+.history-date-selector input{border-radius:9px 0 0 9px;width:145px;flex:0 0 145px;max-width:none;font-size:.95rem;padding:6px 6px;font-weight:650}
+.history-calendar-button{border-radius:0 9px 9px 0;min-width:32px;flex:0 0 32px;font-size:1.1rem;padding:5px}
+.history-calendar{position:absolute;top:100%;left:0;z-index:20;width:258px;padding:10px;box-sizing:border-box;border:1px solid #b5c2cb;border-radius:11px;background:var(--card-background-color,#fff);box-shadow:0 8px 24px #0003}
+.history-cal-nav{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:.85rem;margin-bottom:8px}
+.history-cal-nav button{padding:4px 7px;min-height:28px}
+.history-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+.history-cal-weekday{text-align:center;font-size:.7rem;color:var(--secondary-text-color,#667);padding:4px 0}
+.history-cal-day{padding:4px 0!important;font-size:.76rem!important;min-height:28px;border-radius:5px!important}
+
 .history-table{max-height:225px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#aab0b5 transparent}
 .history-table table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;min-width:0}
 .history-table thead tr{height:35px}
@@ -562,9 +614,9 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .history-table td.right,.history-table th.right{text-align:right;white-space:nowrap}
 .history-table tr[data-action]{cursor:pointer}
 .history-table tr[data-action]:hover{background:color-mix(in srgb,#b3e5fc 30%,white)}
-.export{border-top:1px solid var(--divider-color,#ddd);margin:0;padding:7px 0 0;text-align:left;align-self:stretch}
+.card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--divider-color,#ddd);padding:9px 0 0;min-height:42px}.export{margin:0;padding:0;text-align:left}
 .export button{font-size:.79rem;padding:6px 10px}
-.card-version{align-self:flex-end;margin:0;font-size:.72rem;color:var(--secondary-text-color,#666)}
+.card-version{margin-left:auto;align-self:center;font-size:.72rem;color:var(--secondary-text-color,#666)}
 /* Centralized controls. Disabled and manage actions are deliberately different. */
 button,button.secondary,button.small,button.liquid-choice,button.amount,button.danger{
  font:inherit;cursor:pointer;background:#B3E5FC;color:#18374b;
@@ -627,25 +679,20 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .volume-edit-row button{height:32px;padding:3px 4px!important;font-size:.78rem!important}
 .delete-warning{margin-top:12px;padding:9px;border:1px solid #b54242;border-radius:8px;color:#9b2121;font-size:.88rem}
 .status{font-size:.82rem;color:var(--secondary-text-color)}
-/* Keep charts beside glass at 400+ CSS-pixel container widths, including zoomed HA views. */
-@container jdhl-card (max-width:279px){
+/* Only stack when a true two-column layout cannot fit. */
+@container jdhl-card (max-width:555px){
  .hero{grid-template-columns:minmax(0,1fr);row-gap:6px}
- .glass-side{grid-column:1;grid-row:1;width:min(274px,100%);margin:0 auto}
+ .glass-side{grid-column:1;grid-row:1;width:260px;margin:0 auto}
  .hero-side{grid-column:1;grid-row:2;min-height:0}
  .hero-actions{margin-top:8px}
 }
-@container jdhl-card (min-width:280px) and (max-width:560px){
- .hero{grid-template-columns:clamp(155px,42%,195px) minmax(0,1fr);gap:8px}
- .hero-side{min-height:185px}
- .bars-title{margin-bottom:6px}
- .bar-line{grid-template-columns:minmax(56px,1.1fr) minmax(20px,1fr) max-content;gap:4px;font-size:.72rem;margin:6px 0}
- .bar-line strong{font-size:.71rem}
- .drink-count{font-size:.70rem}
- .taken{font-size:clamp(17px,5cqw,24px)}
-}
-@container jdhl-card (max-width:350px){
- .bar-line{grid-template-columns:minmax(40px,1fr) minmax(15px,.7fr) max-content;gap:3px;font-size:.68rem}
- .bar-line strong{font-size:.65rem}
+@container jdhl-card (min-width:556px) and (max-width:690px){
+ .hero{grid-template-columns:235px minmax(0,1fr);column-gap:9px}
+ .glass-side{width:235px}
+ .glass-stack{grid-template-columns:87px 148px;width:235px;grid-template-rows:185px 24px}
+ .glass-frame,.drink-count{width:148px}
+ .glass{width:148px;height:185px}
+ .bar-line{grid-template-columns:minmax(65px,1.1fr) minmax(40px,1fr) max-content;font-size:.75rem}
 }
 @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
 @media(max-width:475px){
@@ -656,6 +703,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .volume-edit-row input{width:65px}
  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+@container jdhl-card (max-width:355px){.history-date-selector input{width:112px;flex-basis:112px;font-size:.82rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}}
 @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
 
    </style><ha-card><div class="root">
@@ -676,9 +724,11 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
     </div>`}</div>
    ${this._error?`<div class="error" role="alert">${jdhlEscape(this._error)}</div>`:''}
    ${this._historyHTML()}
-   ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
    ${this._modalHTML()}
-   <footer class="card-version">v1.1.0-beta.13</footer></div></ha-card>`;
+   <footer class="card-footer">
+    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
+    <span class="card-version">v1.1.0-beta.14</span>
+   </footer></div></ha-card>`;
  }
 }
 
@@ -708,8 +758,73 @@ class JwDailyHydrationLogCardEditor extends HTMLElement{
   this._form.data={...this._config,quick_add:jdhlQuick(this._config.quick_add).map(String)};
  }
 }
+/* Independently selectable Lovelace chart cards backed by actual jwDaily sensors.
+   No ApexCharts dependency, no synthetic records and no additional HA storage. */
+const JDHL_CHART_KINDS=[
+ {tag:'jwdaily-hydration-hourly-card',name:'jwDaily Hydration – Today by hour',key:'hourly_intake_today',title:'Today by hour',days:false},
+ {tag:'jwdaily-hydration-weekly-card',name:'jwDaily Hydration – Last 7 days',key:'daily_intake_last_7_days',title:'Last 7 days',days:true}
+];
+const JDHL_PALETTE=['#39a8de','#f2a34a','#67b69a','#9280d0','#dd7ba6','#79a2e7','#c6ad63','#82b5cb'];
+function jdhlChartProfile(hass){
+ const prefix='sensor.jwdhl_',suffix='_daily_target';
+ return Object.keys(hass?.states||{}).filter(v=>v.startsWith(prefix)&&v.endsWith(suffix)).sort().map(v=>v.slice(prefix.length,-suffix.length))[0]||'';
+}
+class JwDailyHydrationChartCard extends HTMLElement {
+ constructor(){super();this.attachShadow({mode:'open'});this._config=null;this._hass=null;this._kind=this.constructor.chartKind||JDHL_CHART_KINDS[0];}
+ static getStubConfig(hass){return {type:`custom:${this.chartKind.tag}`,profile:jdhlChartProfile(hass),title:this.chartKind.title};}
+ setConfig(config){if(!config)throw Error('Missing chart card configuration');this._config={...config};this._render();}
+ set hass(hass){this._hass=hass;this._render();}
+ getCardSize(){return 4;}
+ _render(){if(!this._config||!this._hass)return;
+  const profile=this._config.profile||jdhlChartProfile(this._hass);
+  const entity=this._hass.states?.[`sensor.jwdhl_${profile}_${this._kind.key}`];
+  const rows=entity?.attributes?.[this._kind.days?'days':'buckets'];
+  const list=Array.isArray(rows)?rows:[];
+  const records=list.map((row,i)=>({
+    label:this._kind.days?(String(row.date||'').slice(5)||String(i+1)):String(row.hour??String(i).padStart(2,'0')).padStart(2,'0')+':00',
+    liquids:row.liquids&&typeof row.liquids==='object'?row.liquids:{},
+    total:Number(row.total_logged_ml??row.total_ml??0),
+  }));
+  const keys=[...new Set(records.flatMap(r=>Object.keys(r.liquids)))];
+  const names=entity?.attributes?.liquid_names||{};
+  const max=Math.max(1,...records.map(r=>Math.max(r.total,Object.values(r.liquids).reduce((a,b)=>a+Math.max(0,Number(b)||0),0))));
+  const style=`<style>
+    :host{display:block;min-width:0}ha-card{display:block;box-sizing:border-box;padding:16px 18px;color:var(--primary-text-color,#172c39)}
+    h3{margin:0 0 12px;font-weight:650;font-size:1rem}.notice{font-size:.87rem;color:var(--secondary-text-color,#687783)}
+    .plot{display:grid;grid-template-columns:repeat(${Math.max(1,records.length)},minmax(0,1fr));gap:3px;height:170px;align-items:end;border-bottom:1px solid var(--divider-color,#ccd3d9)}
+    .bar-col{height:100%;min-width:0;display:flex;justify-content:flex-end;flex-direction:column;align-items:stretch}
+    .stack{display:flex;flex-direction:column-reverse;width:100%;height:calc(var(--pct)*1%);min-height:0;border-radius:3px 3px 0 0;overflow:hidden}
+    .part{width:100%;min-height:0;flex:0 0 auto}.axis{display:grid;grid-template-columns:repeat(${Math.max(1,records.length)},minmax(0,1fr));gap:3px;margin-top:5px}
+    .axis span{text-align:center;font-size:.64rem;color:var(--secondary-text-color,#687783);overflow:hidden;white-space:nowrap}
+    .legend{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:13px;font-size:.73rem}.legend span{display:inline-flex;align-items:center;gap:5px}
+    .swatch{width:8px;height:8px;border-radius:2px;display:inline-block}
+    .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:10px;text-align:right}
+    @container(max-width:400px){.axis span{font-size:.53rem}}
+   </style>`;
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.14</div></ha-card>`;return;}
+  const colors=new Map(keys.map((k,i)=>[k,JDHL_PALETTE[i%JDHL_PALETTE.length]]));
+  const bars=records.map(r=>{
+   const height=100*Math.max(0,r.total)/max;
+   const portions=keys.filter(k=>Number(r.liquids[k])>0).map(k=>{
+    const v=Math.max(0,Number(r.liquids[k])||0);
+    return `<div class="part" style="height:${r.total>0?(v/r.total*100).toFixed(2):0}%;background:${colors.get(k)}"></div>`;
+   }).join('');
+   return `<div class="bar-col" title="${jdhlEscape(r.label)}: ${Math.round(r.total)} mL"><div class="stack" style="--pct:${Math.min(100,height).toFixed(3)}">${portions}</div></div>`;
+  }).join('');
+  const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}</span>`).join('');
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><div class="plot">${bars}</div><div class="axis">${records.map(r=>`<span>${jdhlEscape(r.label)}</span>`).join('')}</div><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.14</div></ha-card>`;
+ }
+}
+for(const kind of JDHL_CHART_KINDS){
+ class Chart extends JwDailyHydrationChartCard {}
+ Chart.chartKind=kind;
+ Object.defineProperty(Chart,'name',{value:'JwDailyHydration'+(kind.days?'Weekly':'Hourly')+'Card'});
+ Chart.prototype._kind=kind;
+ if(!customElements.get(kind.tag))customElements.define(kind.tag,Chart);
+}
 if(!customElements.get(JDHL_TAG))customElements.define(JDHL_TAG,JwDailyHydrationLogCard);
 if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHydrationLogCardEditor);
 window.customCards=window.customCards||[];
+for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.13');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.14');
