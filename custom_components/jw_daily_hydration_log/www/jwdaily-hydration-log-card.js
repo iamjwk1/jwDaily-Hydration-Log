@@ -594,7 +594,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .date-nav input{width:160px;max-width:48%;box-sizing:border-box;text-align:center;font:inherit;font-size:1.23rem;font-weight:700;line-height:1.2;padding:7px 8px;color:var(--primary-text-color);background:#fff;border:1px solid var(--divider-color,#bbb);border-radius:9px}
 .date-nav button{font-size:1rem;padding:6px 10px;min-height:34px}
 .history-date-selector{position:relative;display:flex;align-items:stretch;min-width:0;flex:0 0 auto}
-.history-date-selector input{border-radius:9px 0 0 9px;width:100px;flex:0 0 100px;max-width:none;font-size:.80rem;padding:5px 3px;font-weight:650}
+.history-date-selector input{border-radius:9px 0 0 9px;width:100px;flex:0 0 100px;max-width:none;font-size:.90rem;padding:5px 3px;font-weight:650}
 .history-calendar-button{border-radius:0 9px 9px 0;min-width:30px;flex:0 0 30px;font-size:1rem;padding:5px}
 .history-calendar{position:absolute;top:100%;left:0;z-index:20;width:258px;padding:10px;box-sizing:border-box;border:1px solid #b5c2cb;border-radius:11px;background:var(--card-background-color,#fff);box-shadow:0 8px 24px #0003}
 .history-cal-nav{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:.85rem;margin-bottom:8px}
