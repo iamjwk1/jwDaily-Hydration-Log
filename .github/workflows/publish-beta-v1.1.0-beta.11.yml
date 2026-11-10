@@ -55,8 +55,8 @@ jobs:
           coord=(root/'coordinator.py').read_text()
           sensors=(root/'sensor.py').read_text()
           assert manifest['domain']=='jw_daily_hydration_log'
-          assert manifest['version']=='1.1.0-beta.10'
-          assert "VERSION = '1.1.0-beta.10'" in const and "VERSION = '1.1.0-beta.10'" in excel
+          assert manifest['version']=='1.1.0-beta.11'
+          assert "VERSION = '1.1.0-beta.11'" in const and "VERSION = '1.1.0-beta.11'" in excel
           assert 'v1.1.0-beta.11' in card
           assert 'jdhlNormalizeTime' in card and 'inputmode="numeric"' in card
           assert 'class="taken-slot"' in card and 'class="drink-count"' in card
@@ -79,7 +79,7 @@ jobs:
           assert json.loads(pathlib.Path('hacs.json').read_text())['name']=='jwDaily Hydration Log'
           assert pathlib.Path('examples/apexcharts-jwdhl-v1.1.0-beta.11.md').is_file()
           assert pathlib.Path('RELEASE_NOTES_v1.1.0-beta.11.md').is_file()
-          print('BETA10 QA CONTRACT PASS')
+          print('BETA11 QA CONTRACT PASS')
           PY
       - uses: home-assistant/actions/hassfest@master
       - name: HACS validation

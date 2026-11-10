@@ -164,6 +164,7 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('History and Excel remain intact'));
  await c._click(click('manage-delete-cancel'));assert(!c._managePendingDelete);
  await c._click(click('manage-hide','milk'));await c._click(click('manage-delete-confirm'));
+ console.log('DEBUG milk-hidden',catalog.find(x=>x.id==='milk').hidden,'error',c._error,'busy',c._busy,'pending',JSON.stringify(c._managePendingDelete),'lastWS',JSON.stringify(wsCalls.slice(-4)));
  assert(catalog.find(x=>x.id==='milk').hidden===true);
  assert(c.shadowRoot.innerHTML.includes('Hidden built-in liquid types'));
  assert(c.shadowRoot.innerHTML.includes('data-action="manage-restore"'));
