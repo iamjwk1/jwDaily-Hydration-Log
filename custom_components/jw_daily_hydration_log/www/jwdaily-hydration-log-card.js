@@ -572,7 +572,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%}
 .glass{display:block;width:100%;height:auto;aspect-ratio:4/5;margin:0}
 .drink-count{grid-column:1/-1;grid-row:2;min-width:0;width:100%;margin:0;text-align:center;white-space:nowrap;font-size:.92rem;line-height:1.4}
-.hero-side{grid-column:2;grid-row:1;min-width:0;width:100%;min-height:224px;display:flex;flex-direction:column;padding:1px 0 0;box-sizing:border-box}
+.hero-side{grid-column:2;grid-row:1;align-self:stretch;min-width:0;width:100%;min-height:224px;display:flex;flex-direction:column;padding:1px 0 0;box-sizing:border-box}
 .liquid-bars{align-self:stretch;width:100%;min-width:0;overflow:visible}
 .bars-title{font-size:.88rem;font-weight:650;margin:0 0 9px;line-height:1.3}
 .bars-date{font-size:.74rem;font-weight:450}
