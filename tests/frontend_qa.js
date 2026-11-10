@@ -1,4 +1,4 @@
-/* jwDaily beta10 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta11 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -23,14 +23,14 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.10',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.11',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history'){
    const breakdown=history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]);
    const total=history.reduce((a,r)=>a+r.volume_ml,0);
    return {date:msg.date,entries:history.map(x=>({...x})),
     total_ml:total,liquid_types:catalog.map(x=>({...x})),
     day_summary:{date:msg.date,consumed_ml:total,target_ml:3000,drink_count:history.length,liquid_breakdown:breakdown},
-    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.10'};
+    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.11'};
   }
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
@@ -79,7 +79,7 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.10'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.11'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
@@ -89,12 +89,18 @@ async function main(){
  assert(layout.includes('font-size:24px'), 'Blue intake is 24px on both desktop sizes');
  assert(layout.includes('class="hero-side"') && layout.includes('class="hero-actions"'));
  assert(layout.includes('height:40px!important'), 'Every history row is compact and consistent');
+ assert(!layout.includes('Undo last drink'), 'Undo button must be absent');
+ assert(layout.includes('--jdhl-button:#B3E5FC'), 'Action button palette');
+ assert(layout.includes('background:#FFFFFF!important'), 'Date selector white');
+ assert(layout.includes('background:#EEEEEE'), 'Manage buttons neutral');
+ assert(layout.includes('@container(max-width:470px)'), 'Responsive breakpoint');
+ assert(layout.includes('font-size:.86rem!important'), 'Liquid and volume buttons equal font size');
  assert(layout.includes('class="drink-count"') && layout.includes('drink moments'), 'Count remains below glass');
  assert(layout.includes('button.secondary:not(:disabled)'), 'Enabled buttons have active styling');
- assert(layout.includes('class="card-version">v1.1.0-beta.10'));
+ assert(layout.includes('class="card-version">v1.1.0-beta.11'));
  assert(!layout.includes('aria-live="polite"'), 'No persistent status row');
  assert(!layout.includes('<div class="register">'));
- console.log('PASS: beta10 fixed blue/cup gap, 40px rows, compact controls, active buttons, preserved count');
+ console.log('PASS: beta11 fixed blue/cup gap, 40px rows, compact controls, active buttons, preserved count');
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));
  assert(c._glass(10,2700,3000).includes('attributeName="y"'));
