@@ -19,8 +19,8 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.10'
-SHEETS = ['Hydration log', 'Daily Totals', 'Settings - Liquid Types', 'Settings - Volume Buttons']
+VERSION = '1.1.0-beta.11'
+SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
 # extracted from the supplied Excel reference. Values contain no workbook cells.
@@ -134,7 +134,7 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
     for row in sorted(rows):
-        rowheight=' ht="29.15" customHeight="1"' if row==11 and index in (1,2) else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')
+        rowheight=' ht="35" customHeight="1"' if row==11 and index in (1,2) else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
@@ -159,7 +159,7 @@ def _table(table_number: int, bottom: int) -> bytes:
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
     else:
         label='tblDailyIntake';right='Q'
-        headers=['Date','Profile','Age','Gender','Full day','Target_x000a_(mL)','Drink_x000a_count','Volume_x000a_(ml)','%',
+        headers=['Date','Profile','Age','Gender','Full day','Target_x000a_(mL)','Drink_x000a_count','Volume_x000a_(mL)','%',
                  'Water_x000a_(mL)','Coffee_x000a_(mL)','Tea_x000a_(mL)','Milk_x000a_(mL)',
                  'Soup_x000a_(mL)','Wine_x000a_(mL)','Other_x000a_(mL)']
         attrs='headerRowDxfId="0" dataDxfId="32" headerRowBorderDxfId="30" tableBorderDxfId="31" totalsRowBorderDxfId="29"'
@@ -257,7 +257,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         logrows[12]=[]
 
     drows=summary('Home Assistant jwDaily Hydration Log  - Daily totals','Daily total rows',len(days),second=True)
-    dheads=['Date','Profile','Age','Gender','Full day','Target\n(mL)','Drink\ncount','Volume\n(ml)','%',
+    dheads=['Date','Profile','Age','Gender','Full day','Target\n(mL)','Drink\ncount','Volume\n(mL)','%',
             'Water\n(mL)','Coffee\n(mL)','Tea\n(mL)','Milk\n(mL)','Soup\n(mL)','Wine\n(mL)','Other\n(mL)']
     dhstyles=[10,11,11,11,12,13,13,13,14]+[6]*7
     drows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(dheads,dhstyles),2)]
@@ -294,8 +294,8 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             buttonsrows[row]=[(i,value,0,None) for i,value in enumerate(vals,1)]
 
     content=[
-     _worksheet(1,logrows,[4,25,17,11,13,17,23,16],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
-     _worksheet(2,drows,[4.285,17,18,12,13,12,15,13,15,8.5,14,14,13,13,13,13,13],f'Q{max(12,11+len(days))}',max(12,11+len(days)),True),
+     _worksheet(1,logrows,[4,25,16,6,9,9,17,11],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6,10,10,10,10,10,10,10],f'Q{max(12,11+len(days))}',max(12,11+len(days)),True),
      _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25],f'I{max(1,len(typesrows))}',len(typesrows)),
      _worksheet(4,buttonsrows,[16,14,18,25],f'D{max(1,len(buttonsrows))}',len(buttonsrows)),
     ]
