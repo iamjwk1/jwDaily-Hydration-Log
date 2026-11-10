@@ -1,5 +1,12 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.11 (HACS pre-release)
+- Responsive side-by-side liquid chart, no Undo button, compact history and manager dialogs.
+- Unified light-blue enabled action buttons (#B3E5FC), neutral Manage buttons, white date selector.
+- Equal font size for liquid and volume choices; exact user-requested Excel column widths, Daily intake sheet.
+- No storage schema, profile or drink history changes.
+
+
 ## v1.1.0-beta.10 — HACS pre-release
 - Matched user-edited visual reference: fixed 24px blue intake next to left glass without overlap; wider right chart; smaller Add control anchored at the lower right.
 - Kept dynamic *Drink moments* directly beneath glass. Removed only persistent success/status text beneath the hero.
