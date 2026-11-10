@@ -1,4 +1,4 @@
-/* jwDaily beta9 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta10 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -23,14 +23,14 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.9',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.10',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history'){
    const breakdown=history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]);
    const total=history.reduce((a,r)=>a+r.volume_ml,0);
    return {date:msg.date,entries:history.map(x=>({...x})),
     total_ml:total,liquid_types:catalog.map(x=>({...x})),
     day_summary:{date:msg.date,consumed_ml:total,target_ml:3000,drink_count:history.length,liquid_breakdown:breakdown},
-    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.9'};
+    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.10'};
   }
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
@@ -79,22 +79,22 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.9'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.10'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
- assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'), 'Glass and taken amount share a frame');
- assert(layout.includes('grid-template-columns:minmax(0,min(320px,50%)) minmax(0,1fr)'), 'Two responsive columns use container width');
- assert(layout.includes('container-type:inline-size'), 'Card-size breakpoints rather than viewport breakpoints');
- assert(layout.includes('width:69%;max-width:69%'), 'Cup size is bounded by responsive column');
- assert(layout.includes('class="hero-side"') && layout.includes('class="hero-actions"'), 'Chart and Add grouped right');
- assert(layout.includes('min-width:0;min-height:100%;display:flex;flex-direction:column'), 'Right chart can shrink');
- assert(layout.includes('white-space:nowrap;text-align:right'), 'Bar values never wrap');
- assert(layout.includes('margin-top:auto;padding:10px 0 0 9px'), 'Compact Add below chart');
- assert(layout.includes('font-size:1.07rem') && layout.includes('font-size:1.05rem'), 'History date and moments larger');
- assert(layout.includes('class="card-version">v1.1.0-beta.9'), 'New beta version footer');
- assert(!layout.includes('<div class="register">'), 'No full-width Add row');
- console.log('PASS: two-column container-responsive glass/chart, Add placement and larger history text');
-
+ assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
+ assert(layout.includes('class="taken-slot"'), 'Blue intake has separate fixed-height slot');
+ assert(layout.includes('grid-template-columns:108px 160px'), 'Blue intake and glass fixed columns');
+ assert(layout.includes('grid-template-columns:274px minmax(0,1fr)'), 'Graph uses remaining card width');
+ assert(layout.includes('font-size:24px'), 'Blue intake is 24px on both desktop sizes');
+ assert(layout.includes('class="hero-side"') && layout.includes('class="hero-actions"'));
+ assert(layout.includes('height:40px!important'), 'Every history row is compact and consistent');
+ assert(layout.includes('class="drink-count"') && layout.includes('drink moments'), 'Count remains below glass');
+ assert(layout.includes('button.secondary:not(:disabled)'), 'Enabled buttons have active styling');
+ assert(layout.includes('class="card-version">v1.1.0-beta.10'));
+ assert(!layout.includes('aria-live="polite"'), 'No persistent status row');
+ assert(!layout.includes('<div class="register">'));
+ console.log('PASS: beta10 fixed blue/cup gap, 40px rows, compact controls, active buttons, preserved count');
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));
  assert(c._glass(10,2700,3000).includes('attributeName="y"'));
