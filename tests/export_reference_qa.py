@@ -74,7 +74,7 @@ with ZipFile(BytesIO(raw)) as zipf:
  assert c(log,'G14')[0]=='Test juice', 'Custom must show configured display name'
  assert c(log,'B12')[2]=='25' and c(log,'G11')[2]=='23'
  assert c(day,'B2')[0]=='Home Assistant jwDaily Hydration Log  - Daily totals'
- assert c(day,'C8')[0]=='2' and c(day,'K11')[0]=='Water\n(mL)'
+ assert c(day,'C8')[0]=='2' and c(day,'K11')[0]=='Water (cup)\n(mL)'
  assert c(day,'I12')[0]=='750.0' and c(day,'J12')[1]=='I12/G12*100'
  assert c(day,'I13')[0]=='750.0' and c(day,'J13')[1]=='I13/G13*100'
  assert c(day,'K12')[0]=='250.0' and c(day,'L12')[0]=='300.0'
