@@ -1,4 +1,4 @@
-"""Create, validate and checksum complete jwDaily Hydration Log beta.16 installation ZIP."""
+"""Create, validate and checksum complete jwDaily Hydration Log beta.17 installation ZIP."""
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import zipfile
 
-VERSION = "1.1.0-beta.16"
+VERSION = "1.1.0-beta.17"
 BASENAME = "20261110 jwDaily Hydration Log v1.1.0-beta.17.zip"
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "dist" / BASENAME
@@ -49,7 +49,7 @@ def main():
         const = z.read("custom_components/jw_daily_hydration_log/const.py")
         excel = z.read("custom_components/jw_daily_hydration_log/excel.py")
         assert manifest["version"] == VERSION
-        assert b"v1.1.0-beta.17" in card and b"VERSION = '1.1.0-beta.16'" in const and b"VERSION = '1.1.0-beta.16'" in excel
+        assert b"v1.1.0-beta.17" in card and b"VERSION = '1.1.0-beta.17'" in const and b"VERSION = '1.1.0-beta.17'" in excel
         assert b"background:#B3E5FC" in card
         assert b"background:#EEEEEE" in card
         assert b"background:#FFFFFF" in card
