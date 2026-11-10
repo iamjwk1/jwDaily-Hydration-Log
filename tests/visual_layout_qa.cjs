@@ -33,7 +33,7 @@ const puppeteer=require('puppeteer-core');
       'sensor.jwdhl_jan_willem_drink_count_today':{state:'4',attributes:{}}
      },async callWS(msg){
        if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:records,day_summary:summary,liquid_types:defs,volume_buttons:[120,150,300,500],total_ml:1080};
-       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.17'};
+       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.18'};
        throw Error('Unexpected: '+msg.type);
      }};
     c.setConfig({profile:'jan_willem',title:'Vocht intake Jan-Willem'});
@@ -69,8 +69,8 @@ const puppeteer=require('puppeteer-core');
    }
    assert(x.button.width<235,'Add button must be compact');
    assert(x.chart.left<x.button.left+10,'Add belongs under chart, not outside it');
-   assert(x.rows.every(h=>Math.abs(h-30)<1),'History rows not uniformly 30px: '+x.rows);
-   assert(x.histViewport.height<=181 && x.histViewport.height>=179,'History viewport must be header + five rows');
+   assert(x.rows.every(h=>Math.abs(h-28)<1),'History rows not uniformly 28px: '+x.rows);
+   assert(x.histViewport.height<=171 && x.histViewport.height>=169,'History viewport must be header + five rows');
    assert(x.histViewport.fifthBottom<=x.histViewport.bottom+1,'Fifth data row must be fully visible');
    assert(x.histViewport.sixthTop>=x.histViewport.bottom-1,'Sixth data row must be hidden until scrolling');
    assert(x.histViewport.scrollHeight>x.histViewport.clientHeight,'Older drinks must remain scrollable');
@@ -138,7 +138,7 @@ const puppeteer=require('puppeteer-core');
    assert(volumes.rows.every(r=>r.height<=44),'Volume manager must be one 38-44px line per volume');
    assert(volumes.buttons.every(a=>a.right<=volumes.dialog.right+1),'Volume button clipped outside dialog');
    console.log('VISUAL_MODAL_PASS',width,JSON.stringify({normal,liquids,volumes}));
-   await page.screenshot({path:path.resolve(__dirname,'layout-beta17-'+width+'.png'),fullPage:true});
+   await page.screenshot({path:path.resolve(__dirname,'layout-beta18-'+width+'.png'),fullPage:true});
    console.log('VISUAL_GEOMETRY_PASS',width,JSON.stringify(x));
    await page.close();
   }
