@@ -21,7 +21,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.14'
+VERSION = '1.1.0-beta.15'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
