@@ -1,6 +1,6 @@
 # jwDaily Hydration Log — changelog
 
-## v1.1.0-beta.16
+## v1.1.0-beta.17
 - Responsive HA card layout at browser zoom: side-by-side liquid bars and glass until 280 CSS px.
 - Excel Daily intake header row 11 exactly 44 pt, Hydration log unchanged at 34 pt.
 - No data or storage changes; all previous Excel and chart fixes retained.
