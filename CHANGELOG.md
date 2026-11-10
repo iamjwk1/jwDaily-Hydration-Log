@@ -1,5 +1,11 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.18
+- Consistent deterministic per-liquid colors across both charts; weekly scale and responsive axes improved.
+- Compact chart cards, five 28px history rows and smaller date/Excel controls.
+- All data, history, APIs and the validated Excel export preserved.
+
+
 ## v1.1.0-beta.17
 - Responsive HA card layout at browser zoom: side-by-side liquid bars and glass until 280 CSS px.
 - Excel Daily intake header row 11 exactly 44 pt, Hydration log unchanged at 34 pt.
