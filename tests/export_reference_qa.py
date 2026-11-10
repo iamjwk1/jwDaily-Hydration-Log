@@ -104,7 +104,7 @@ with ZipFile(BytesIO(raw)) as zipf:
  assert c(day,'G11')[0]=='Target\n(mL)'
  assert all(c(day,k+'11')[0].endswith('\n(mL)') for k in 'KLM')
  for sheet in (log,day):
-  assert float(sheet.find(NS+'sheetData').find(f'{NS}row[@r="11"]').attrib['ht'])>=30
+  assert float(sheet.find(NS+'sheetData').find(f'{NS}row[@r="11"]').attrib['ht'])==(34.0 if sheet is log else 44.0), 'Excel header heights must be exactly 34pt / 44pt'
  # Reference header-cell styles have wrapText enabled; without it line breaks clip.
  xfs=ET.fromstring(zipf.read('xl/styles.xml')).find(NS+'cellXfs')
  for idx in sorted(set(int(c(sh,ref)[2]) for sh,ref in [
