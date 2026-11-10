@@ -78,7 +78,7 @@ with ZipFile(BytesIO(raw)) as zipf:
  assert c(day,'I12')[0]=='750.0' and c(day,'J12')[1]=='I12/G12*100'
  assert c(day,'I13')[0]=='750.0' and c(day,'J13')[1]=='I13/G13*100'
  assert c(day,'K12')[0]=='250.0' and c(day,'L12')[0]=='300.0'
- assert c(day,'Q12')[0]=='0', 'Custom types must not be mislabeled as Other'
+ assert c(day,'M12')[0]=='200.0', 'Custom liquid must have its own dynamic column'
  assert c(types,'C1')[0]=='Name' and c(types,'C4')[0]=='Test juice'
  assert c(buttons,'C1')[0]=='Volume mL' and c(buttons,'C6')[0]=='500'
  for sh in (log,day):
@@ -93,8 +93,8 @@ with ZipFile(BytesIO(raw)) as zipf:
   assert xml.index('<pageMargins') < xml.index('<tableParts')
  assert excel._xml('Valid\x01\ud800name')=='Validname'
  # FIX-10/11 exact Excel column widths, in Excel units, including leading A.
- expected_log=[4,25,16,6,9,9,17,11]
- expected_daily=[4.285,16,15,7,9,6,10,9,11,6,10,10,10,10,10,10,10]
+ expected_log=[4,19,16,6,9,9,17,11]
+ expected_daily=[4.285,16,15,7,9,6,10,9,11,6,10,10,10]
  def widths(sheet):
   return [float(x.attrib['width']) for x in sheet.find(NS+'cols').findall(NS+'col')]
  assert widths(log)==expected_log,('Hydration log',widths(log))
@@ -102,14 +102,14 @@ with ZipFile(BytesIO(raw)) as zipf:
  assert c(log,'F11')[0]=='Target\n(mL)' and c(log,'H11')[0]=='Volume\n(mL)'
  assert c(day,'H11')[0]=='Drink\ncount' and c(day,'I11')[0]=='Volume\n(mL)'
  assert c(day,'G11')[0]=='Target\n(mL)'
- assert all(c(day,k+'11')[0].endswith('\n(mL)') for k in 'KLMNOPQ')
+ assert all(c(day,k+'11')[0].endswith('\n(mL)') for k in 'KLM')
  for sheet in (log,day):
   assert float(sheet.find(NS+'sheetData').find(f'{NS}row[@r="11"]').attrib['ht'])>=30
  # Reference header-cell styles have wrapText enabled; without it line breaks clip.
  xfs=ET.fromstring(zipf.read('xl/styles.xml')).find(NS+'cellXfs')
  for idx in sorted(set(int(c(sh,ref)[2]) for sh,ref in [
    (log,'F11'),(log,'H11'),(day,'G11'),(day,'H11'),(day,'I11'),
-   (day,'K11'),(day,'Q11')])):
+   (day,'K11'),(day,'M11')])):
   xf=xfs[idx];alignment=xf.find(NS+'alignment')
   assert alignment is not None and alignment.attrib.get('wrapText')=='1',('No wrapText',idx)
  # Every settings header must fit within its configured worksheet column.
@@ -123,7 +123,7 @@ with ZipFile(BytesIO(raw)) as zipf:
  t1=ET.fromstring(zipf.read('xl/tables/table1.xml'))
  t2=ET.fromstring(zipf.read('xl/tables/table2.xml'))
  assert t1.attrib['name']=='tblHydrationLog' and t1.attrib['ref']=='B11:H15'
- assert t2.attrib['name']=='tblDailyIntake' and t2.attrib['ref']=='B11:Q13'
+ assert t2.attrib['name']=='tblDailyIntake' and t2.attrib['ref']=='B11:M13'
  styles=ET.fromstring(zipf.read('xl/styles.xml'))
  assert len(styles.find(NS+'cellXfs'))>=30
  # Date+time, color, header rows and percentage formulas follow the reference.
