@@ -36,6 +36,7 @@ jobs:
         run: |
           npm install --no-save --no-package-lock puppeteer-core@24
           CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)" node tests/visual_layout_qa.cjs
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || command -v chromium-browser)" node tests/chart_layout_qa.cjs
       - name: Preserve real-browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
