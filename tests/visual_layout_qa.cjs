@@ -32,7 +32,7 @@ const puppeteer=require('puppeteer-core');
       'sensor.jwdhl_jan_willem_drink_count_today':{state:'4',attributes:{}}
      },async callWS(msg){
        if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:records,day_summary:summary,liquid_types:defs,volume_buttons:[120,150,300,500],total_ml:1080};
-       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.9'};
+       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.10'};
        throw Error('Unexpected: '+msg.type);
      }};
     c.setConfig({profile:'jan_willem',title:'Vocht intake Jan-Willem'});
@@ -45,7 +45,13 @@ const puppeteer=require('puppeteer-core');
     const rows=[...root.querySelectorAll('.history-table tbody tr')].map(el=>el.getBoundingClientRect().height);
     return {card:rect('ha-card'),hero:rect('.hero'),glass:rect('.glass-frame .glass'),taken:rect('.taken'),
       chart:rect('.liquid-bars'),button:rect('.add-drink'),date:rect('.date-nav input'),export:rect('.export button'),
-      count:rect('.drink-count'),rows,bodyScroll:document.documentElement.scrollWidth,fontsize:getComputedStyle(root.querySelector('.date-nav input')).fontSize};
+      count:rect('.drink-count'),rows,bodyScroll:document.documentElement.scrollWidth,
+      fontsize:getComputedStyle(root.querySelector('.date-nav input')).fontSize,
+      intakeFont:getComputedStyle(root.querySelector('.taken')).fontSize,
+      activeButtons:[...root.querySelectorAll('button.secondary:not(:disabled)')].length,
+      statusVisible:!!root.querySelector('.root > .status'),
+      barVolumes:[...root.querySelectorAll('.bar-line strong')].map(el=>{const q=el.getBoundingClientRect();return{left:q.left,right:q.right}}),
+      history:rect('.history')};
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
@@ -55,13 +61,21 @@ const puppeteer=require('puppeteer-core');
    }
    assert(x.button.width<235,'Add button must be compact');
    assert(x.chart.left<x.button.left+10,'Add belongs under chart, not outside it');
-   assert(x.rows.every(h=>Math.abs(h-x.rows[0])<1),'History table rows vary in height: '+x.rows);
-   assert(Number.parseFloat(x.fontsize)>=18,'History date font too small: '+x.fontsize);
+   assert(x.rows.every(h=>Math.abs(h-40)<1),'History rows are not all 40px: '+x.rows);
+   assert(Number.parseFloat(x.fontsize)>=18,'History date too small: '+x.fontsize);
+   assert(Math.abs(parseFloat(x.intakeFont)-24)<.2,'Blue intake must be exactly 24px on all widths: '+x.intakeFont);
+   assert(x.activeButtons>=2,'Enabled secondary controls are unexpectedly absent/disabled');
+   assert(!x.statusVisible,'Permanent status message should not consume card height');
+   assert(x.count.top>=x.glass.bottom-1 && x.count.top<=x.glass.bottom+12,'Drink moments must stay directly under glass');
+   assert(x.export.left>=x.history.left-2 && x.export.left<=x.history.left+2,'Excel button not aligned left with history');
+   assert(x.button.bottom<=x.hero.bottom+2 && x.hero.bottom-x.button.bottom<15,'Add drink too high above hero bottom');
+   for(const bar of x.barVolumes)assert(bar.left>=x.chart.left && bar.right<=x.card.right+1,'Chart volume clipped');
    if(width>=721){
-    assert(x.taken.right<=x.glass.left+10,'Blue volume too far from glass');
-    assert(x.chart.left>x.glass.left,'Graph not to right of glass');
+    assert(x.taken.right<=x.glass.left-6,'Blue intake overlaps or is too close to glass: '+JSON.stringify({taken:x.taken,glass:x.glass}));
+    assert(x.glass.left-x.taken.right<=18,'Blue intake too far from glass');
+    assert(x.chart.left>=x.glass.right,'Graph not to right of glass');
    }
-   await page.screenshot({path:path.resolve(__dirname,'layout-beta9-'+width+'.png'),fullPage:true});
+   await page.screenshot({path:path.resolve(__dirname,'layout-beta10-'+width+'.png'),fullPage:true});
    console.log('VISUAL_GEOMETRY_PASS',width,JSON.stringify(x));
    await page.close();
   }
