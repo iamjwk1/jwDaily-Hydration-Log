@@ -83,7 +83,7 @@ async function main(){
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
- assert(layout.includes('grid-template-columns:clamp(155px,42%,274px) minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
+ assert(layout.includes('grid-template-columns:clamp(186px,40%,274px) minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
  assert(layout.includes('@container jdhl-card (max-width:379px)'), 'mobile stacks only when card is narrow');
  assert(layout.includes('font-size:24px'), 'intake blue remains 24px on desktops');
  assert(layout.includes('height:38px'), 'all history rows compact 38px');
