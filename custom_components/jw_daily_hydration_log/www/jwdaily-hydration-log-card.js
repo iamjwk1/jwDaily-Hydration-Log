@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.16 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.17 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -224,7 +224,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.16')throw Error(`Frontend v1.1.0-beta.16 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.17')throw Error(`Frontend v1.1.0-beta.17 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -594,7 +594,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .date-nav input{width:160px;max-width:48%;box-sizing:border-box;text-align:center;font:inherit;font-size:1.23rem;font-weight:700;line-height:1.2;padding:7px 8px;color:var(--primary-text-color);background:#fff;border:1px solid var(--divider-color,#bbb);border-radius:9px}
 .date-nav button{font-size:1rem;padding:6px 10px;min-height:34px}
 .history-date-selector{position:relative;display:flex;align-items:stretch;min-width:0;flex:0 0 auto}
-.history-date-selector input{border-radius:9px 0 0 9px;width:118px;flex:0 0 118px;max-width:none;font-size:.89rem;padding:6px 4px;font-weight:650}
+.history-date-selector input{border-radius:9px 0 0 9px;width:100px;flex:0 0 100px;max-width:none;font-size:.80rem;padding:5px 3px;font-weight:650}
 .history-calendar-button{border-radius:0 9px 9px 0;min-width:30px;flex:0 0 30px;font-size:1rem;padding:5px}
 .history-calendar{position:absolute;top:100%;left:0;z-index:20;width:258px;padding:10px;box-sizing:border-box;border:1px solid #b5c2cb;border-radius:11px;background:var(--card-background-color,#fff);box-shadow:0 8px 24px #0003}
 .history-cal-nav{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:.85rem;margin-bottom:8px}
@@ -603,20 +603,20 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .history-cal-weekday{text-align:center;font-size:.7rem;color:var(--secondary-text-color,#667);padding:4px 0}
 .history-cal-day{padding:4px 0!important;font-size:.76rem!important;min-height:28px;border-radius:5px!important}
 
-.history-table{max-height:225px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#aab0b5 transparent}
+.history-table{max-height:180px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#aab0b5 transparent}
 .history-table table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;min-width:0}
-.history-table thead tr{height:35px}
-.history-table th{height:35px;box-sizing:border-box;position:sticky;top:0;z-index:2;padding:0 6px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.88rem;font-weight:500;color:var(--secondary-text-color,#667);text-align:left;background:var(--card-background-color,#fff)}
-.history-table tbody tr{height:38px;max-height:38px;min-height:38px}
-.history-table tbody td{height:38px;box-sizing:border-box;padding:0 6px;line-height:20px;font-size:.88rem;vertical-align:middle;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-table thead tr{height:30px}
+.history-table th{height:30px;box-sizing:border-box;position:sticky;top:0;z-index:2;padding:0 6px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.88rem;font-weight:500;color:var(--secondary-text-color,#667);text-align:left;background:var(--card-background-color,#fff)}
+.history-table tbody tr{height:30px;max-height:30px;min-height:30px}
+.history-table tbody td{height:30px;box-sizing:border-box;padding:0 6px;line-height:20px;font-size:.88rem;vertical-align:middle;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .history-table th:first-child,.history-table td:first-child{width:27%}
 .history-table th:last-child,.history-table td:last-child{width:29%}
 .history-table td.right,.history-table th.right{text-align:right;white-space:nowrap}
 .history-table tr[data-action]{cursor:pointer}
 .history-table tr[data-action]:hover{background:color-mix(in srgb,#b3e5fc 30%,white)}
-.card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;padding:2px 0 0;min-height:0}.export{margin:0;padding:0;text-align:left}
-.export button{font-size:.79rem;padding:6px 10px}
-.card-version{margin-left:auto;align-self:center;font-size:.72rem;color:var(--secondary-text-color,#666)}
+.card-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;border:0;padding:2px 0 0;min-height:0}.export{margin:0;padding:0;text-align:left}
+.export button{font-size:.72rem;padding:4px 8px;line-height:1.25;min-height:28px}
+.card-version{margin-left:auto;align-self:flex-end;font-size:.72rem;color:var(--secondary-text-color,#666)}
 /* Centralized controls. Disabled and manage actions are deliberately different. */
 button,button.secondary,button.small,button.liquid-choice,button.amount,button.danger{
  font:inherit;cursor:pointer;background:#B3E5FC;color:#18374b;
@@ -705,7 +705,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .volume-edit-row input{width:65px}
  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@container jdhl-card (max-width:355px){.history-date-selector input{width:104px;flex-basis:104px;font-size:.80rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}.bar-line{grid-template-columns:minmax(33px,.85fr) minmax(17px,.65fr) max-content;gap:2px}.bar-line strong{font-size:.64rem}}
+@container jdhl-card (max-width:355px){.history-date-selector input{width:94px;flex-basis:94px;font-size:.76rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}.bar-line{grid-template-columns:minmax(33px,.85fr) minmax(17px,.65fr) max-content;gap:2px}.bar-line strong{font-size:.64rem}}
 @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
 
    </style><ha-card><div class="root">
@@ -729,7 +729,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" ${this._busy?'disabled':''}>Export all data to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.16</span>
+    <span class="card-version">v1.1.0-beta.17</span>
    </footer></div></ha-card>`;
  }
 }
@@ -780,41 +780,76 @@ class JwDailyHydrationChartCard extends HTMLElement {
  _render(){if(!this._config||!this._hass)return;
   const profile=this._config.profile||jdhlChartProfile(this._hass);
   const entity=this._hass.states?.[`sensor.jwdhl_${profile}_${this._kind.key}`];
-  const rows=entity?.attributes?.[this._kind.days?'days':'buckets'];
-  const list=Array.isArray(rows)?rows:[];
-  const records=list.map((row,i)=>({
-    label:this._kind.days?(String(row.date||'').slice(5)||String(i+1)):String(row.hour??String(i).padStart(2,'0')).padStart(2,'0')+':00',
-    liquids:row.liquids&&typeof row.liquids==='object'?row.liquids:{},
-    total:Number(row.total_logged_ml??row.total_ml??0),
-  }));
+  const input=entity?.attributes?.[this._kind.days?'days':'buckets'];
+  const list=Array.isArray(input)?input:[];
+  const shortMonths=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const records=list.map((row,i)=>{
+   const original=String(row.date||'');
+   const parts=original.split('-');
+   const formatted=(parts.length===3&&Number(parts[1])>=1&&Number(parts[1])<=12)?`${Number(parts[2])} ${shortMonths[Number(parts[1])-1]}`:original;
+   const liquidValues=row.liquids&&typeof row.liquids==='object'?row.liquids:{};
+   const liquids=Object.fromEntries(Object.entries(liquidValues).map(([k,v])=>[k,Math.max(0,Number(v)||0)]));
+   const total=Math.max(0,Number(row.total_logged_ml??row.total_ml??0));
+   return {label:this._kind.days?formatted:String(i+1),liquids,total};
+  });
   const keys=[...new Set(records.flatMap(r=>Object.keys(r.liquids)))];
   const names=entity?.attributes?.liquid_names||{};
-  const max=Math.max(1,...records.map(r=>Math.max(r.total,Object.values(r.liquids).reduce((a,b)=>a+Math.max(0,Number(b)||0),0))));
+  const totals=Object.fromEntries(keys.map(k=>[k,records.reduce((a,r)=>a+(r.liquids[k]||0),0)]));
+  const total=records.reduce((a,r)=>a+r.total,0);
+  const highest=Math.max(1,...records.map(r=>r.total));
+  const magnitude=Math.pow(10,Math.floor(Math.log10(highest)));
+  const basis=magnitude/2;
+  const step=Math.max(1,Math.ceil(highest/(4*basis))*basis);
+  const max=step*4;
+  const fmt=v=>Math.round(v).toLocaleString('en-US');
   const style=`<style>
-    :host{display:block;min-width:0}ha-card{display:block;box-sizing:border-box;padding:16px 18px;color:var(--primary-text-color,#172c39)}
-    h3{margin:0 0 12px;font-weight:650;font-size:1rem}.notice{font-size:.87rem;color:var(--secondary-text-color,#687783)}
-    .plot{display:grid;grid-template-columns:repeat(${Math.max(1,records.length)},minmax(0,1fr));gap:3px;height:170px;align-items:end;border-bottom:1px solid var(--divider-color,#ccd3d9)}
-    .bar-col{height:100%;min-width:0;display:flex;justify-content:flex-end;flex-direction:column;align-items:stretch}
-    .stack{display:flex;flex-direction:column-reverse;width:100%;height:calc(var(--pct)*1%);min-height:0;border-radius:3px 3px 0 0;overflow:hidden}
-    .part{width:100%;min-height:0;flex:0 0 auto}.axis{display:grid;grid-template-columns:repeat(${Math.max(1,records.length)},minmax(0,1fr));gap:3px;margin-top:5px}
-    .axis span{text-align:center;font-size:.64rem;color:var(--secondary-text-color,#687783);overflow:hidden;white-space:nowrap}
-    .legend{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:13px;font-size:.73rem}.legend span{display:inline-flex;align-items:center;gap:5px}
-    .swatch{width:8px;height:8px;border-radius:2px;display:inline-block}
-    .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:10px;text-align:right}
-    @container(max-width:400px){.axis span{font-size:.53rem}}
-   </style>`;
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.16</div></ha-card>`;return;}
-  const colors=new Map(keys.map((k,i)=>[k,JDHL_PALETTE[i%JDHL_PALETTE.length]]));
-  const bars=records.map(r=>{
-   const height=100*Math.max(0,r.total)/max;
-   const portions=keys.filter(k=>Number(r.liquids[k])>0).map(k=>{
-    const v=Math.max(0,Number(r.liquids[k])||0);
-    return `<div class="part" style="height:${r.total>0?(v/r.total*100).toFixed(2):0}%;background:${colors.get(k)}"></div>`;
-   }).join('');
-   return `<div class="bar-col" title="${jdhlEscape(r.label)}: ${Math.round(r.total)} mL"><div class="stack" style="--pct:${Math.min(100,height).toFixed(3)}">${portions}</div></div>`;
-  }).join('');
-  const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}</span>`).join('');
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${jdhlEscape(this._config.title||this._kind.title)}</h3><div class="plot">${bars}</div><div class="axis">${records.map(r=>`<span>${jdhlEscape(r.label)}</span>`).join('')}</div><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.16</div></ha-card>`;
+  :host{display:block;min-width:0}ha-card{display:flex;flex-direction:column;box-sizing:border-box;padding:16px 15px 10px;min-height:314px;color:var(--primary-text-color,#172c39)}
+  h3{margin:0 0 6px;font-weight:650;font-size:1rem}.notice{font-size:.87rem;color:var(--secondary-text-color,#687783)}
+  .summary{font-size:.79rem;margin:0 0 3px;color:var(--secondary-text-color,#526474)}
+  .chart{width:100%;height:auto;display:block;overflow:visible}
+  .axis-text{font-family:inherit;font-size:11px;fill:var(--secondary-text-color,#657784)}
+  .grid-line{stroke:var(--divider-color,#d2dbe0);stroke-width:.8;stroke-dasharray:2 3}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin:9px 0 0;font-size:.76rem}
+  .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .swatch{width:10px;height:10px;border-radius:2px;display:inline-block}
+  .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:auto;padding-top:7px;align-self:flex-end;text-align:right}
+  </style>`;
+  const title=jdhlEscape(this._config.title||this._kind.title);
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.17</div></ha-card>`;return;}
+  const colors=new Map(keys.map((key,i)=>[key,JDHL_PALETTE[i%JDHL_PALETTE.length]]));
+  /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
+     24 x-axis hours (1-24) or seven local day labels, plus daily sum labels. */
+  const viewWidth=750, left=52,right=12,top=this._kind.days?27:15,bottom=32,graphH=213;
+  const graphW=viewWidth-left-right, plotBottom=top+graphH, groupW=graphW/Math.max(1,records.length);
+  const barW=Math.min(this._kind.days?62:19,groupW*(this._kind.days?.75:.73));
+  let art='';
+  for(let tick=0;tick<=4;tick++){
+   const value=step*tick,y=plotBottom-graphH*tick/4;
+   art+=`<line class="grid-line" x1="${left}" x2="${viewWidth-right}" y1="${y}" y2="${y}"/>`;
+   art+=`<text class="axis-text" x="${left-8}" y="${y+4}" text-anchor="end">${fmt(value)}</text>`;
+  }
+  art+=`<text class="axis-text" x="12" y="${top+graphH/2}" text-anchor="middle" transform="rotate(-90 12 ${top+graphH/2})">mL</text>`;
+  records.forEach((r,i)=>{
+   const cx=left+(i+.5)*groupW,x=cx-barW/2;
+   let bottomY=plotBottom;
+   for(const key of keys){
+    const amount=r.liquids[key]||0;
+    if(amount<=0)continue;
+    const height=graphH*amount/max;
+    bottomY-=height;
+    art+=`<rect x="${x.toFixed(2)}" y="${bottomY.toFixed(2)}" width="${barW.toFixed(2)}" height="${height.toFixed(2)}" rx="1" fill="${colors.get(key)}"><title>${jdhlEscape(names[key]||key)}: ${fmt(amount)} mL</title></rect>`;
+   }
+   if(this._kind.days&&r.total>0){
+    const y=Math.max(13,plotBottom-graphH*r.total/max-6);
+    art+=`<text x="${cx.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--primary-text-color,#243746)">${fmt(r.total)} mL</text>`;
+   }
+   art+=`<text class="axis-text" x="${cx.toFixed(2)}" y="${plotBottom+19}" text-anchor="middle" font-size="${this._kind.days?12:10}">${jdhlEscape(r.label)}</text>`;
+  });
+  const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}${this._kind.days?'':` (${fmt(totals[k])} mL)`}</span>`).join('');
+  const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
+  const target=Number(targetEntity?.state);
+  const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.17</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -829,4 +864,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.16');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.17');
