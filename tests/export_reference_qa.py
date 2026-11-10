@@ -59,7 +59,7 @@ with ZipFile(BytesIO(raw)) as zipf:
   if name.endswith(('.xml','.rels')): ET.fromstring(zipf.read(name))
  wb=ET.fromstring(zipf.read('xl/workbook.xml'))
  assert [s.attrib['name'] for s in wb.find(NS+'sheets')] == [
-  'Hydration log','Daily Totals','Settings - Liquid Types','Settings - Volume Buttons']
+  'Hydration log','Daily intake','Settings - Liquid Types','Settings - Volume Buttons']
  def root(index): return ET.fromstring(zipf.read(f'xl/worksheets/sheet{index}.xml'))
  def c(r,ref):
   v=r.find(f'.//{NS}c[@r="{ref}"]'); assert v is not None,ref
@@ -96,6 +96,8 @@ with ZipFile(BytesIO(raw)) as zipf:
  def col_widths(sheet):
   cols=sheet.find(NS+'cols')
   return [float(col.get('width')) for col in cols.findall(NS+'col')]
+ assert col_widths(log)==[4,25,16,6,9,9,17,11], col_widths(log)
+ assert col_widths(day)==[4.285,16,15,7,9,6,10,9,11,6,10,10,10,10,10,10,10], col_widths(day)
  assert col_widths(types)[4]>=18 and col_widths(types)[5]>=25
  assert col_widths(types)[8]>=25
  assert col_widths(buttons)[2]>=18 and col_widths(buttons)[3]>=25
