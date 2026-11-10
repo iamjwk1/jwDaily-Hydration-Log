@@ -1,4 +1,4 @@
-"""Create, validate and checksum complete jwDaily Hydration Log beta.14 installation ZIP."""
+"""Create, validate and checksum complete jwDaily Hydration Log beta.16 installation ZIP."""
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import zipfile
 
-VERSION = "1.1.0-beta.15"
+VERSION = "1.1.0-beta.16"
 BASENAME = "20261110 jwDaily Hydration Log v1.1.0-beta.16.zip"
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "dist" / BASENAME
