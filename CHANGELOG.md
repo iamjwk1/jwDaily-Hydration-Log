@@ -1,5 +1,12 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.13
+- Rebuilt card's complete stylesheet for fluid side-by-side layout and five-row history viewport.
+- Dynamic Excel Daily intake columns for current and historical-only types, flagged orange.
+- Hydration log Date+time column width 19.
+- No data migrations or destructive changes.
+
+
 ## v1.1.0-beta.12 (HACS pre-release)
 - Correct side-by-side bar-chart layout on wider cards with named container query.
 - Enforce 38px history rows and single-line volume manager rows.
