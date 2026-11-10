@@ -40,6 +40,14 @@ profile={
   {'id':'id_set','kind':'set_target','timestamp':'2026-11-08T15:00:00+01:00','volume_ml':2500},
  ],
 }
+# Export ordering must be chronological even if the storage ledger was edited out of order.
+unordered=dict(profile)
+unordered['records']=[profile['records'][3], profile['records'][2], profile['records'][0],
+                       profile['records'][4], profile['records'][1]]
+ordered=excel._record_table([unordered],excel.ZoneInfo('Europe/Amsterdam'))
+assert [round(row[1],8) for row in ordered]==sorted(round(row[1],8) for row in ordered)
+assert [row[9] for row in ordered]==['water','coffee','custom_abc','water']
+
 raw=excel.export_xlsx([profile],'Europe/Amsterdam',when=when)
 with ZipFile(BytesIO(raw)) as zipf:
  assert zipf.testzip() is None, 'ZIP CRC error'
@@ -84,6 +92,13 @@ with ZipFile(BytesIO(raw)) as zipf:
   xml=zipf.read(f'xl/worksheets/sheet{sheet_num}.xml').decode()
   assert xml.index('<pageMargins') < xml.index('<tableParts')
  assert excel._xml('Valid\x01\ud800name')=='Validname'
+ # Every settings header must fit within its configured worksheet column.
+ def col_widths(sheet):
+  cols=sheet.find(NS+'cols')
+  return [float(col.get('width')) for col in cols.findall(NS+'col')]
+ assert col_widths(types)[4]>=18 and col_widths(types)[5]>=25
+ assert col_widths(types)[8]>=25
+ assert col_widths(buttons)[2]>=18 and col_widths(buttons)[3]>=25
  assert types.find(NS+'autoFilter') is not None and buttons.find(NS+'autoFilter') is not None
  t1=ET.fromstring(zipf.read('xl/tables/table1.xml'))
  t2=ET.fromstring(zipf.read('xl/tables/table2.xml'))

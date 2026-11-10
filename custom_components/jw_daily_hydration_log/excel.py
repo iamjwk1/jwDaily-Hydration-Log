@@ -19,7 +19,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 
-VERSION = '1.1.0-beta.9'
+VERSION = '1.1.0-beta.10'
 SHEETS = ['Hydration log', 'Daily Totals', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -191,6 +191,9 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
             display=(liquid if liquid in _BUILTIN else definitions.get(liquid, 'Unknown (legacy)' if liquid=='unknown' else liquid))
             result.append((p,_serial(local),cfg['name'],cfg.get('age'),cfg.get('gender'),
                            target_day,display,float(record.get('volume_ml',0)),day,liquid))
+    # Chronological presentation, independent of the original storage order.
+    # Stable sorting preserves input order for exact ties.
+    result.sort(key=lambda row: (row[1], str(row[2]), str(row[9])))
     return result
 
 
@@ -291,10 +294,10 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             buttonsrows[row]=[(i,value,0,None) for i,value in enumerate(vals,1)]
 
     content=[
-     _worksheet(1,logrows,[4,19.5,14.285,5.57,8.71,10.14,14,9.57],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
-     _worksheet(2,drows,[4.285,16.14,14.855,14.855,14.855,11.5,10.14,9.785,11.425,6.5,10,10.57,8.64,8.64,9.285,9.21,9.71],f'Q{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[12,21,15,23,11,19,11,14,19],f'I{max(1,len(typesrows))}',len(typesrows)),
-     _worksheet(4,buttonsrows,[12,11,11,19],f'D{max(1,len(buttonsrows))}',len(buttonsrows)),
+     _worksheet(1,logrows,[4,25,17,11,13,17,23,16],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(2,drows,[4.285,17,18,12,13,12,15,13,15,8.5,14,14,13,13,13,13,13],f'Q{max(12,11+len(days))}',max(12,11+len(days)),True),
+     _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25],f'I{max(1,len(typesrows))}',len(typesrows)),
+     _worksheet(4,buttonsrows,[16,14,18,25],f'D{max(1,len(buttonsrows))}',len(buttonsrows)),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.
     buffer=BytesIO()
