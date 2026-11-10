@@ -84,7 +84,7 @@ async function main(){
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
  assert(layout.includes('grid-template-columns:274px minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
- assert(layout.includes('@container(max-width:510px)'), 'mobile stacks only when card is narrow');
+ assert(layout.includes('@container jdhl-card (max-width:455px)'), 'mobile stacks only when card is narrow');
  assert(layout.includes('font-size:24px'), 'intake blue remains 24px on desktops');
  assert(layout.includes('height:38px'), 'all history rows compact 38px');
  assert(layout.includes('class="drink-count"') && layout.includes('drink moments'), 'count below glass preserved');
