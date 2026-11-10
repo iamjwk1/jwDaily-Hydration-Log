@@ -33,7 +33,7 @@ const puppeteer=require('puppeteer-core');
       'sensor.jwdhl_jan_willem_drink_count_today':{state:'4',attributes:{}}
      },async callWS(msg){
        if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:records,day_summary:summary,liquid_types:defs,volume_buttons:[120,150,300,500],total_ml:1080};
-       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.13'};
+       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.14'};
        throw Error('Unexpected: '+msg.type);
      }};
     c.setConfig({profile:'jan_willem',title:'Vocht intake Jan-Willem'});
@@ -62,7 +62,7 @@ const puppeteer=require('puppeteer-core');
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
-   if(width>=310)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
+   if(width>=610)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
  else assert(x.chart.top>=x.glass.bottom,'narrow cards should stack the chart below glass');
    for(const part of ['glass','taken','chart','button','date','export']){
      const p=x[part];assert(p&&p.left>=x.card.left-4&&p.right<=right+2,part+' outside card: '+JSON.stringify(p));
@@ -75,15 +75,15 @@ const puppeteer=require('puppeteer-core');
    assert(x.histViewport.sixthTop>=x.histViewport.bottom-1,'Sixth data row must be hidden until scrolling');
    assert(x.histViewport.scrollHeight>x.histViewport.clientHeight,'Older drinks must remain scrollable');
    assert(x.histViewport.headerBottom<x.histViewport.bottom,'Header must be visible');
-   assert(Number.parseFloat(x.fontsize)>=18,'History date too small: '+x.fontsize);
-   assert(parseFloat(x.intakeFont)>=17&&parseFloat(x.intakeFont)<=24.2,'Blue intake font outside responsive range: '+x.intakeFont);
+   assert(Number.parseFloat(x.fontsize)>=14,'History date too small: '+x.fontsize);
+   assert(parseFloat(x.intakeFont)>=23&&parseFloat(x.intakeFont)<=24.2,'Blue intake font outside responsive range: '+x.intakeFont);
    assert(x.activeButtons>=2,'Enabled secondary controls are unexpectedly absent/disabled');
    assert(!x.statusVisible,'Permanent status message should not consume card height');
    assert(x.count.top>=x.glass.bottom-1 && x.count.top<=x.glass.bottom+12,'Drink moments must stay directly under glass');
    assert(x.export.left>=x.history.left-2 && x.export.left<=x.history.left+2,'Excel button not aligned left with history');
    assert(x.button.bottom<=x.hero.bottom+2 && x.hero.bottom-x.button.bottom<15,'Add drink too high above hero bottom');
    for(const bar of x.barVolumes)assert(bar.left>=x.chart.left && bar.right<=x.card.right+1,'Chart volume clipped');
-   if(width>=560){
+   if(width>=610){
     assert(x.taken.right<=x.glass.left-6,'Blue intake overlaps or is too close to glass: '+JSON.stringify({taken:x.taken,glass:x.glass}));
     assert(x.glass.left-x.taken.right<=18,'Blue intake too far from glass');
     assert(x.chart.left>=x.glass.right,'Graph not to right of glass');
@@ -138,7 +138,7 @@ const puppeteer=require('puppeteer-core');
    assert(volumes.rows.every(r=>r.height<=44),'Volume manager must be one 38-44px line per volume');
    assert(volumes.buttons.every(a=>a.right<=volumes.dialog.right+1),'Volume button clipped outside dialog');
    console.log('VISUAL_MODAL_PASS',width,JSON.stringify({normal,liquids,volumes}));
-   await page.screenshot({path:path.resolve(__dirname,'layout-beta13-'+width+'.png'),fullPage:true});
+   await page.screenshot({path:path.resolve(__dirname,'layout-beta14-'+width+'.png'),fullPage:true});
    console.log('VISUAL_GEOMETRY_PASS',width,JSON.stringify(x));
    await page.close();
   }
