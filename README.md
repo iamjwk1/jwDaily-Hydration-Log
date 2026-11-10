@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.13
+# jwDaily Hydration Log v1.1.0-beta.14
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,18 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.13
+## What's new in beta.14
+
+- Preserve Office XML namespaces in styles.xml when generating orange historical-liquid headers; prevent desktop Excel repair warnings.
+- Use direct in-page Excel data download instead of blob:http links; browser origin security still depends on how Home Assistant is accessed.
+- Register two independent Lovelace cards in Add card: jwDaily Hydration – Today by hour and jwDaily Hydration – Last 7 days.
+- Align Excel export button at bottom-left and version at bottom-right.
+- Add a real history calendar popup beside editable DD-MM-YYYY text with a narrower date control.
+- Restore readable red target label and full-size cup; align consumed volume closer to glass.
+- Keep only five recent drink rows visible; older records accessible via scroll.
+- No profile/data migrations.
+
+## Earlier beta.13 changes
 
 - Clean rebuilt responsive main card: keep liquid chart beside glass at usable widths; narrow fallback only below 280 CSS pixels.
 - Show exactly five latest drink-history rows (38 CSS px each), with the column header always visible and older entries accessible by scrolling.
