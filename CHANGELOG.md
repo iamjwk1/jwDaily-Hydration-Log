@@ -1,5 +1,9 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.15
+- Rebuild hero breakpoint and compact history/date/footer; preserve all beta.14 functionality.
+
+
 ## v1.1.0-beta.14
 - Office styles XML prefix preservation fixes corrupt XLSX export.
 - Excel in-page download and 2 selectable self-contained HACS Lovelace chart cards.
