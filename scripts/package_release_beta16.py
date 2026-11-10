@@ -49,7 +49,7 @@ def main():
         const = z.read("custom_components/jw_daily_hydration_log/const.py")
         excel = z.read("custom_components/jw_daily_hydration_log/excel.py")
         assert manifest["version"] == VERSION
-        assert b"v1.1.0-beta.16" in card and b"VERSION = '1.1.0-beta.15'" in const and b"VERSION = '1.1.0-beta.15'" in excel
+        assert b"v1.1.0-beta.16" in card and b"VERSION = '1.1.0-beta.16'" in const and b"VERSION = '1.1.0-beta.16'" in excel
         assert b"background:#B3E5FC" in card
         assert b"background:#EEEEEE" in card
         assert b"background:#FFFFFF" in card
