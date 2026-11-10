@@ -1,4 +1,4 @@
-/* jwDaily beta18 browser-shell regression: single popup, custom types & target line. */
+/* jwDaily beta19 browser-shell regression: single popup, custom types & target line. */
 const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');
 const src=fs.readFileSync(path.join(__dirname,'../custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'),'utf8');
 const els={},downloads=[],wsCalls=[];
@@ -23,14 +23,14 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.18',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.19',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history'){
    const breakdown=history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]);
    const total=history.reduce((a,r)=>a+r.volume_ml,0);
    return {date:msg.date,entries:history.map(x=>({...x})),
     total_ml:total,liquid_types:catalog.map(x=>({...x})),
     day_summary:{date:msg.date,consumed_ml:total,target_ml:3000,drink_count:history.length,liquid_breakdown:breakdown},
-    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.18'};
+    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.19'};
   }
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
@@ -79,7 +79,7 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.18'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.19'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
@@ -92,11 +92,11 @@ async function main(){
  assert(layout.includes('background:#EEEEEE'), 'separate manage button styling');
  assert(layout.includes('background:#FFFFFF'), 'date picker remains white');
  assert(layout.includes('.liquid-choice,.volume-choices .amount{font-size:.93rem!important'), 'liquid and amount same text size');
- assert(layout.includes('class="card-version">v1.1.0-beta.18'), 'version footer');
+ assert(layout.includes('class="card-version">v1.1.0-beta.19'), 'version footer');
  assert(!layout.includes('Undo last drink'), 'Undo removed from card');
  assert(!layout.includes('data-action="undo"'), 'no invisible Undo control');
  assert(!layout.includes('aria-live="polite"'), 'no persistent drink-saved placeholder');
- console.log('PASS: beta18 hero two columns, no Undo, 28px history, uniform blue controls, neutral Manage, white date');
+ console.log('PASS: beta19 hero two columns, no Undo, 28px history, uniform blue controls, neutral Manage, white date');
  assert(c.shadowRoot.innerHTML.includes('M38 39 L122 39'));
  assert(c.shadowRoot.innerHTML.includes('stroke-dasharray="4 5"'));
  assert(c._glass(10,2700,3000).includes('attributeName="y"'));
