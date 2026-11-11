@@ -26,9 +26,9 @@ const assert=require('node:assert/strict'),path=require('node:path'),puppeteer=r
    assert.equal(errors.length,0,errors.join('; '));
    assert(got.every(x=>x.width<=width+2&&x.right<=width+2),'Chart horizontal overflow');
    assert(got.every(x=>Math.abs(x.footRight-x.right)<20&&x.cardBottom-x.footBottom<20),'Version not at bottom right');
-   assert(got[0].labels.includes('1')&&got[0].labels.includes('24')&&got[0].labels.includes('mL'));
+   assert(got[0].labels.includes('24')&&(width>=640?got[0].labels.includes('1'):got[0].labels.includes('2'))&&got[0].html.includes('class="axis-unit"'),'Hourly responsive hour labels or y-axis missing');
    assert(got[0].html.includes('Coffee (500 mL)')&&got[0].html.includes('Target: 2,000 mL'));
-   assert(got[1].labels.includes('7 Nov')&&got[1].html.includes('1,400 mL')&&got[1].labels.includes('mL'));
+   assert(got[1].labels.includes('7 Nov')&&got[1].html.includes('1,400 mL')&&got[1].html.includes('class="axis-unit"'),'Weekly day/axis missing');
    assert(got[1].columns>=7);
    console.log('CHART_BROWSER_PASS',width,got.map(x=>({width:x.width,columns:x.columns})));
    await page.close();
