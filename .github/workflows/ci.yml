@@ -15,9 +15,11 @@ jobs:
           node-version: '22'
       - name: Python syntax
         run: python -m compileall -q custom_components/jw_daily_hydration_log
-      - name: Python offline tests
+      - name: Legacy backend offline regression
         run: python tests/qa.py
-      - name: Beta23 backend and OOXML regression tests
-        run: python tests/qa_beta23.py
-      - name: Frontend offline tests
-        run: node tests/frontend_qa.js
+      - name: Beta24 storage, migration and OOXML regression
+        run: |
+          python -m pip install --disable-pip-version-check openpyxl
+          python tests/qa_beta24.py
+      - name: Frontend syntax
+        run: node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js

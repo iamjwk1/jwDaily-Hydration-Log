@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import base64
+import json
+import hashlib
 import logging
 import math
 import voluptuous as vol
@@ -26,7 +28,8 @@ _DRINK_SCHEMA=vol.Schema({vol.Required('profile'):cv.string,vol.Required('volume
                            vol.Optional('unit',default='mL'):vol.In(UNITS),
                            vol.Optional('origin',default='service'):cv.string,
                            vol.Required('liquid_type'):cv.string,
-                           vol.Optional('date'):cv.string,vol.Optional('time'):cv.string})
+                           vol.Optional('date'):cv.string,vol.Optional('time'):cv.string,
+                           vol.Optional('cup_type_id'):cv.string,vol.Optional('quick_button_id'):cv.string})
 _RESET_SCHEMA=vol.Schema({vol.Required('profile'):cv.string})
 _SET_SCHEMA=vol.Schema({vol.Required('profile'):cv.string,vol.Required('volume'):vol.Coerce(float),
                         vol.Optional('unit',default='mL'):vol.In(UNITS)})
@@ -55,7 +58,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         c=_resolve(hass,call.data['profile'])
         try:
             await c.async_add_drink(call.data['volume'],call.data['unit'],call.data.get('origin','service'),
-                                    call.data['liquid_type'],call.data.get('date'),call.data.get('time'))
+                                    call.data['liquid_type'],call.data.get('date'),call.data.get('time'),
+                                    call.data.get('cup_type_id'),call.data.get('quick_button_id'))
         except ValueError as exc:
             raise ServiceValidationError(str(exc)) from exc
 
@@ -102,6 +106,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_set_builtin_liquid_visibility)
     websocket_api.async_register_command(hass,ws_set_liquid_order)
     websocket_api.async_register_command(hass,ws_set_volume_buttons)
+    websocket_api.async_register_command(hass,ws_manage_cup)
+    websocket_api.async_register_command(hass,ws_manage_quick)
+    websocket_api.async_register_command(hass,ws_legacy_preview)
+    websocket_api.async_register_command(hass,ws_migration_backup)
+    websocket_api.async_register_command(hass,ws_legacy_mapping)
+    websocket_api.async_register_command(hass,ws_set_target)
     websocket_api.async_register_command(hass,ws_export)
     return True
 
@@ -140,7 +150,8 @@ async def async_unload_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
 def ws_capabilities(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
     """Confirm that the Python backend matches the frontend before any write."""
     connection.send_result(msg['id'],{'version':VERSION,'add_drink':True,
-                                      'edit_drink':True,'custom_liquid_types':True,'builtin_liquid_visibility':True})
+                                      'edit_drink':True,'custom_liquid_types':True,'builtin_liquid_visibility':True,
+                                      'cup_types':True,'quick_buttons':True,'legacy_mapping':True,'central_settings':True})
 
 
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/history',probatio.Required('profile'):str,
@@ -168,6 +179,10 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'liquid_types':c.get_liquid_definitions(),
         'volume_buttons':None if c.volume_buttons is None else list(c.volume_buttons),
         'today_breakdown':c.today_breakdown(),
+        'cup_types':c.get_cup_types(), 'quick_buttons':c.get_quick_buttons(),
+        'profile_settings':dict(name=c.name,age=c.age,gender=c.gender,unit=c.unit,
+                                source_mode=c.source_mode),
+        'migration_active':bool(c.legacy_mappings),
         'backend_version':VERSION,
     })
 
@@ -177,14 +192,17 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
                                   probatio.Required('volume_ml'):float,
                                   probatio.Required('liquid_type'):str,
                                   probatio.Optional('date'):str,
-                                  probatio.Optional('time'):str})
+                                  probatio.Optional('time'):str,
+                                  probatio.Optional('cup_type_id'):str,
+                                  probatio.Optional('quick_button_id'):str})
 @websocket_api.async_response
 async def ws_add_drink(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
     """Add a new drink and return the saved ID so Undo never guesses."""
     try:
         c=_resolve(hass,msg['profile'])
         saved=await c.async_add_drink(msg['volume_ml'],'mL','dashboard',msg['liquid_type'],
-                                      msg.get('date'),msg.get('time'))
+                                      msg.get('date'),msg.get('time'),
+                                      msg.get('cup_type_id'),msg.get('quick_button_id'))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_drink',str(exc))
         return
@@ -198,13 +216,16 @@ async def ws_add_drink(hass:HomeAssistant,connection:websocket_api.ActiveConnect
                                   probatio.Required('volume_ml'):float,
                                   probatio.Required('liquid_type'):str,
                                   probatio.Required('date'):str,
-                                  probatio.Required('time'):str})
+                                  probatio.Required('time'):str,
+                                  probatio.Optional('cup_type_id'):str,
+                                  probatio.Optional('quick_button_id'):str})
 @websocket_api.async_response
 async def ws_edit_drink(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         c=_resolve(hass,msg['profile'])
         updated=await c.async_edit_drink(msg['record_id'],msg['volume_ml'],
-                                         msg['liquid_type'],msg['date'],msg['time'])
+                                         msg['liquid_type'],msg['date'],msg['time'],
+                                         msg.get('cup_type_id'),msg.get('quick_button_id'))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_drink',str(exc))
         return
@@ -323,6 +344,125 @@ async def ws_set_volume_buttons(hass:HomeAssistant,connection:websocket_api.Acti
         connection.send_error(msg['id'],'invalid_volume_buttons',str(exc))
         return
     connection.send_result(msg['id'],{'volumes':volumes})
+
+
+# Central-settings APIs: all changes remain admin-gated, profile scoped and validated.
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/manage_cup',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('action'):str,
+                                  probatio.Optional('cup_id'):str,
+                                  probatio.Optional('name'):str,
+                                  probatio.Optional('volume_ml'):float,
+                                  probatio.Optional('icon_mdi'):str,
+                                  probatio.Optional('order'):[str]})
+@websocket_api.async_response
+async def ws_manage_cup(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        result=await c.async_manage_cup(msg['action'],msg.get('cup_id',''),msg.get('name',''),
+                                        msg.get('volume_ml'),msg.get('icon_mdi',''),msg.get('order'))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_cup',str(exc));return
+    connection.send_result(msg['id'],{'cup_types':result})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/manage_quick',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('action'):str,
+                                  probatio.Optional('quick_id'):str,
+                                  probatio.Optional('liquid_type_id'):str,
+                                  probatio.Optional('cup_type_id'):str,
+                                  probatio.Optional('label_mode'):str,
+                                  probatio.Optional('custom_label'):str,
+                                  probatio.Optional('order'):[str]})
+@websocket_api.async_response
+async def ws_manage_quick(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        result=await c.async_manage_quick(msg['action'],msg.get('quick_id',''),
+                                          msg.get('liquid_type_id',''),msg.get('cup_type_id',''),
+                                          msg.get('label_mode','automatic'),msg.get('custom_label',''),
+                                          msg.get('order'))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_quick',str(exc));return
+    connection.send_result(msg['id'],{'quick_buttons':result})
+
+
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_preview',
+                                  probatio.Required('profile'):str})
+@callback
+def ws_legacy_preview(hass, connection, msg):
+    try:
+        result=_resolve(hass,msg['profile']).migration_preview()
+    except ServiceValidationError as exc:
+        connection.send_error(msg['id'],'not_found',str(exc));return
+    connection.send_result(msg['id'],result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_backup',
+                                  probatio.Required('profile'):str})
+@websocket_api.async_response
+async def ws_migration_backup(hass, connection, msg):
+    """Return the unmodified persisted profile store for a user-held rollback.
+
+    This is a read-only operation. It deliberately does not write any HA file,
+    change the Store schema, or silently enable a migration.
+    """
+    try:
+        c=_resolve(hass,msg['profile'])
+        saved=await c._store.async_load()
+        if not isinstance(saved,dict):
+            raise ValueError('No stored profile snapshot to back up')
+        data=json.dumps(saved,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+        digest=hashlib.sha256(data).hexdigest()
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'backup_error',str(exc));return
+    connection.send_result(msg['id'],{
+        'filename':f'jwDaily Hydration Log {c.slug} pre-beta24-migration.json',
+        'base64':base64.b64encode(data).decode('ascii'),
+        'sha256':digest,'bytes':len(data),'version':VERSION})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/legacy_mapping',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('action'):str,
+                                  probatio.Required('legacy_id'):str,
+                                  probatio.Optional('liquid_type_id'):str,
+                                  probatio.Optional('cup_type_id'):str})
+@websocket_api.async_response
+async def ws_legacy_mapping(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        if msg['action']=='apply':
+            result=await c.async_set_legacy_mapping(msg['legacy_id'],msg.get('liquid_type_id',''),msg.get('cup_type_id',''))
+        elif msg['action']=='clear':
+            result=await c.async_clear_legacy_mapping(msg['legacy_id'])
+        else:
+            raise ValueError('Unknown legacy mapping action')
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_mapping',str(exc));return
+    connection.send_result(msg['id'],result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_target',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('target_ml'):float})
+@websocket_api.async_response
+async def ws_set_target(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        target=float(msg['target_ml'])
+        if not math.isfinite(target) or target<0 or target>100000:
+            raise ValueError('Daily target must be 0 (automatic) or at most 100000 mL')
+        await c.async_set_target(target)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_target',str(exc));return
+    connection.send_result(msg['id'],{'target_ml':c.target_ml,'target_override_ml':c.target_override_ml})
 
 
 @websocket_api.require_admin

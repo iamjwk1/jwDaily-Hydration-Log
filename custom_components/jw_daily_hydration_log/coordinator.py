@@ -156,6 +156,12 @@ class HydrationCoordinator:
         self.liquid_order: list[str] = []
         # None means follow the existing dashboard's quick_add YAML until customized.
         self.volume_buttons: list[float] | None = None
+        # Additive v1.1.0-beta.24 profile-local catalog. Original data is authoritative.
+        # Empty lists do not generate cup or quick-button guesses from legacy amounts.
+        self.cup_types: list[dict[str, Any]] = []
+        self.quick_buttons: list[dict[str, Any]] = []
+        # Legacy ID -> canonical liquid ID + optional cup ID. Never rewrite records.
+        self.legacy_mappings: dict[str, dict[str, str]] = {}
 
     def _now(self) -> datetime:
         return dt_util.now()
@@ -249,6 +255,9 @@ class HydrationCoordinator:
             self.liquid_order = list(saved.get('liquid_order') or [])
             if saved.get('volume_buttons') is not None:
                 self.volume_buttons = list(saved['volume_buttons'])
+            self.cup_types = list(saved.get('cup_types') or [])
+            self.quick_buttons = list(saved.get('quick_buttons') or [])
+            self.legacy_mappings = dict(saved.get('legacy_mappings') or {})
         if self.last_reset_date != self._today():
             self._rolled()
             await self._save()
@@ -278,11 +287,16 @@ class HydrationCoordinator:
 
     async def async_add_drink(self, amount: float, unit: str = 'mL', origin: str = 'service',
                               liquid_type: str | None = None, day: str | None = None,
-                              clock: str | None = None) -> dict:
+                              clock: str | None = None, cup_type_id: str | None = None,
+                              quick_button_id: str | None = None) -> dict:
         amount_ml = safe_amount(amount, unit)
         if not self._valid_liquid_type(liquid_type):
             raise ValueError('Choose a valid liquid type explicitly')
         timestamp = _local_timestamp(self.hass, day, clock)
+        if cup_type_id and not self.valid_cup(cup_type_id):
+            raise ValueError('Choose a valid cup type')
+        if quick_button_id and not self.valid_quick(quick_button_id, liquid_type, cup_type_id):
+            raise ValueError('Quick button does not match selected liquid and cup')
         async with self._lock:
             self._rolled()
             if not self._valid_liquid_type(liquid_type):
@@ -298,6 +312,10 @@ class HydrationCoordinator:
             record = self._entry('drink',origin,before,amount_ml,float(amount),unit)
             record['timestamp'] = timestamp
             record['liquid_type'] = liquid_type
+            if cup_type_id:
+                record['cup_type_id'] = cup_type_id
+            if quick_button_id:
+                record['quick_button_id'] = quick_button_id
             self.records.append(record)
             if not is_today:
                 self._adjust_archive(timestamp[:10], amount_ml)
@@ -326,11 +344,16 @@ class HydrationCoordinator:
             self.consumed_ml = max(0.0, self.consumed_ml + delta_ml)
 
     async def async_edit_drink(self, record_id: str, amount: float, liquid_type: str,
-                               day: str, clock: str) -> dict:
+                               day: str, clock: str, cup_type_id: str | None = None,
+                               quick_button_id: str | None = None) -> dict:
         """Replace a drink in place, keeping its stable ID but no old values."""
         if not self._valid_liquid_type(liquid_type):
             raise ValueError('Choose a valid liquid type explicitly')
         amount_ml = safe_amount(amount, 'mL')
+        if cup_type_id and not self.valid_cup(cup_type_id):
+            raise ValueError('Choose a valid cup type')
+        if quick_button_id and not self.valid_quick(quick_button_id, liquid_type, cup_type_id):
+            raise ValueError('Quick button does not match the liquid and cup')
         timestamp = _local_timestamp(self.hass, day, clock)
         async with self._lock:
             self._rolled()
@@ -346,6 +369,15 @@ class HydrationCoordinator:
             # Replace first so archive counts reflect the new timestamp/date.
             record.update(timestamp=timestamp, volume_ml=round(amount_ml, 4),
                           liquid_type=liquid_type, input_volume=float(amount), input_unit='mL')
+            # An explicit user edit may change the cup; never infer it from volume.
+            if cup_type_id:
+                record['cup_type_id'] = cup_type_id
+            else:
+                record.pop('cup_type_id', None)
+            if quick_button_id:
+                record['quick_button_id'] = quick_button_id
+            else:
+                record.pop('quick_button_id', None)
             if previous_day == self.last_reset_date:
                 self._adjust_current(-previous_ml)
             else:
@@ -479,7 +511,9 @@ class HydrationCoordinator:
             liquid_colors=self.liquid_colors,
             liquid_order=self.liquid_order,
             hidden_builtin_liquids=self.hidden_builtin_liquids,
-            volume_buttons=self.volume_buttons))
+            volume_buttons=self.volume_buttons,
+            cup_types=self.cup_types, quick_buttons=self.quick_buttons,
+            legacy_mappings=self.legacy_mappings))
 
     @callback
     def _dispatch(self) -> None:
@@ -504,6 +538,11 @@ class HydrationCoordinator:
         for item in base:
             item.update(self.liquid_overrides.get(item['id'], {}))
         items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
+        for item in items:
+            # Legacy source IDs remain in the store and export, but are no longer
+            # offered as separate options once the user accepts a canonical mapping.
+            if item['id'] in self.legacy_mappings:
+                item['hidden'] = True
         for item in items:
             ident = item['id']
             item['color_override'] = self.liquid_colors.get(ident)
@@ -556,6 +595,10 @@ class HydrationCoordinator:
                 raise ValueError('Custom liquid not found')
             if any(x.get('kind') == 'drink' and x.get('liquid_type') == liquid_type for x in self.records):
                 raise ValueError('This liquid is used in drink history and cannot be deleted')
+            if any(q.get('liquid_type_id') == liquid_type for q in self.quick_buttons):
+                raise ValueError('This liquid is used by Quick buttons; hide it instead')
+            if any(v.get('liquid_type_id') == liquid_type for v in self.legacy_mappings.values()):
+                raise ValueError('This liquid is a migration target; clear the mapping first')
             self.custom_liquid_types.remove(item)
             self.liquid_order = [key for key in self.liquid_order if key != liquid_type]
             await self._save()
@@ -650,10 +693,211 @@ class HydrationCoordinator:
             self._dispatch()
             return list(self.volume_buttons)
 
+    # --- beta.24 catalog and explicit legacy aliases ---
+    @staticmethod
+    def _catalog_name(value: str, label: str = 'Name') -> str:
+        if not isinstance(value, str) or not (1 <= len(value.strip()) <= 48):
+            raise ValueError(f'{label} must contain 1-48 characters')
+        value = value.strip()
+        if any(ord(ch) < 32 for ch in value):
+            raise ValueError(f'{label} contains an invalid control character')
+        return value
+
+    def valid_cup(self, cup_id: str | None, include_hidden: bool = False) -> bool:
+        return bool(cup_id) and any(c['id'] == cup_id and (include_hidden or not c.get('hidden'))
+                                     for c in self.cup_types)
+
+    def valid_quick(self, quick_id: str | None, liquid_id: str | None,
+                    cup_id: str | None) -> bool:
+        return bool(quick_id) and any(q['id'] == quick_id and not q.get('hidden')
+                                      and q['liquid_type_id'] == liquid_id
+                                      and q['cup_type_id'] == cup_id
+                                      for q in self.quick_buttons)
+
+    def get_cup_types(self) -> list[dict]:
+        return [dict(c) for c in self.cup_types]
+
+    def get_quick_buttons(self) -> list[dict]:
+        liquid_names = {x['id']: x['name'] for x in self.get_liquid_definitions()}
+        cup_names = {x['id']: x['name'] for x in self.cup_types}
+        result = []
+        for q in self.quick_buttons:
+            item = dict(q)
+            item['label'] = (q.get('custom_label', '') if q.get('label_mode') == 'custom'
+                             else f"{liquid_names.get(q['liquid_type_id'], q['liquid_type_id'])} "
+                                  f"({cup_names.get(q['cup_type_id'], q['cup_type_id'])})")
+            item['default_volume_ml'] = next((x['default_volume_ml'] for x in self.cup_types
+                                             if x['id'] == q['cup_type_id']), None)
+            item['available'] = (self._valid_liquid_type(q['liquid_type_id'])
+                                 and not any(x['id'] == q['liquid_type_id'] and x.get('hidden')
+                                             for x in self.get_liquid_definitions())
+                                 and self.valid_cup(q['cup_type_id']) and not q.get('hidden'))
+            result.append(item)
+        return result
+
+    async def async_manage_cup(self, action: str, cup_id: str = '', name: str = '',
+                               volume_ml: float | None = None, icon_mdi: str = '',
+                               order: list[str] | None = None) -> list[dict]:
+        if action not in ('add', 'update', 'hide', 'restore', 'reorder'):
+            raise ValueError('Invalid cup action')
+        async with self._lock:
+            if action == 'reorder':
+                if not isinstance(order, list) or set(order) != {c['id'] for c in self.cup_types} or len(order) != len(self.cup_types):
+                    raise ValueError('Cup order must include every cup exactly once')
+                lookup = {c['id']: c for c in self.cup_types}
+                self.cup_types = [lookup[x] for x in order]
+            elif action in ('hide', 'restore'):
+                cup = next((c for c in self.cup_types if c['id'] == cup_id), None)
+                if cup is None:
+                    raise ValueError('Cup type not found')
+                cup['hidden'] = action == 'hide'
+            else:
+                name = self._catalog_name(name, 'Cup name')
+                valid_volume = _default_volume(volume_ml)
+                if valid_volume is None:
+                    raise ValueError('Cup volume must be between 0 and 100000 mL')
+                if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}', icon_mdi):
+                    raise ValueError('Invalid Cup MDI icon')
+                cup = next((c for c in self.cup_types if c['id'] == cup_id), None)
+                if action == 'update' and cup is None:
+                    raise ValueError('Cup type not found')
+                if action == 'add' and len(self.cup_types) >= 40:
+                    raise ValueError('Maximum 40 cup types')
+                if any(c['name'].casefold() == name.casefold() and c is not cup for c in self.cup_types):
+                    raise ValueError('Cup name already exists')
+                props = dict(name=name, default_volume_ml=valid_volume,
+                             icon_mdi=icon_mdi or 'mdi:cup', hidden=False)
+                if action == 'add':
+                    self.cup_types.append(dict(id='cup_' + uuid4().hex[:12], **props))
+                else:
+                    cup.update(props)
+            await self._save()
+            self._dispatch()
+            return self.get_cup_types()
+
+    async def async_manage_quick(self, action: str, quick_id: str = '',
+                                 liquid_type_id: str = '', cup_type_id: str = '',
+                                 label_mode: str = 'automatic', custom_label: str = '',
+                                 order: list[str] | None = None) -> list[dict]:
+        if action not in ('add','update','hide','restore','reorder'):
+            raise ValueError('Invalid quick-button action')
+        async with self._lock:
+            if action == 'reorder':
+                if not isinstance(order, list) or set(order) != {q['id'] for q in self.quick_buttons} or len(order) != len(self.quick_buttons):
+                    raise ValueError('Quick-button order must include every button exactly once')
+                lookup = {q['id']: q for q in self.quick_buttons}
+                self.quick_buttons = [lookup[x] for x in order]
+            elif action in ('hide','restore'):
+                item = next((q for q in self.quick_buttons if q['id'] == quick_id), None)
+                if item is None:
+                    raise ValueError('Quick button not found')
+                item['hidden'] = action == 'hide'
+            else:
+                if not self._valid_liquid_type(liquid_type_id) or liquid_type_id in self.legacy_mappings:
+                    raise ValueError('Choose an active liquid type')
+                if not self.valid_cup(cup_type_id):
+                    raise ValueError('Choose an active cup type')
+                if label_mode not in ('automatic','custom'):
+                    raise ValueError('Label mode must be automatic or custom')
+                if label_mode == 'custom':
+                    if not isinstance(custom_label,str) or not custom_label.strip() or any(ord(ch)<32 for ch in custom_label):
+                        raise ValueError('Custom button label is required')
+                    custom_label=custom_label.strip()
+                    if len(custom_label) > 60:
+                        raise ValueError('Label must be at most 60 characters')
+                else:
+                    custom_label = ''
+                item = next((q for q in self.quick_buttons if q['id'] == quick_id), None)
+                if action == 'update' and item is None:
+                    raise ValueError('Quick button not found')
+                if action == 'add' and len(self.quick_buttons) >= 48:
+                    raise ValueError('Maximum 48 quick buttons')
+                if any(q is not item and q['liquid_type_id'] == liquid_type_id and
+                       q['cup_type_id'] == cup_type_id for q in self.quick_buttons):
+                    raise ValueError('A Quick button already uses this Liquid and Cup combination')
+                props = dict(liquid_type_id=liquid_type_id,cup_type_id=cup_type_id,
+                             label_mode=label_mode,custom_label=custom_label,hidden=False)
+                if action == 'add':
+                    self.quick_buttons.append(dict(id='quick_' + uuid4().hex[:12], **props))
+                else:
+                    item.update(props)
+            await self._save()
+            self._dispatch()
+            return self.get_quick_buttons()
+
+    def canonical_liquid(self, liquid_id: str) -> str:
+        # No aliases are traversed recursively: only explicit direct mappings
+        # to an unmapped currently defined target are permitted.
+        alias = self.legacy_mappings.get(liquid_id, {})
+        return str(alias.get('liquid_type_id') or liquid_id)
+
+    def mapped_cup(self, liquid_id: str, direct_cup: str | None = None) -> str | None:
+        return direct_cup or self.legacy_mappings.get(liquid_id, {}).get('cup_type_id') or None
+
+    def migration_preview(self) -> dict:
+        defs = self.get_liquid_definitions()
+        active = {d['id']: d for d in defs}
+        counts: dict[str, dict] = {}
+        for r in self.records:
+            if r.get('kind') != 'drink':
+                continue
+            key = str(r.get('liquid_type') or 'unknown')
+            data = counts.setdefault(key, {'count':0, 'total_ml':0.0})
+            data['count'] += 1
+            data['total_ml'] += float(r.get('volume_ml', 0))
+        proposals = []
+        for old_id, value in counts.items():
+            known = active.get(old_id)
+            label = known['name'] if known else old_id
+            suggestion = None
+            # Suggest only an obvious Water subtype. Do not apply automatically.
+            match = re.fullmatch(r'water\s*\((beker|glas|glass|cup)\)',label,re.I)
+            if match and 'water' in active and old_id != 'water':
+                preferred = match.group(1).casefold()
+                cup = next((c for c in self.cup_types if c['name'].casefold() == preferred), None)
+                suggestion = dict(liquid_type_id='water', cup_type_id=cup['id'] if cup else '')
+            assigned = self.legacy_mappings.get(old_id)
+            target = active.get((assigned or suggestion or {}).get('liquid_type_id',''))
+            old_color = self.liquid_color(old_id, label)
+            proposals.append(dict(legacy_id=old_id,legacy_name=label,
+                count=value['count'],total_ml=round(value['total_ml'],3),
+                old_color=old_color, current_mapping=assigned,
+                proposal=suggestion, target_color=target['color'] if target else '',
+                color_conflict=bool(target and target['color'] != old_color)))
+        return dict(proposals=proposals,record_count=sum(v['count'] for v in counts.values()),
+                    total_logged_ml=round(sum(v['total_ml'] for v in counts.values()),3))
+
+    async def async_set_legacy_mapping(self, old_id: str, new_liquid_id: str,
+                                       cup_type_id: str = '') -> dict:
+        if old_id == new_liquid_id:
+            raise ValueError('Select a different canonical liquid type')
+        if not self._valid_liquid_type(new_liquid_id) or new_liquid_id in self.legacy_mappings:
+            raise ValueError('Canonical target must be a defined, unmapped liquid')
+        if old_id not in {str(r.get('liquid_type')) for r in self.records if r.get('kind')=='drink'}:
+            raise ValueError('Legacy ID has no historic drink records')
+        if cup_type_id and not self.valid_cup(cup_type_id):
+            raise ValueError('Select an existing cup or leave cup unknown')
+        async with self._lock:
+            self.legacy_mappings[old_id] = dict(liquid_type_id=new_liquid_id,
+                                                cup_type_id=cup_type_id)
+            await self._save()
+            self._dispatch()
+            return self.migration_preview()
+
+    async def async_clear_legacy_mapping(self, old_id: str) -> dict:
+        async with self._lock:
+            self.legacy_mappings.pop(old_id, None)
+            await self._save()
+            self._dispatch()
+            return self.migration_preview()
+
     def get_history(self, date: str | None = None) -> list[dict]:
         day = date or self._today()
-        values = [dict(id=r['id'], timestamp=r['timestamp'], volume_ml=r['volume_ml'],
-                       liquid_type=r.get('liquid_type', 'unknown'), origin=r.get('origin', ''))
+        values = [dict(id=r['id'],timestamp=r['timestamp'],volume_ml=r['volume_ml'],
+                       liquid_type=self.canonical_liquid(r.get('liquid_type', 'unknown')),
+                       original_liquid_type=r.get('liquid_type', 'unknown'),
+                       cup_type_id=self.mapped_cup(r.get('liquid_type','unknown'), r.get('cup_type_id')),
+                       quick_button_id=r.get('quick_button_id'),origin=r.get('origin', ''))
                   for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
         return sorted(values, key=lambda r: (r['timestamp'],r['id']))
 
@@ -667,7 +911,7 @@ class HydrationCoordinator:
         for record in self.records:
             if record.get('kind') != 'drink' or record.get('timestamp', '')[:10] != day:
                 continue
-            liquid = record.get('liquid_type', 'unknown')
+            liquid = self.canonical_liquid(record.get('liquid_type', 'unknown'))
             totals[liquid] = totals.get(liquid, 0.0) + float(record.get('volume_ml', 0))
         return [dict(liquid_type=key, volume_ml=round(volume, 3))
                 for key, volume in sorted(totals.items()) if volume > 0]
@@ -737,7 +981,7 @@ class HydrationCoordinator:
             except (TypeError,ValueError,IndexError):
                 continue
             bucket=buckets[hour]
-            liquid=str(record.get('liquid_type') or 'unknown')
+            liquid=self.canonical_liquid(str(record.get('liquid_type') or 'unknown'))
             bucket['total_ml']+=volume
             bucket['liquids'][liquid]=bucket['liquids'].get(liquid,0.0)+volume
         for bucket in buckets:
@@ -781,4 +1025,6 @@ class HydrationCoordinator:
                     liquid_definitions=self.get_liquid_definitions(),
                     liquid_colors=dict(self.liquid_colors),
                     hidden_builtin_liquids=list(self.hidden_builtin_liquids),
-                    volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons))
+                    volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons),
+                    cup_types=self.get_cup_types(),quick_buttons=self.get_quick_buttons(),
+                    legacy_mappings={key:dict(value) for key,value in self.legacy_mappings.items()})

@@ -1,4 +1,4 @@
-# ApexCharts examples for jwDaily Hydration Log v1.1.0-beta.23
+# ApexCharts examples for jwDaily Hydration Log v1.1.0-beta.24
 
 The Home Assistant integration creates two additional **sensors per profile**, both
 derived from the existing stored drink ledger (no new recording database):

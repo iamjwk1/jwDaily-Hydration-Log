@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.24
+
+- Additive per-profile Cup types, Quick buttons with automatic/custom labels, and explicit legacy mapping preview.
+- Chart grouping by canonical liquid ID; preserve original drink IDs and registered volumes.
+- Settings hub with target, profile, liquid, cup, quick and migration.
+- Cup labels 14px, responsive chart labels, tinted MDI icons.
+- Four-sheet Excel export with additional cup and quick metadata.
+
 ## v1.1.0-beta.23
 - 19px intake volume, 17px target and remaining volume; lower-aligned version footer.
 - Accessible liquid color picker/hex/preview/reset, profile-stable overrides with no destructive migration.
