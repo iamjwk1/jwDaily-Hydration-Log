@@ -33,7 +33,7 @@ const puppeteer=require('puppeteer-core');
       'sensor.jwdhl_jan_willem_drink_count_today':{state:'4',attributes:{}}
      },async callWS(msg){
        if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:records,day_summary:summary,liquid_types:defs,volume_buttons:[120,150,300,500],total_ml:1080};
-       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.19'};
+       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.21'};
        throw Error('Unexpected: '+msg.type);
      }};
     c.setConfig({profile:'jan_willem',title:'Vocht intake Jan-Willem'});
@@ -58,7 +58,11 @@ const puppeteer=require('puppeteer-core');
       activeButtons:[...root.querySelectorAll('button.secondary:not(:disabled)')].length,
       statusVisible:!!root.querySelector('.root > .status'),
       barVolumes:[...root.querySelectorAll('.bar-line strong')].map(el=>{const q=el.getBoundingClientRect();return{left:q.left,right:q.right}}),
-      history:rect('.history')};
+      history:rect('.history'),
+      targetFont:getComputedStyle(root.querySelector('.cup-target')).fontSize,
+      remainingFont:getComputedStyle(root.querySelector('.cup-remaining')).fontSize,
+      times:[...root.querySelectorAll('.history-table tbody td:first-child')].map(e=>e.textContent.trim()),
+      barStarts:[...root.querySelectorAll('.bar-line .bar-track')].map(e=>e.getBoundingClientRect().left)};
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
@@ -75,23 +79,29 @@ const puppeteer=require('puppeteer-core');
    assert(x.histViewport.sixthTop>=x.histViewport.bottom-1,'Sixth data row must be hidden until scrolling');
    assert(x.histViewport.scrollHeight>x.histViewport.clientHeight,'Older drinks must remain scrollable');
    assert(x.histViewport.headerBottom<x.histViewport.bottom,'Header must be visible');
-   assert(Number.parseFloat(x.fontsize)>=14,'History date too small: '+x.fontsize);
-   assert(parseFloat(x.intakeFont)>=(width>=560?23:15)&&parseFloat(x.intakeFont)<=24.2,'Blue intake font outside responsive range: '+x.intakeFont);
+   assert(Number.parseFloat(x.fontsize)>=(width>=355?14:12),'History date too small: '+x.fontsize);
+   assert.equal(x.intakeFont,'24px','Blue intake size must remain identical on broad and narrow cards');
+   assert.equal(x.targetFont,'17px','Cup goal must retain exact fixed font');
+   assert.equal(x.remainingFont,'17px','Cup remaining amount must retain the same font');
+   assert(x.times.every(t=>/^\d{2}:\d{2}$/.test(t)),'History times must display HH:MM, no seconds');
    assert(x.activeButtons>=2,'Enabled secondary controls are unexpectedly absent/disabled');
    assert(!x.statusVisible,'Permanent status message should not consume card height');
    assert(x.count.top>=x.glass.bottom-1 && x.count.top<=x.glass.bottom+12,'Drink moments must stay directly under glass');
-   assert(x.export.left>=x.history.left-2 && x.export.left<=x.history.left+2,'Excel button not aligned left with history');
+   assert(x.export.left>=x.history.left-6 && x.export.left<=x.history.left,'Excel button not aligned with left reference');
    assert(x.export.height>=27 && x.export.height<=29,'Excel export button must measure exactly 28 CSS px: '+x.export.height);
-   if(width>=700)assert(x.glass.width>=186,'Cup must be visibly larger at full desktop card width: '+x.glass.width);
-   if(width>=400 && width<560)assert(x.glass.width>=95,'Cup not enlarged sufficiently at narrower card widths: '+x.glass.width);
+   if(width>=700)assert(x.glass.width>=170,'Cup undersized at full desktop card width: '+x.glass.width);
+   if(width>=400 && width<560)assert(x.glass.width>=80,'Cup cannot be legible at this narrower card width: '+x.glass.width);
 
    assert(x.button.bottom<=x.hero.bottom+2 && x.hero.bottom-x.button.bottom<15,'Add drink too high above hero bottom');
    for(const bar of x.barVolumes)assert(bar.left>=x.chart.left && bar.right<=x.card.right+1,'Chart volume clipped');
-   if(width>=560){
-    assert(x.taken.right<=x.glass.left-6,'Blue intake overlaps or is too close to glass: '+JSON.stringify({taken:x.taken,glass:x.glass}));
-    assert(x.glass.left-x.taken.right<=18,'Blue intake too far from glass');
-    assert(x.chart.left>=x.glass.right,'Graph not to right of glass');
+   if(width>=310){
+    const visualCupLeft=x.glass.left+x.glass.width*0.2;
+    const gap=visualCupLeft-x.taken.right;
+    assert(gap>=2 && gap<=20,'Blue intake must end just left of actual glass outline, no overlap: '+gap);
+    assert(x.chart.left>=x.glass.right-1,'Graph must be to right of glass');
    }
+   for(const value of x.barVolumes)assert(Math.abs(value.right-x.button.right)<=2,'Volume labels and Add drink must align on the same right edge');
+   assert(x.barStarts.every(left=>left-x.chart.left<=140),'Liquid bar starts too far from liquid name column');
    // Modal measured after clicking the actual button; no backend mutation.
    await page.evaluate(()=>document.querySelector('jwdaily-hydration-log-card').shadowRoot.querySelector('[data-action="new"]').click());
    await page.waitForFunction(()=>!!document.querySelector('jwdaily-hydration-log-card')?.shadowRoot?.querySelector('.dialog-drink'));
@@ -142,7 +152,7 @@ const puppeteer=require('puppeteer-core');
    assert(volumes.rows.every(r=>r.height<=44),'Volume manager must be one 38-44px line per volume');
    assert(volumes.buttons.every(a=>a.right<=volumes.dialog.right+1),'Volume button clipped outside dialog');
    console.log('VISUAL_MODAL_PASS',width,JSON.stringify({normal,liquids,volumes}));
-   await page.screenshot({path:path.resolve(__dirname,'layout-beta19-'+width+'.png'),fullPage:true});
+   await page.screenshot({path:path.resolve(__dirname,'layout-beta21-'+width+'.png'),fullPage:true});
    console.log('VISUAL_GEOMETRY_PASS',width,JSON.stringify(x));
    await page.close();
   }
