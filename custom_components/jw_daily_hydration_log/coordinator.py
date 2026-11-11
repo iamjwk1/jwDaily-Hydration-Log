@@ -711,9 +711,15 @@ class HydrationCoordinator:
             day=(today-timedelta(days=offset)).isoformat()
             summary=self.day_summary(day)
             typed={part['liquid_type']:part['volume_ml'] for part in summary['liquid_breakdown']}
+            # 'No data' is not the same as a tracked day with zero logged drinks.
+            # Today is an active tracking day; historical days require an archive
+            # snapshot or actual drink records. This is read-only metadata.
+            has_data = (day == self._today() or day in self.daily_archive
+                        or any(r.get('kind') == 'drink' and r.get('timestamp', '')[:10] == day
+                               for r in self.records))
             rows.append(dict(date=day,total_logged_ml=round(sum(typed.values()),3),
                              consumed_ml=summary['consumed_ml'],target_ml=summary['target_ml'],
-                             drink_count=summary['drink_count'],liquids=typed))
+                             drink_count=summary['drink_count'],liquids=typed,has_data=has_data))
         return dict(days=rows,total_logged_ml=round(sum(r['total_logged_ml'] for r in rows),3),
                     coverage='typed_logged_drinks_only',
                     liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()})
