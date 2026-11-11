@@ -33,7 +33,7 @@ const puppeteer=require('puppeteer-core');
       'sensor.jwdhl_jan_willem_drink_count_today':{state:'4',attributes:{}}
      },async callWS(msg){
        if(msg.type==='jw_daily_hydration_log/history')return {date:msg.date,entries:records,day_summary:summary,liquid_types:defs,volume_buttons:[120,150,300,500],total_ml:1080};
-       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.21'};
+       if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.22'};
        throw Error('Unexpected: '+msg.type);
      }};
     c.setConfig({profile:'jan_willem',title:'Vocht intake Jan-Willem'});
@@ -152,7 +152,7 @@ const puppeteer=require('puppeteer-core');
    assert(volumes.rows.every(r=>r.height<=44),'Volume manager must be one 38-44px line per volume');
    assert(volumes.buttons.every(a=>a.right<=volumes.dialog.right+1),'Volume button clipped outside dialog');
    console.log('VISUAL_MODAL_PASS',width,JSON.stringify({normal,liquids,volumes}));
-   await page.screenshot({path:path.resolve(__dirname,'layout-beta21-'+width+'.png'),fullPage:true});
+   await page.screenshot({path:path.resolve(__dirname,'layout-beta22-'+width+'.png'),fullPage:true});
    console.log('VISUAL_GEOMETRY_PASS',width,JSON.stringify(x));
    await page.close();
   }
