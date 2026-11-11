@@ -53,7 +53,7 @@ const puppeteer=require('puppeteer-core');
     const col=i=>data[i].colors.find(x=>x.name.startsWith(name+':'))?.color;
     assert(col(0)&&col(0)===col(1),'Liquid color inconsistent: '+name);
    }
-   await page.click('jwdaily-hydration-hourly-card >>> rect[data-chart-bucket="11"]');
+   await page.$eval('jwdaily-hydration-hourly-card',el=>el.shadowRoot.querySelector('rect[data-chart-bucket="11"]').dispatchEvent(new MouseEvent('click',{bubbles:true,composed:true})));
    assert((await page.$eval('jwdaily-hydration-hourly-card',el=>el.shadowRoot.querySelector('.detail-panel')?.textContent||'')).includes('360 mL'),'Hourly drill-down');
    await page.$eval('jwdaily-hydration-hourly-card',el=>el.shadowRoot.querySelector('[data-chart-close]').click());
    await page.$eval('jwdaily-hydration-weekly-card',el=>el.shadowRoot.querySelector('rect.bucket-hit[data-chart-bucket="0"]').dispatchEvent(new MouseEvent('click',{bubbles:true,composed:true})));
