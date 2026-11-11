@@ -43,7 +43,7 @@ const puppeteer=require('puppeteer-core');
    assert(result.every(x=>x.width<=width+2&&x.overflow<=width+2),'Chart horizontally overflowed');
    assert(result.every(x=>x.footerGap<=16),'Footer too far above card bottom');
    assert(result.every(x=>x.height<500),'Chart cards must not have excess vertical whitespace');
-   assert(result[0].ticks.includes('1')&&result[0].ticks.includes('24'),'Hour axis not 1..24');
+   assert(result[0].ticks.includes('24')&&(width>=640?result[0].ticks.includes('1'):result[0].ticks.includes('2')),'Responsive hour labels must stay readable');
    assert(result[1].ticks.includes('3,000'),'7-day axis should end at 3,000 mL for max 2,550 mL');
    assert(result[1].ticks.includes('10 Nov'),'Seven-day date labels missing');
    assert(result[0].legend.includes('Coffee (720 mL)')&&result[0].legend.includes('Tea (720 mL)'),'Hourly per-liquid total legend missing');
