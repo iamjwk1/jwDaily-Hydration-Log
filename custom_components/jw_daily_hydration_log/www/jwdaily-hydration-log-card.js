@@ -934,6 +934,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const detailLabel=selected?(this._kind.days?selected.label:`Hour ${this._selectedBucket+1} (${String(this._selectedBucket).padStart(2,'0')}:00–${String(this._selectedBucket).padStart(2,'0')}:59)`):'';
   const selectedKeys=selected?Object.keys(selected.liquids).filter(k=>selected.liquids[k]>0).sort((a,b)=>selected.liquids[b]-selected.liquids[a]):[];
   const details=!selected?'':`<section class="detail-panel" role="status"><div class="detail-head"><strong>${jdhlEscape(detailLabel)} · ${selected.hasData?`${fmt(selected.total)} mL`:'No data recorded'}</strong><button type="button" data-chart-close aria-label="Close chart details">×</button></div>${selectedKeys.length?`<div class="detail-items">${selectedKeys.map(k=>`<span><i class="swatch" style="display:inline-block;vertical-align:middle;background:${colors.get(k)}"></i> ${jdhlEscape(names[k]||k)}: ${fmt(selected.liquids[k])} mL</span>`).join('')}</div>`:selected.hasData?'<p>No drinks recorded.</p>':'<p>No history is available for this date.</p>'}</section>`;
+
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
