@@ -1,0 +1,112 @@
+name: jwDaily Hydration Log beta.23 — validate and publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/jw_daily_hydration_log/**
+      - tests/qa_beta23.py
+      - tests/frontend_qa.js
+      - RELEASE_NOTES_v1.1.0-beta.23.md
+      - .github/workflows/publish-v1.1.0-beta.23.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jwdhl-beta23-publish
+  cancel-in-progress: false
+
+jobs:
+  source-and-excel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate integration source, persistence, XLSX and frontend
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+          python tests/qa_beta23.py
+          node tests/frontend_qa.js
+          node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
+      - name: Real Chromium responsive and color-control rendering
+        run: |
+          python -m pip install --disable-pip-version-check playwright
+          python -m playwright install --with-deps chromium
+          python tests/browser_beta23.py
+
+  hacs:
+    name: HACS integration validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: Hassfest integration validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  publish:
+    name: Publish immutable verified beta.23 prerelease
+    needs: [source-and-excel, hacs, hassfest]
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create and validate HACS installation archive
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          root=Path('.')
+          manifest=json.loads((root/'custom_components/jw_daily_hydration_log/manifest.json').read_text())
+          assert manifest['version']=='1.1.0-beta.23'
+          fname='20261111 jwDaily Hydration Log v1.1.0-beta.23.zip'
+          files=['CHANGELOG.md','LICENSE','LICENSE-UPSTREAM-MIT','README.md',
+                 'RELEASE_NOTES_v1.1.0-beta.23.md','hacs.json']
+          files.extend(p.as_posix() for p in Path('custom_components/jw_daily_hydration_log').rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix!='.pyc')
+          files.extend(p.as_posix() for p in Path('examples').rglob('*') if p.is_file() and 'beta.23' in p.name)
+          files=sorted(set(files))
+          assert len(files)==22,len(files)
+          with zipfile.ZipFile(fname,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as out:
+              for name in files:
+                  info=zipfile.ZipInfo(name,date_time=(2026,11,11,16,0,0))
+                  info.compress_type=zipfile.ZIP_DEFLATED
+                  info.external_attr=0o644<<16
+                  out.writestr(info,Path(name).read_bytes())
+          with zipfile.ZipFile(fname) as archive:
+              assert archive.testzip() is None
+              assert archive.namelist()==files
+              assert all(archive.read(name)==Path(name).read_bytes() for name in files)
+          digest=hashlib.sha256(Path(fname).read_bytes()).hexdigest()
+          Path(fname+'.sha256').write_text(f'{digest}  {fname}\n')
+          print('RELEASE_ZIP_QA_PASS',fname,Path(fname).stat().st_size,digest)
+          PY
+      - name: Create official GitHub prerelease only after all QA gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view 'v1.1.0-beta.23' >/dev/null 2>&1; then
+            echo 'Existing prerelease is preserved; no overwrite.'
+            gh release view 'v1.1.0-beta.23' --json url,tagName,isPrerelease
+            exit 0
+          fi
+          gh release create 'v1.1.0-beta.23' \
+            --target "$GITHUB_SHA" \
+            --title 'jwDaily Hydration Log v1.1.0-beta.23' \
+            --notes-file 'RELEASE_NOTES_v1.1.0-beta.23.md' \
+            --prerelease \
+            '20261111 jwDaily Hydration Log v1.1.0-beta.23.zip' \
+            '20261111 jwDaily Hydration Log v1.1.0-beta.23.zip.sha256'
+          gh release view 'v1.1.0-beta.23' --json url,tagName,isPrerelease

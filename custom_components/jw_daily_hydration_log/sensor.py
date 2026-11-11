@@ -10,7 +10,7 @@ from .const import DOMAIN, ENTITY_PREFIX, from_ml
 
 async def async_setup_entry(hass, entry, async_add_entities):
     c = hass.data[DOMAIN]['profiles'][entry.entry_id]
-    async_add_entities([DailyTarget(c), ConsumedToday(c), ManualConsumed(c), Remaining(c), Pace(c), Progress(c), DrinkCount(c)])
+    async_add_entities([DailyTarget(c), ConsumedToday(c), ManualConsumed(c), Remaining(c), Progress(c), DrinkCount(c), HourlyIntakeToday(c), DailyIntakeLast7Days(c)])
 
 class _Sensor(SensorEntity):
     _attr_should_poll = False
@@ -71,16 +71,6 @@ class Remaining(_Volume):
     @property
     def native_value(self):return self.volume(self.coordinator.remaining_ml)
 
-class Pace(_Volume):
-    _attr_icon='mdi:speedometer'
-    def __init__(self,c):super().__init__(c,'hourly_pace','Hourly pace')
-    @property
-    def native_unit_of_measurement(self):return f'{self.coordinator.unit}/h'
-    @property
-    def native_value(self):return self.volume(self.coordinator.hourly_pace_ml)
-    @property
-    def extra_state_attributes(self):return {'day_start':self.coordinator.day_start.isoformat(),'day_end':self.coordinator.day_end.isoformat()}
-
 class Progress(_Sensor):
     _attr_icon='mdi:chart-donut'
     _attr_native_unit_of_measurement=PERCENTAGE
@@ -95,3 +85,25 @@ class DrinkCount(_Sensor):
     def __init__(self,c):super().__init__(c,'drink_count_today','Drink moments today')
     @property
     def native_value(self):return len(self.coordinator.get_history())
+
+class HourlyIntakeToday(_Sensor):
+    """24 local-clock hourly buckets, using individually registered drinks only."""
+    _attr_icon='mdi:chart-bar'
+    _attr_native_unit_of_measurement='mL'
+    def __init__(self,c):super().__init__(c,'hourly_intake_today','Hourly intake today')
+    @property
+    def native_value(self):return self.coordinator.chart_hourly_today()['total_logged_ml']
+    @property
+    def extra_state_attributes(self):
+        return self.coordinator.chart_hourly_today()
+
+class DailyIntakeLast7Days(_Sensor):
+    """Seven-date type breakdown; no duplicate sensor per liquid."""
+    _attr_icon='mdi:chart-timeline-variant'
+    _attr_native_unit_of_measurement='mL'
+    def __init__(self,c):super().__init__(c,'daily_intake_last_7_days','Daily intake last 7 days')
+    @property
+    def native_value(self):return self.coordinator.chart_last_7_days()['total_logged_ml']
+    @property
+    def extra_state_attributes(self):
+        return self.coordinator.chart_last_7_days()

@@ -1,0 +1,78 @@
+name: Publish jwDaily Hydration Log v1.1.0-beta.4
+on:
+  push:
+    branches: ["release/v1.1.0-beta.4"]
+    paths:
+      - .github/workflows/publish-beta-v1.1.0-beta.4.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jwdhl-release-v1.1.0-beta.4
+  cancel-in-progress: false
+
+jobs:
+  publish-beta:
+    name: Validate source and publish HACS prerelease
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python compilation and backend regression tests
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+      - name: JavaScript card interaction regression tests
+        run: node tests/frontend_qa.js
+      - name: Validate release metadata and assets
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root=pathlib.Path('custom_components/jw_daily_hydration_log')
+          manifest=json.loads((root/'manifest.json').read_text())
+          constants=(root/'const.py').read_text()
+          card=(root/'www/jwdaily-hydration-log-card.js').read_text()
+          excel=(root/'excel.py').read_text()
+          assert manifest['domain']=='jw_daily_hydration_log'
+          assert manifest['version']=='1.1.0-beta.4'
+          assert "VERSION = '1.1.0-beta.4'" in constants
+          assert 'v1.1.0-beta.4' in card
+          assert 'M38 ${targetY} L122 ${targetY}' in card and 'targetY=39' in card
+          assert 'calendar-toggle' in card and 'jw_daily_hydration_log/capabilities' in card
+          assert 'actual>100?topY' in card and 'stroke-opacity=\".95\"' in card
+          assert 'Manage liquid types' in card and 'Manage volume buttons' in card
+          assert 'jw_daily_hydration_log/set_volume_buttons' in card and 'jw_daily_hydration_log/set_liquid_order' in card
+          backend=(root/'coordinator.py').read_text()
+          assert 'def async_update_liquid_type' in backend and 'def async_set_liquid_order' in backend
+          assert 'def async_set_volume_buttons' in backend
+          assert 'Today by liquid' in card and 'Wine' in card
+          assert 'Liquid Types' in excel and 'Wine mL' in excel and 'Volume Buttons' in excel
+          assert (root/'brand/icon.png').is_file()
+          assert json.loads(pathlib.Path('hacs.json').read_text())['name']=='jwDaily Hydration Log'
+          assert pathlib.Path('RELEASE_NOTES_v1.1.0-beta.4.md').is_file()
+          print('BETA.4 METADATA, PRESET MANAGEMENT AND OVERFLOW GLASS: PASS')
+          PY
+      - uses: home-assistant/actions/hassfest@master
+      - name: HACS repository validation
+        uses: hacs/action@main
+        with:
+          category: integration
+      - name: Create official beta.4 GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.1.0-beta.4 >/dev/null 2>&1; then
+            echo 'Pre-release exists; keeping its original tag and contents unchanged.'
+            gh release view v1.1.0-beta.4 --json tagName,isPrerelease,url
+            exit 0
+          fi
+          gh release create v1.1.0-beta.4 --target "$GITHUB_SHA" --title 'jwDaily Hydration Log v1.1.0-beta.4' --prerelease --latest=false --notes-file RELEASE_NOTES_v1.1.0-beta.4.md
+          gh release view v1.1.0-beta.4 --json tagName,isPrerelease,url

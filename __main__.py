@@ -1,7 +1,7 @@
 """ZIP-executable jwDaily Hydration Log installer (stdlib only).
 
-Usage: python3 '/config/20261108 jwDaily Hydration Log v1.0.2.zip' --preflight
-       python3 '/config/20261108 jwDaily Hydration Log v1.0.2.zip' --apply
+Usage: python3 '/config/20261108 jwDaily Hydration Log v1.1.0.zip' --preflight
+       python3 '/config/20261108 jwDaily Hydration Log v1.1.0.zip' --apply
 """
 from __future__ import annotations
 import argparse
@@ -19,7 +19,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 COMPONENT='custom_components/jw_daily_hydration_log'
 BLUEPRINTS='blueprints/automation/jw_daily_hydration_log'
 ROOTS=(COMPONENT,BLUEPRINTS)
-PACKAGE_NAME='jwDaily Hydration Log v1.0.2'
+PACKAGE_NAME='jwDaily Hydration Log v1.1.0'
 
 
 def stamp():return datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
@@ -37,7 +37,7 @@ def manifest_check(archive):
     for name, expected in listed.items():
         if name.startswith('/') or '..' in Path(name).parts or '\\' in name:
             raise RuntimeError('Unsafe path in ZIP: '+name)
-        if not (name=='__main__.py' or name.startswith(ROOTS) or name.startswith('tests/') or name in ('README.md','LICENSE','hacs.json')):
+        if not (name=='__main__.py' or name.startswith(ROOTS) or name.startswith('tests/') or name in ('README.md','CHANGELOG.md','LICENSE','LICENSE-UPSTREAM-MIT','hacs.json')):
             raise RuntimeError('Unapproved archive member: '+name)
         data=archive.read(name)
         if sha(data)!=expected['sha256'] or len(data)!=expected['size']:
@@ -70,14 +70,15 @@ def preflight(config,archive,version):
     if old_fork:print('WARNING: old fork history/config is NOT imported. Do not remove it before migration review.')
     print('Existing fork paths:',existing or 'none')
     print('Will NOT modify upstream PHM or any dashboard YAML.')
-    print('Next action only with explicit --apply:',f'python3 {sys.argv[0]!r} --apply')
+    next_flag = '--upgrade' if existing else '--apply'
+    print('Next action only after approval:', f'python3 {sys.argv[0]!r} {next_flag}')
     return existing
 
 
 def backup(config, backup_dir, prior):
     if not backup_dir.is_dir():
         raise RuntimeError(f'Backup directory is absent: {backup_dir} (set --backup-dir)')
-    filename=f'{stamp()} jwDaily Hydration Log Backup v1.0.2.zip'
+    filename=f'{stamp()} jwDaily Hydration Log Backup v1.1.0.zip'
     output=backup_dir/filename
     if output.exists():raise RuntimeError('Backup target exists; refusing overwrite: '+str(output))
     inventory=[]
@@ -127,7 +128,7 @@ def restore(config, backup_path, restore_storage=False):
 
 
 def install(config, backup_dir, archive, upgrade):
-    before=preflight(config,archive,'1.0.2')
+    before=preflight(config,archive,'1.1.0')
     if before and not upgrade:
         raise RuntimeError('Fork already present. No overwrite: review preflight then explicitly use --upgrade.')
     required=[x for x in archive.namelist() if x.startswith(ROOTS) and not x.endswith('/')]
@@ -168,8 +169,8 @@ def install(config, backup_dir, archive, upgrade):
                  f'HA CORE CHECK: {checker}\nBACKUP: {backup_path}\n'
                  f'BACKUP SHA256: {sha(backup_path.read_bytes())}\n'
                  f'UPSTREAM MODIFIED: NO\nRESTART AUTOMATICALLY PERFORMED: NO\n'
-                 f'Next: restart Home Assistant after confirming check PASS; add jwDaily Hydration Log profile.\n')
-            report=config/f'{stamp()} jwDaily Hydration Log Install Result v1.0.2.txt'
+                 f'Next: restart Home Assistant after confirming check PASS; keep existing profile if already configured.\n')
+            report=config/f'{stamp()} jwDaily Hydration Log Install Result v1.1.0.txt'
             report.write_text(msg,encoding='utf8')
             print(msg,'REPORT:',report)
         except Exception:
@@ -198,7 +199,7 @@ def main():
             restore(args.config_dir,args.backup,args.restore_storage)
             print('ROLLBACK COMPLETE:',args.backup)
         elif args.preflight:
-            preflight(args.config_dir,archive,'1.0.2')
+            preflight(args.config_dir,archive,'1.1.0')
         else:
             install(args.config_dir,args.backup_dir,archive,args.upgrade)
 

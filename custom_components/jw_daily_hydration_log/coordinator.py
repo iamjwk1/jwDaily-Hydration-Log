@@ -1,9 +1,12 @@
-"""Per-profile state, immutable drink ledger and source sample history."""
+"""Per-profile editable drink records and durable source sample history."""
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 import math
+import re
+import xml.etree.ElementTree as ET
 from uuid import uuid4
 from typing import Any
 
@@ -15,15 +18,105 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN, SIGNAL, DEFAULT_START, DEFAULT_END, SOURCE_MODES, to_ml, target_ml, safe_amount
+from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount, default_liquid_color
 
 
-def _parse_clock(text: str, fallback: str) -> time:
+def _local_timestamp(hass: HomeAssistant, day: str | None, clock: str | None) -> str:
+    """Validate dd-mm-yyyy and 24-hour HH:MM in the HA local timezone."""
+    if day is None and clock is None:
+        return dt_util.now().isoformat(timespec='microseconds')
+    if not day or not clock:
+        raise ValueError('Date and time must both be supplied')
     try:
-        return time.fromisoformat((text or fallback))
-    except (TypeError, ValueError):
-        return time.fromisoformat(fallback)
+        local_day = datetime.strptime(day, '%d-%m-%Y')
+        clock_format = '%H:%M:%S' if len(clock) == 8 else '%H:%M'
+        local_clock = datetime.strptime(clock, clock_format)
+        if local_day.strftime('%d-%m-%Y') != day or local_clock.strftime(clock_format) != clock:
+            raise ValueError('Incorrect date or 24-hour time format')
+        tz = ZoneInfo(hass.config.time_zone)
+        value = datetime(local_day.year, local_day.month, local_day.day,
+                         local_clock.hour, local_clock.minute, local_clock.second, tzinfo=tz)
+    except (ValueError, KeyError, AttributeError) as exc:
+        raise ValueError('Use DD-MM-YYYY and HH:MM or HH:MM:SS (24-hour local time)') from exc
+    # Reject spring-forward wall times that never happened in this timezone.
+    if value.astimezone(timezone.utc).astimezone(tz).replace(tzinfo=None) != value.replace(tzinfo=None):
+        raise ValueError('This time does not exist because of daylight saving time')
+    # The calendar DAY cannot be in the future, but any valid time TODAY is
+    # allowed, including a time later than the current HA-local clock.
+    if value.date() > dt_util.now().astimezone(tz).date():
+        raise ValueError('Drink date cannot be in the future')
+    return value.isoformat(timespec='seconds')
 
+
+
+
+# Personal SVG uploads are stored as inert images (never inline DOM), restricted to
+# a small set of vector-only elements. This rejects scripts, links and remote assets.
+_SVG_ELEMENTS = {'svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line',
+                 'polyline', 'polygon', 'defs', 'linearGradient', 'stop'}
+_SVG_ATTRS = {'xmlns', 'viewBox', 'width', 'height', 'd', 'points', 'cx', 'cy',
+              'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'fill', 'stroke',
+              'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
+              'fill-rule', 'clip-rule', 'opacity', 'fill-opacity', 'stroke-opacity',
+              'transform', 'id', 'offset', 'stop-color', 'stop-opacity',
+              'gradientUnits', 'gradientTransform'}
+_BUILTIN_LIQUIDS = (
+    ('water', 'Water', 'mdi:water'), ('coffee', 'Coffee', 'mdi:coffee'),
+    ('tea', 'Tea', 'mdi:tea'), ('milk', 'Milk', 'mdi:cow'),
+    ('soup', 'Soup', 'mdi:bowl-mix'), ('wine', 'Wine', 'mdi:glass-wine'),
+    ('other', 'Other', 'mdi:glass-water'),
+)
+
+
+def _safe_svg(svg: str) -> str:
+    if not isinstance(svg, str) or not (0 < len(svg.encode('utf-8')) <= 16000):
+        raise ValueError('SVG must be a nonempty file up to 16 KB')
+    if re.search(r'<!DOCTYPE|<!ENTITY|<\?xml-stylesheet', svg, re.I):
+        raise ValueError('SVG must not contain declarations or entities')
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError as exc:
+        raise ValueError('Invalid SVG file') from exc
+    if root.tag != '{http://www.w3.org/2000/svg}svg':
+        raise ValueError('SVG root needs the standard SVG namespace')
+    if len(list(root.iter())) > 400:
+        raise ValueError('Too many SVG elements')
+    for element in root.iter():
+        tag = element.tag.rsplit('}', 1)[-1]
+        if tag not in _SVG_ELEMENTS:
+            raise ValueError('SVG contains unsupported elements')
+        for raw_key, value in element.attrib.items():
+            key = raw_key.rsplit('}', 1)[-1]
+            if key not in _SVG_ATTRS or raw_key.startswith('{http://www.w3.org/1999/xlink}'):
+                raise ValueError('SVG contains unsafe attributes')
+            if re.search(r'url\s*\(|javascript:|data:|https?:|@import|expression\s*\(', value, re.I):
+                raise ValueError('SVG cannot load external or embedded resources')
+        if element.text and element.text.strip():
+            raise ValueError('SVG cannot contain text nodes')
+    return svg
+
+
+def _hex_color(value: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+        raise ValueError('Color must be a 6-digit hex code such as #3A87B2')
+    return value.upper()
+
+
+def _color_override(value: str | None) -> str | None:
+    """Empty text resets; absent WS field is handled by the caller."""
+    return _hex_color(value) if value else None
+
+
+def _default_volume(value):
+    if value is None or value == '':
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Default volume must be numeric') from exc
+    if not math.isfinite(v) or v <= 0 or v > 100000:
+        raise ValueError('Default volume must be between 0 and 100000 mL')
+    return round(v, 2)
 
 class HydrationCoordinator:
     """One persisted profile; every user-visible add is a distinct ledger event."""
@@ -33,7 +126,7 @@ class HydrationCoordinator:
         self.entry_id = entry.entry_id
         self._store = Store(hass, 1, f'{DOMAIN}.{entry.entry_id}')
         self._lock = asyncio.Lock()
-        self._unsub_reset = self._unsub_source = self._unsub_pace = None
+        self._unsub_reset = self._unsub_source = None
         cfg = {**entry.data, **entry.options}
         self.name = cfg.get('name', 'Hydration')
         self.slug = slugify(self.name)
@@ -41,8 +134,6 @@ class HydrationCoordinator:
         self.gender = cfg.get('gender', 'male')
         self.pregnancy = bool(cfg.get('pregnancy', False))
         self.lactation = bool(cfg.get('lactation', False))
-        self.day_start = _parse_clock(cfg.get('day_start'), DEFAULT_START)
-        self.day_end = _parse_clock(cfg.get('day_end'), DEFAULT_END)
         self.source_sensor = cfg.get('source_sensor') or None
         self.source_mode = cfg.get('source_mode', 'absolute')
         self.unit = cfg.get('unit', 'mL')
@@ -55,6 +146,16 @@ class HydrationCoordinator:
         self.records: list[dict[str, Any]] = []
         self.source_readings: list[dict[str, Any]] = []
         self.daily_archive: dict[str, dict[str, Any]] = {}
+        self.custom_liquid_types: list[dict[str, Any]] = []
+        # Profile-scoped settings; stable liquid IDs preserve all old drink records.
+        self.liquid_overrides: dict[str, dict[str, Any]] = {}
+        # Non-destructive additive storage, scoped to this HA config entry.
+        # Overrides are keyed by stable IDs, independent of name and order.
+        self.liquid_colors: dict[str, str] = {}
+        self.hidden_builtin_liquids: list[str] = []
+        self.liquid_order: list[str] = []
+        # None means follow the existing dashboard's quick_add YAML until customized.
+        self.volume_buttons: list[float] | None = None
 
     def _now(self) -> datetime:
         return dt_util.now()
@@ -80,17 +181,6 @@ class HydrationCoordinator:
     @property
     def progress_percent(self) -> float:
         return min(100.0, round(100*self.consumed_ml/max(1,self.target_ml),1))
-
-    @property
-    def hourly_pace_ml(self) -> float:
-        now = self._now()
-        start = now.replace(hour=self.day_start.hour,minute=self.day_start.minute,second=self.day_start.second,microsecond=0)
-        end = now.replace(hour=self.day_end.hour,minute=self.day_end.minute,second=self.day_end.second,microsecond=0)
-        if end <= start or now >= end:
-            return round(self.remaining_ml,1)
-        if now < start:
-            return round(self.remaining_ml / max(0.25, (end-start).total_seconds()/3600),1)
-        return round(self.remaining_ml / max(0.25, (end-now).total_seconds()/3600),1)
 
     @property
     def source_contribution_ml(self) -> float:
@@ -142,19 +232,33 @@ class HydrationCoordinator:
             self._last_source_value = saved.get('last_source_value')
             self._source_baseline_ml = float(saved.get('source_baseline',0.0))
             self.records = list(saved.get('records',[]))
+            for item in self.records:
+                if item.get('kind') == 'drink':
+                    item.setdefault('liquid_type', 'unknown')  # Historical v1.0.2, never assume water.
             self.source_readings = list(saved.get('source_readings',[]))
             self.daily_archive = dict(saved.get('daily_archive',{}))
+            self.custom_liquid_types = list(saved.get('custom_liquid_types', []))
+            self.liquid_overrides = dict(saved.get('liquid_overrides') or {})
+            # Preserve only valid values, never rewrite historic entries.
+            self.liquid_colors = {str(k): _hex_color(v) for k, v in
+                                  (saved.get('liquid_colors') or {}).items()
+                                  if isinstance(k, str) and isinstance(v, str)
+                                  and re.fullmatch(r'#[0-9a-fA-F]{6}', v)}
+            self.hidden_builtin_liquids = [ident for ident in (saved.get('hidden_builtin_liquids') or [])
+                                           if ident in LIQUID_TYPES]
+            self.liquid_order = list(saved.get('liquid_order') or [])
+            if saved.get('volume_buttons') is not None:
+                self.volume_buttons = list(saved['volume_buttons'])
         if self.last_reset_date != self._today():
             self._rolled()
             await self._save()
         self._unsub_reset = async_track_time_change(self.hass,self._scheduled_reset,hour=0,minute=0,second=0)
-        self._unsub_pace = async_track_time_change(self.hass,self._tick,second=0)
         if self.source_sensor:
             self._unsub_source = self.hass.bus.async_listen(EVENT_STATE_CHANGED,self._handle_source_change)
         self._dispatch()
 
     async def async_shutdown(self) -> None:
-        for func in (self._unsub_reset,self._unsub_pace,self._unsub_source):
+        for func in (self._unsub_reset,self._unsub_source):
             if func:
                 func()
         async with self._lock:
@@ -164,10 +268,6 @@ class HydrationCoordinator:
     def _scheduled_reset(self, _now: datetime) -> None:
         self.hass.async_create_task(self.async_maybe_reset())
 
-    @callback
-    def _tick(self, _now: datetime) -> None:
-        self._dispatch()
-
     async def async_maybe_reset(self) -> None:
         async with self._lock:
             if self.last_reset_date == self._today():
@@ -176,21 +276,109 @@ class HydrationCoordinator:
             await self._save()
             self._dispatch()
 
-    async def async_add_drink(self, amount: float, unit: str = 'mL', origin: str = 'service') -> dict:
+    async def async_add_drink(self, amount: float, unit: str = 'mL', origin: str = 'service',
+                              liquid_type: str | None = None, day: str | None = None,
+                              clock: str | None = None) -> dict:
         amount_ml = safe_amount(amount, unit)
+        if not self._valid_liquid_type(liquid_type):
+            raise ValueError('Choose a valid liquid type explicitly')
+        timestamp = _local_timestamp(self.hass, day, clock)
         async with self._lock:
             self._rolled()
+            if not self._valid_liquid_type(liquid_type):
+                raise ValueError('Liquid type was removed before saving the drink')
             before = self.consumed_ml
-            self.manual_consumed_ml += amount_ml
-            if self.source_mode == 'sum':
-                self.consumed_ml = self.manual_consumed_ml + self.source_contribution_ml
-            else:
-                self.consumed_ml += amount_ml
+            is_today = timestamp[:10] == self.last_reset_date
+            if is_today:
+                self.manual_consumed_ml += amount_ml
+                if self.source_mode == 'sum':
+                    self.consumed_ml = self.manual_consumed_ml + self.source_contribution_ml
+                else:
+                    self.consumed_ml += amount_ml
             record = self._entry('drink',origin,before,amount_ml,float(amount),unit)
+            record['timestamp'] = timestamp
+            record['liquid_type'] = liquid_type
             self.records.append(record)
+            if not is_today:
+                self._adjust_archive(timestamp[:10], amount_ml)
             await self._save()
             self._dispatch()
             return record
+
+    def _adjust_archive(self, day: str, delta_ml: float) -> None:
+        """Correct historical snapshots in place; no separate edit/delete ledger."""
+        snapshot = self.daily_archive.get(day)
+        if snapshot is None:
+            # A backdated day that was not yet in storage. It has no external sensor history.
+            snapshot = dict(manual_ml=0.0, source_ml=0.0, consumed_ml=0.0,
+                            target_ml=self.target_ml, drink_count=0, closed_at=None)
+            self.daily_archive[day] = snapshot
+        snapshot['manual_ml'] = round(max(0.0, float(snapshot.get('manual_ml', 0)) + delta_ml), 4)
+        snapshot['consumed_ml'] = round(max(0.0, float(snapshot.get('consumed_ml', 0)) + delta_ml), 4)
+        snapshot['drink_count'] = sum(1 for r in self.records if r.get('kind') == 'drink'
+                                      and r.get('timestamp', '')[:10] == day)
+
+    def _adjust_current(self, delta_ml: float) -> None:
+        self.manual_consumed_ml = round(max(0.0, self.manual_consumed_ml + delta_ml), 4)
+        if self.source_mode == 'sum':
+            self.consumed_ml = self.manual_consumed_ml + self.source_contribution_ml
+        else:
+            self.consumed_ml = max(0.0, self.consumed_ml + delta_ml)
+
+    async def async_edit_drink(self, record_id: str, amount: float, liquid_type: str,
+                               day: str, clock: str) -> dict:
+        """Replace a drink in place, keeping its stable ID but no old values."""
+        if not self._valid_liquid_type(liquid_type):
+            raise ValueError('Choose a valid liquid type explicitly')
+        amount_ml = safe_amount(amount, 'mL')
+        timestamp = _local_timestamp(self.hass, day, clock)
+        async with self._lock:
+            self._rolled()
+            if not self._valid_liquid_type(liquid_type):
+                raise ValueError('Liquid type was removed before saving the edit')
+            record = next((r for r in self.records if r.get('id') == record_id
+                           and r.get('kind') == 'drink'), None)
+            if record is None:
+                raise ValueError('Drink moment not found')
+            previous_day = record['timestamp'][:10]
+            previous_ml = float(record['volume_ml'])
+            next_day = timestamp[:10]
+            # Replace first so archive counts reflect the new timestamp/date.
+            record.update(timestamp=timestamp, volume_ml=round(amount_ml, 4),
+                          liquid_type=liquid_type, input_volume=float(amount), input_unit='mL')
+            if previous_day == self.last_reset_date:
+                self._adjust_current(-previous_ml)
+            else:
+                self._adjust_archive(previous_day, -previous_ml)
+            if next_day == self.last_reset_date:
+                self._adjust_current(amount_ml)
+            else:
+                self._adjust_archive(next_day, amount_ml)
+            # Remove stale event-relative snapshots; they are no longer historic truth.
+            record.pop('before_ml', None)
+            record.pop('after_ml', None)
+            record.pop('manual_after_ml', None)
+            await self._save()
+            self._dispatch()
+            return dict(record)
+
+    async def async_delete_drink(self, record_id: str) -> None:
+        """Permanently delete a drink and correct its day's totals."""
+        async with self._lock:
+            self._rolled()
+            record = next((r for r in self.records if r.get('id') == record_id
+                           and r.get('kind') == 'drink'), None)
+            if record is None:
+                raise ValueError('Drink moment not found')
+            old_day = record['timestamp'][:10]
+            delta = -float(record['volume_ml'])
+            self.records.remove(record)
+            if old_day == self.last_reset_date:
+                self._adjust_current(delta)
+            else:
+                self._adjust_archive(old_day, delta)
+            await self._save()
+            self._dispatch()
 
     async def async_set_consumed(self, amount: float, unit: str = 'mL', origin: str = 'service') -> dict:
         requested = float(amount)
@@ -285,23 +473,312 @@ class HydrationCoordinator:
         await self._store.async_save(dict(consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
             last_reset_date=self.last_reset_date,target_override_ml=self.target_override_ml,
             last_source_value=self._last_source_value,source_baseline=self._source_baseline_ml,
-            records=self.records,source_readings=self.source_readings,daily_archive=self.daily_archive))
+            records=self.records,source_readings=self.source_readings,daily_archive=self.daily_archive,
+            custom_liquid_types=self.custom_liquid_types,
+            liquid_overrides=self.liquid_overrides,
+            liquid_colors=self.liquid_colors,
+            liquid_order=self.liquid_order,
+            hidden_builtin_liquids=self.hidden_builtin_liquids,
+            volume_buttons=self.volume_buttons))
 
     @callback
     def _dispatch(self) -> None:
         async_dispatcher_send(self.hass,self.signal)
 
+    def liquid_color(self, liquid_id: str, name: str = '') -> str:
+        return self.liquid_colors.get(liquid_id, default_liquid_color(liquid_id, name))
+
+    def liquid_color_map(self) -> dict[str, str]:
+        """Current catalog plus remembered historic color overrides."""
+        defs = {t['id']: self.liquid_color(t['id'], t['name'])
+                for t in self.get_liquid_definitions()}
+        for ident, color in self.liquid_colors.items():
+            defs.setdefault(ident, color)
+        return defs
+
+    def get_liquid_definitions(self) -> list[dict]:
+        """Ordered definitions, merging built-in display overrides with stable IDs."""
+        base = [dict(id=key, name=name, icon_mdi=icon, icon_svg='',
+                     default_volume_ml=None, custom=False, hidden=key in self.hidden_builtin_liquids)
+                for key, name, icon in _BUILTIN_LIQUIDS]
+        for item in base:
+            item.update(self.liquid_overrides.get(item['id'], {}))
+        items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
+        for item in items:
+            ident = item['id']
+            item['color_override'] = self.liquid_colors.get(ident)
+            item['color'] = self.liquid_color(ident, item['name'])
+        priority = {ident: index for index, ident in enumerate(self.liquid_order)}
+        fallback = {item['id']: index for index, item in enumerate(items)}
+        return sorted(items, key=lambda item: priority.get(item['id'], len(priority) + fallback[item['id']]))
+
+    def _valid_liquid_type(self, liquid_type: str | None) -> bool:
+        return isinstance(liquid_type, str) and (
+            liquid_type in LIQUID_TYPES or
+            any(liquid_type == item['id'] for item in self.custom_liquid_types))
+
+    async def async_add_liquid_type(self, name: str, icon_mdi: str = '',
+                                    icon_svg: str = '', default_volume_ml=None, color: str = '') -> dict:
+        if not isinstance(name, str):
+            raise ValueError('Liquid name is required')
+        name = name.strip()
+        if not 1 <= len(name) <= 48 or any(ord(c) < 32 for c in name):
+            raise ValueError('Liquid name must be 1-48 characters')
+        if icon_mdi and icon_svg:
+            raise ValueError('Choose an MDI icon or an SVG, not both')
+        if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}', icon_mdi):
+            raise ValueError('Invalid MDI icon (example: mdi:coffee)')
+        if icon_svg:
+            icon_svg = _safe_svg(icon_svg)
+        vol = _default_volume(default_volume_ml)
+        selected_color = _color_override(color)
+        async with self._lock:
+            if len(self.custom_liquid_types) >= 30:
+                raise ValueError('Maximum of 30 custom liquids reached')
+            if any(x['name'].casefold() == name.casefold() for x in self.get_liquid_definitions()):
+                raise ValueError('Liquid name already exists')
+            item = dict(id='custom_' + uuid4().hex[:12], name=name,
+                        icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
+                        icon_svg=icon_svg, default_volume_ml=vol, custom=True)
+            self.custom_liquid_types.append(item)
+            if selected_color:
+                self.liquid_colors[item['id']] = selected_color
+            if self.liquid_order:
+                self.liquid_order.append(item['id'])
+            await self._save()
+            self._dispatch()
+            return dict(item)
+
+    async def async_delete_liquid_type(self, liquid_type: str) -> None:
+        async with self._lock:
+            item = next((x for x in self.custom_liquid_types if x['id'] == liquid_type), None)
+            if item is None:
+                raise ValueError('Custom liquid not found')
+            if any(x.get('kind') == 'drink' and x.get('liquid_type') == liquid_type for x in self.records):
+                raise ValueError('This liquid is used in drink history and cannot be deleted')
+            self.custom_liquid_types.remove(item)
+            self.liquid_order = [key for key in self.liquid_order if key != liquid_type]
+            await self._save()
+            self._dispatch()
+
+    async def async_update_liquid_type(self, liquid_type: str, name: str,
+                                      icon_mdi: str = '', icon_svg: str = '',
+                                      default_volume_ml=None, color: str | None = None) -> dict:
+        """Update any liquid's display metadata. Never rewrite its historical ID."""
+        if not isinstance(name, str):
+            raise ValueError('Liquid name is required')
+        name = name.strip()
+        if not 1 <= len(name) <= 48 or any(ord(c) < 32 for c in name):
+            raise ValueError('Liquid name must be 1-48 characters')
+        if icon_mdi and icon_svg:
+            raise ValueError('Choose an MDI icon or an SVG, not both')
+        if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}', icon_mdi):
+            raise ValueError('Invalid MDI icon (example: mdi:coffee)')
+        if icon_svg:
+            icon_svg = _safe_svg(icon_svg)
+        volume = _default_volume(default_volume_ml)
+        selected_color = _color_override(color) if color is not None else None
+        async with self._lock:
+            definitions = self.get_liquid_definitions()
+            existing = next((item for item in definitions if item['id'] == liquid_type), None)
+            if existing is None:
+                raise ValueError('Liquid type not found')
+            if any(item['id'] != liquid_type and item['name'].casefold() == name.casefold()
+                   for item in definitions):
+                raise ValueError('Liquid name already exists')
+            props = dict(name=name,
+                         icon_mdi=icon_mdi or ('mdi:glass-water' if not icon_svg else ''),
+                         icon_svg=icon_svg, default_volume_ml=volume)
+            if existing['custom']:
+                next(item for item in self.custom_liquid_types if item['id'] == liquid_type).update(props)
+            else:
+                self.liquid_overrides[liquid_type] = props
+            if color is not None:
+                if selected_color is None:
+                    self.liquid_colors.pop(liquid_type, None)
+                else:
+                    self.liquid_colors[liquid_type] = selected_color
+            await self._save()
+            self._dispatch()
+            return next(item for item in self.get_liquid_definitions() if item['id'] == liquid_type)
+
+    async def async_set_builtin_liquid_visibility(self, liquid_type: str, visible: bool) -> dict:
+        """Remove or restore a built-in button without deleting historical records.
+
+        Built-in IDs are part of historical drink data and service contracts. Hiding
+        removes the type from the picker only, while preserving the definition for
+        past records, the today chart, Excel and explicit recovery.
+        """
+        if liquid_type not in LIQUID_TYPES or type(visible) is not bool:
+            raise ValueError('Expected a built-in liquid and a boolean visibility')
+        async with self._lock:
+            hidden = set(self.hidden_builtin_liquids)
+            if visible:
+                hidden.discard(liquid_type)
+            else:
+                hidden.add(liquid_type)
+            self.hidden_builtin_liquids = [key for key, _, _ in _BUILTIN_LIQUIDS if key in hidden]
+            await self._save()
+            self._dispatch()
+            return next(item for item in self.get_liquid_definitions() if item['id'] == liquid_type)
+
+    async def async_set_liquid_order(self, ordered_ids: list[str]) -> list[str]:
+        """Replace the entire catalog order atomically, rejecting stale lists."""
+        async with self._lock:
+            known = [item['id'] for item in self.get_liquid_definitions()]
+            if (not isinstance(ordered_ids, list)
+                    or any(not isinstance(ident, str) for ident in ordered_ids)
+                    or len(ordered_ids) != len(known)
+                    or len(set(ordered_ids)) != len(known)
+                    or set(ordered_ids) != set(known)):
+                raise ValueError('Liquid order must contain each existing type exactly once')
+            self.liquid_order = list(ordered_ids)
+            await self._save()
+            self._dispatch()
+            return list(self.liquid_order)
+
+    async def async_set_volume_buttons(self, volumes: list[float]) -> list[float]:
+        """Store ordered quick-add volumes, including an intentionally empty list."""
+        if not isinstance(volumes, list) or len(volumes) > 24:
+            raise ValueError('Choose 0 to 24 volume buttons')
+        cleaned = [_default_volume(value) for value in volumes]
+        if any(value is None for value in cleaned) or len(set(cleaned)) != len(cleaned):
+            raise ValueError('Volumes must be positive, unique and between 0 and 100,000 mL')
+        async with self._lock:
+            self.volume_buttons = cleaned
+            await self._save()
+            self._dispatch()
+            return list(self.volume_buttons)
+
     def get_history(self, date: str | None = None) -> list[dict]:
         day = date or self._today()
-        return [dict(id=r['id'],timestamp=r['timestamp'],volume_ml=r['volume_ml'],origin=r['origin'])
-                for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
+        values = [dict(id=r['id'], timestamp=r['timestamp'], volume_ml=r['volume_ml'],
+                       liquid_type=r.get('liquid_type', 'unknown'), origin=r.get('origin', ''))
+                  for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
+        return sorted(values, key=lambda r: (r['timestamp'],r['id']))
+
+    def liquid_breakdown(self, day: str) -> list[dict]:
+        """Recorded drinks grouped for ONE selected date, including hidden types.
+
+        Source-sensor measurements cannot be assigned a liquid type and are not
+        silently included in the typed breakdown.
+        """
+        totals: dict[str, float] = {}
+        for record in self.records:
+            if record.get('kind') != 'drink' or record.get('timestamp', '')[:10] != day:
+                continue
+            liquid = record.get('liquid_type', 'unknown')
+            totals[liquid] = totals.get(liquid, 0.0) + float(record.get('volume_ml', 0))
+        return [dict(liquid_type=key, volume_ml=round(volume, 3))
+                for key, volume in sorted(totals.items()) if volume > 0]
+
+    def today_breakdown(self) -> list[dict]:
+        """Backward-compatible current-day breakdown."""
+        return self.liquid_breakdown(self._today())
+
+    def day_summary(self, day: str) -> dict:
+        """Consistent historic or live totals for the selected HA-local date.
+
+        Closed days use their stored daily_archive snapshots, including past
+        sensor contribution and the target in force on that day. Dates without
+        a snapshot cannot reconstruct historic sensor readings: use their
+        manually logged drinks without inventing missing external volumes.
+        """
+        try:
+            parsed = datetime.strptime(day, '%Y-%m-%d').date()
+            if parsed.isoformat() != day:
+                raise ValueError()
+        except (TypeError, ValueError) as exc:
+            raise ValueError('History date must be YYYY-MM-DD') from exc
+        if day > self._today():
+            raise ValueError('History date cannot be in the future')
+        entries = self.get_history(day)
+        if day == self._today():
+            consumed = self.consumed_ml
+            target = self.target_ml
+            source = self.source_contribution_ml
+        else:
+            archived = self.daily_archive.get(day)
+            if archived is not None:
+                consumed = float(archived.get('consumed_ml', 0.0))
+                target = float(archived.get('target_ml') or self.target_ml)
+                source = float(archived.get('source_ml', 0.0))
+            else:
+                consumed = sum(float(item['volume_ml']) for item in entries)
+                target = self.target_ml
+                source = 0.0
+        return dict(date=day, consumed_ml=round(max(0.0, consumed), 3),
+                    target_ml=round(max(1.0, target), 3),
+                    source_ml=round(max(0.0, source), 3),
+                    drink_count=len(entries),
+                    liquid_breakdown=self.liquid_breakdown(day))
+
+    def chart_hourly_today(self) -> dict:
+        """24 local-clock hour buckets, typed drink records only.
+
+        Two physical hours during the autumn DST transition share the same
+        labelled 02:00 local bucket. Source sensors cannot be typed per hour
+        and are explicitly excluded to avoid misattribution.
+        """
+        day=self._today()
+        tz=ZoneInfo(getattr(self.hass.config, 'time_zone', 'Europe/Amsterdam'))
+        buckets=[]
+        for hour in range(24):
+            start=datetime.combine(date.fromisoformat(day),time(hour=hour),tzinfo=tz)
+            buckets.append(dict(hour=f'{hour:02d}:00',start=start.isoformat(timespec='seconds'),
+                                total_ml=0.0,liquids={}))
+        for record in self.records:
+            if record.get('kind')!='drink' or record.get('timestamp','')[:10]!=day:
+                continue
+            try:
+                hour=int(record['timestamp'][11:13])
+                volume=float(record.get('volume_ml',0))
+                if not 0<=hour<=23 or not math.isfinite(volume) or volume<=0: continue
+            except (TypeError,ValueError,IndexError):
+                continue
+            bucket=buckets[hour]
+            liquid=str(record.get('liquid_type') or 'unknown')
+            bucket['total_ml']+=volume
+            bucket['liquids'][liquid]=bucket['liquids'].get(liquid,0.0)+volume
+        for bucket in buckets:
+            bucket['total_ml']=round(bucket['total_ml'],3)
+            bucket['liquids']={k:round(v,3) for k,v in bucket['liquids'].items()}
+        return dict(date=day,total_logged_ml=round(sum(b['total_ml'] for b in buckets),3),
+                    buckets=buckets,coverage='typed_logged_drinks_only',
+                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()},
+                    liquid_colors=self.liquid_color_map())
+
+    def chart_last_7_days(self) -> dict:
+        """Exactly seven HA-local calendar days, including today, by stable type ID."""
+        today=date.fromisoformat(self._today())
+        rows=[]
+        for offset in range(6,-1,-1):
+            day=(today-timedelta(days=offset)).isoformat()
+            summary=self.day_summary(day)
+            typed={part['liquid_type']:part['volume_ml'] for part in summary['liquid_breakdown']}
+            # 'No data' is not the same as a tracked day with zero logged drinks.
+            # Today is an active tracking day; historical days require an archive
+            # snapshot or actual drink records. This is read-only metadata.
+            has_data = (day == self._today() or day in self.daily_archive
+                        or any(r.get('kind') == 'drink' and r.get('timestamp', '')[:10] == day
+                               for r in self.records))
+            rows.append(dict(date=day,total_logged_ml=round(sum(typed.values()),3),
+                             consumed_ml=summary['consumed_ml'],target_ml=summary['target_ml'],
+                             drink_count=summary['drink_count'],liquids=typed,has_data=has_data))
+        return dict(days=rows,total_logged_ml=round(sum(r['total_logged_ml'] for r in rows),3),
+                    coverage='typed_logged_drinks_only',
+                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()},
+                    liquid_colors=self.liquid_color_map())
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
-        cfg['day_start']=self.day_start.isoformat()
-        cfg['day_end']=self.day_end.isoformat()
         return dict(entry_id=self.entry_id,slug=self.slug,config=cfg,date=self.last_reset_date,
                     consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
                     target_ml=self.target_ml,source_contribution_ml=self.source_contribution_ml,
                     records=[dict(r) for r in self.records],source_readings=[dict(r) for r in self.source_readings],
-                    daily_archive={key:dict(val) for key,val in self.daily_archive.items()})
+                    daily_archive={key:dict(val) for key,val in self.daily_archive.items()},
+                    custom_liquid_types=[dict(item) for item in self.custom_liquid_types],
+                    liquid_definitions=self.get_liquid_definitions(),
+                    liquid_colors=dict(self.liquid_colors),
+                    hidden_builtin_liquids=list(self.hidden_builtin_liquids),
+                    volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons))

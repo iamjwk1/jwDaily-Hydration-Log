@@ -6,7 +6,7 @@ from homeassistant import config_entries
 from homeassistant.helpers import selector
 from homeassistant.util import slugify
 from homeassistant.core import callback
-from .const import DOMAIN, DEFAULT_START,DEFAULT_END,SOURCE_MODES,UNITS
+from .const import DOMAIN, SOURCE_MODES,UNITS
 
 
 def _schema(existing: dict | None = None, with_name: bool = True):
@@ -18,8 +18,6 @@ def _schema(existing: dict | None = None, with_name: bool = True):
     fields[vol.Required('gender',default=d.get('gender','male'))]=selector.SelectSelector(selector.SelectSelectorConfig(options=['male','female'],mode='dropdown'))
     fields[vol.Optional('pregnancy',default=d.get('pregnancy',False))]=bool
     fields[vol.Optional('lactation',default=d.get('lactation',False))]=bool
-    fields[vol.Required('day_start',default=d.get('day_start',DEFAULT_START))]=selector.TimeSelector()
-    fields[vol.Required('day_end',default=d.get('day_end',DEFAULT_END))]=selector.TimeSelector()
     if d.get('source_sensor'):
         fields[vol.Optional('source_sensor',default=d['source_sensor'])]=selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
     else:
