@@ -1,5 +1,14 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.25
+
+- Complete, explicit Legacy Liquid/Cup/Quick conversion wizard with backup, rollback-safe original record preservation, idempotency guard and canonical Water chart grouping.
+- Durable profile-scoped settings JSON import/export with strict schema and referential validation, verified preview and write revision protection.
+- Manage profiles in the card: edit display and HA preferences, create new profiles and copy configuration without histories or personal targets.
+- Compact neutral Settings and embedded Add drink Settings footer; settings and Add drink on one main-card action row.
+- Single-row Today by liquid bars at narrow card widths, smaller bar widths with right-aligned totals; 60 mL remaining remains visible near target.
+- Full regression suite and gated official GitHub HACS/Hassfest prerelease; beta.24 preserved.
+
 ## v1.1.0-beta.24
 
 - Additive per-profile Cup types, Quick buttons with automatic/custom labels, and explicit legacy mapping preview.
