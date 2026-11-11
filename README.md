@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.21
+# jwDaily Hydration Log v1.1.0-beta.22
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,17 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.21
+## What's new in beta.22
+
+- **Main card completed:** center X drink moments under the glass, keep the 24px intake aligned to the glass, move Add drink up into the cup zone, reduce unused white space, bring liquid names and title slightly left while retaining aligned graph bars and volumes.
+- **Consistent design:** blue volume bars, subtle per-liquid color dots, compact 28px history rows, editable HH:MM display with internal HH:MM:SS, white calendar date field, compact Excel footer.
+- **Today by hour:** responsive hour labels (every hour on wide cards, every two hours on narrow cards); readable y-axis without overlap; consistent liquid-color mapping; tap/click/keyboard-accessible volume breakdown per hour.
+- **Last 7 days:** y-axis with clear separation from mL label; dynamically scaled max; total volume above each bar; distinct coffee and orange juice colors; consistent legend order with the current day; details on selection.
+- **Data integrity:** historical days with no data are marked —, distinctly from logged days with 0 mL; a new read-only has_data flag is added to the 7-day sensor attributes, without changing records or storage.
+- **Excel unchanged:** valid OOXML, dynamic liquid type columns, orange retired headers, Date+time width 19 and Daily intake header height 44 pt remain in place.
+- **Download security:** HTTPS (Nabu Casa) works; Chrome may block XLSX downloads through unsecured local HTTP as expected.
+
+## Changes retained from beta.21
 
 - Right-align the blue daily intake directly beside the glass rim; fixed 24px text in both broad and narrow cards.
 - Shift the cup slightly left, move Today by liquid left, widen the liquid bars and align their volumes and Add drink on one common right edge.
