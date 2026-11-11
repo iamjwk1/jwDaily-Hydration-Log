@@ -6,7 +6,8 @@ ROOT=Path(__file__).resolve().parents[1]
 JS=str(ROOT/'custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js')
 errors=[]
 with sync_playwright() as p:
- browser=p.chromium.launch(**({'executable_path':'/usr/bin/chromium'} if Path('/usr/bin/chromium').exists() else {}),headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
+ chrome = next((path for path in ('/usr/bin/chromium','/usr/bin/google-chrome','/usr/bin/google-chrome-stable') if Path(path).is_file()), None)
+ browser=p.chromium.launch(**({'executable_path':chrome} if chrome else {}),headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
  page=browser.new_page(viewport={'width':1250,'height':1050}, device_scale_factor=1)
  page.on('pageerror',lambda exc: errors.append(str(exc)))
  page.set_content('<html><head><style>body{font-family:Arial,sans-serif;margin:0;background:#eee;}#test{padding:0;width:100%;}ha-card{background:white;border:1px solid #ddd;}</style></head><body><div id="test"></div></body></html>')
