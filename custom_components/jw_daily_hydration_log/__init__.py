@@ -435,7 +435,7 @@ async def ws_migration_backup(hass, connection, msg):
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'backup_error',str(exc));return
     connection.send_result(msg['id'],{
-        'filename':f'jwDaily Hydration Log {c.slug} pre-beta25-conversion.json',
+        'filename':f'jwDaily Hydration Log {c.slug} pre-beta26-conversion.json',
         'base64':base64.b64encode(data).decode('ascii'),
         'sha256':digest,'bytes':len(data),'version':VERSION})
 
