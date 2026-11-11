@@ -1,6 +1,13 @@
 # jwDaily Hydration Log — changelog
 
-## v1.1.0-beta.21
+## v1.1.0-beta.22
+- Unified main card geometry; drink count aligned under glass and shorter unused whitespace.
+- Fixed stable liquid colors, new 6px type indicators in main card, responsive chart axes and per-bucket drilldown.
+- Distinguish unrecorded vs recorded zero-intake days through additive sensor metadata.
+- Preserve profiles/history, time precision, Excel schema and both HACS chart types.
+
+
+## v1.1.0-beta.22
 - Align consumption number, cup, liquid bars, right-side action, history and Excel/version footer to approved screenshot guides.
 - Fixed 24px blue intake and equal fixed 17px cup labels on all card widths.
 - HH:MM display in history while internally retaining HH:MM:SS.
