@@ -17,13 +17,13 @@ jobs:
         run: |
           python -m compileall -q custom_components/jw_daily_hydration_log
           python tests/qa.py
-      - name: Beta25 storage, settings, conversion and Excel regression
+      - name: Beta27 storage, settings, conversion and Excel regression
         run: |
-          python tests/qa_beta25.py
-          python tests/qa_api_beta25.py
+          python tests/qa_beta27.py
+          python tests/qa_api_beta27.py
       - name: Frontend JavaScript syntax
         run: node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
       - name: Actual Chromium responsive and modal regression
         run: |
           python -m pip install --disable-pip-version-check playwright
-          python tests/browser_beta25.py
+          python tests/browser_beta27.py

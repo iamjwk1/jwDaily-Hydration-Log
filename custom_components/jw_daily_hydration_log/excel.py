@@ -22,7 +22,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color
 
-VERSION = '1.1.0-beta.25'
+VERSION = '1.1.0-beta.27'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -271,7 +271,8 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
             raw_liquid=record.get('liquid_type') or 'unknown'
             mapping=mappings.get(raw_liquid) or {}
             liquid=mapping.get('liquid_type_id') or raw_liquid
-            cup_id=record.get('cup_type_id') or mapping.get('cup_type_id') or ''
+            cup_id=(record.get('cup_type_id') or mapping.get('cup_type_id')
+                    or (p.get('legacy_cup_defaults') or {}).get(raw_liquid) or '')
             quick_id=record.get('quick_button_id') or ''
             # The reference deliberately displays built-in IDs in lowercase;
             # only user-created liquids use their chosen display names.

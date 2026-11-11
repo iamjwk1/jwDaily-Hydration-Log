@@ -1,5 +1,20 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.27
+
+- Align all Today by liquid bars using a single shared three-column grid; preserve right-justified volumes on narrow and wide cards.
+- Audit every recorded historic Liquid ID, including removed IDs, and allow supplementary conversion on already converted profiles.
+- Preserve original records; map all historic identities with explicit confirmation, prevent stale-history writes, and expose exact Liquid/Cup coverage counts.
+- Keep optional Cup unknown distinct from unclassified Liquid, and apply confirmed legacy Cup defaults in Excel.
+- Retain settings JSON transfer, profile management, HACS integration and 4-sheet Excel export.
+
+## v1.1.0-beta.27
+
+- Reissue of the complete v1.1.0-beta.25 implementation, unchanged functional behavior.
+- Rebuild with consistent beta.26 identifiers after beta.25 GitHub Actions runs did not begin.
+- No changes to saved drinks, migration schema, settings import/export, calculations, chart logic or Excel layout.
+- Publication continues to require successful independent GitHub CI, HACS and Hassfest gates.
+
 ## v1.1.0-beta.25
 
 - Complete, explicit Legacy Liquid/Cup/Quick conversion wizard with backup, rollback-safe original record preservation, idempotency guard and canonical Water chart grouping.

@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.25
+# jwDaily Hydration Log v1.1.0-beta.27
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,9 +6,13 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.25
+## What's new in beta.27
 
-- **Guided one-time legacy conversion:** `Settings → Advanced → Convert existing data` inventories old liquid types, volume buttons and original drink counts. Rename suggested Cup types, choose explicit Liquid/Cup mappings and confirm them. A read-only preview and downloadable full-profile JSON backup precede one atomic conversion. Existing records, timestamps, IDs and actual volumes are never rewritten. Duplicate conversion is blocked.
+- **Aligned bars:** all Today by liquid bars begin at the same horizontal coordinate and end before right-aligned volumes.
+- **Full-history conversion audit:** all historic Liquid IDs are included, even for types no longer defined. The wizard supports correcting incomplete beta.26 mappings, counts unknown Cups separately, and refuses changes if the preview is stale.
+
+
+- **Guided, repeatable historical mapping review:** `Settings → Advanced → Convert existing data` inventories old liquid types, volume buttons and original drink counts. Rename suggested Cup types, choose explicit Liquid/Cup mappings and confirm them. A read-only preview and downloadable full-profile JSON backup precede one atomic conversion. Existing records, timestamps, IDs and actual volumes are never rewritten. Repeated confirmed mappings are idempotent; already converted profiles can repair missing historical Liquid/Cup associations.
 - **Water (beker) + Water (glas):** confirmed mappings aggregate to canonical `Water` in the daily, hourly and seven-day charts; the historical cup assignment remains available. The original per-record liquid ID is retained for rollback. Inconclusive cup associations remain unknown unless the user explicitly chooses one.
 - **Profile-scoped settings JSON import/export:** `Settings → Advanced → Settings import / export` exports all Liquid, Cup, Quick, color, legacy-volume and mapping settings, with SHA-256 metadata, but **no drink history, readings, sensor IDs or consumption totals**. Import validates schema, volumes, colors, SVG safety, cross-references and profile; presents all changes; requires explicit confirmation; detects stale revisions. Historical mappings can be restored only to their original profile.
 - **Manage profiles:** directly add and edit profiles, with an option to copy a source profile's Liquid/Cup/Quick configuration without copying history or personal targets. Display-name edits preserve original profile slugs, entity IDs and current dashboard bindings. HA's native config flow retains ownership of the original profile settings.
