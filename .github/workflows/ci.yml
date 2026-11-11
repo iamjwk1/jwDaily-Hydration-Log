@@ -13,13 +13,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Python syntax
-        run: python -m compileall -q custom_components/jw_daily_hydration_log
-      - name: Legacy backend offline regression
-        run: python tests/qa.py
-      - name: Beta24 storage, migration and OOXML regression
+      - name: Python syntax and legacy backend regression
         run: |
-          python -m pip install --disable-pip-version-check openpyxl
-          python tests/qa_beta24.py
-      - name: Frontend syntax
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa.py
+      - name: Beta25 storage, settings, conversion and Excel regression
+        run: |
+          python tests/qa_beta25.py
+          python tests/qa_api_beta25.py
+      - name: Frontend JavaScript syntax
         run: node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
+      - name: Actual Chromium responsive and modal regression
+        run: |
+          python -m pip install --disable-pip-version-check playwright
+          python tests/browser_beta25.py

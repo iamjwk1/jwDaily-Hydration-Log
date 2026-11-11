@@ -1,10 +1,21 @@
-# jwDaily Hydration Log v1.1.0-beta.24
+# jwDaily Hydration Log v1.1.0-beta.25
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
+
+## What's new in beta.25
+
+- **Guided one-time legacy conversion:** `Settings → Advanced → Convert existing data` inventories old liquid types, volume buttons and original drink counts. Rename suggested Cup types, choose explicit Liquid/Cup mappings and confirm them. A read-only preview and downloadable full-profile JSON backup precede one atomic conversion. Existing records, timestamps, IDs and actual volumes are never rewritten. Duplicate conversion is blocked.
+- **Water (beker) + Water (glas):** confirmed mappings aggregate to canonical `Water` in the daily, hourly and seven-day charts; the historical cup assignment remains available. The original per-record liquid ID is retained for rollback. Inconclusive cup associations remain unknown unless the user explicitly chooses one.
+- **Profile-scoped settings JSON import/export:** `Settings → Advanced → Settings import / export` exports all Liquid, Cup, Quick, color, legacy-volume and mapping settings, with SHA-256 metadata, but **no drink history, readings, sensor IDs or consumption totals**. Import validates schema, volumes, colors, SVG safety, cross-references and profile; presents all changes; requires explicit confirmation; detects stale revisions. Historical mappings can be restored only to their original profile.
+- **Manage profiles:** directly add and edit profiles, with an option to copy a source profile's Liquid/Cup/Quick configuration without copying history or personal targets. Display-name edits preserve original profile slugs, entity IDs and current dashboard bindings. HA's native config flow retains ownership of the original profile settings.
+- **UI:** neutral Settings navigation with purpose-specific MDI icons; no separate About/Excel/Legacy-volume tiles; the Excel button remains on the main card. Add drink has a Settings control in the bottom-left of its footer instead of two redundant Manage buttons. The main card places Settings on the left and Add drink on the right of one row below the hero.
+- **Responsive charts:** the Today by liquid name, bar and numeric total stay on one row at narrow and wide card widths; shorter bars preserve the full liquid name. Drink moments remain underneath the cup and outside the chart. The remaining-to-drink figure is displayed whenever positive, even when the cup is almost full.
+- **Excel:** the four approved workbooks, column widths, formulas and date formats remain intact. Charts group by stable canonical Liquid IDs, never Cup or Quick button label.
+- **Rollback:** the full beta.24 prerelease and its original store data remain available. New settings are additive; conversion can only occur after a user-reviewed backup and confirmation. Live Home Assistant acceptance still required.
 
 ## What's new in beta.24
 
