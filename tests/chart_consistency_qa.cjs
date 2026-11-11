@@ -51,7 +51,7 @@ const puppeteer=require('puppeteer-core');
     const color=i=>result[i].bars.find(v=>v.label.startsWith(name+':'))?.fill;
     assert(color(0)&&color(0)===color(1),'Inconsistent color across charts for '+name);
    }
-   await page.screenshot({path:path.resolve(__dirname,'layout-beta19-chart-'+width+'.png'),fullPage:true});
+   await page.screenshot({path:path.resolve(__dirname,'layout-beta21-chart-'+width+'.png'),fullPage:true});
    console.log('CHART_CONSISTENCY_PASS',width,JSON.stringify(result.map(x=>({height:x.height,footerGap:x.footerGap,ticks:x.ticks.slice(0,5)}))));
    await page.close();
   }
