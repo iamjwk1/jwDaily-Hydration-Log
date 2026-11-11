@@ -83,7 +83,7 @@ async function main(){
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
- assert(layout.includes('grid-template-columns:clamp(186px,40%,274px) minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
+ assert(layout.includes('grid-template-columns:clamp(185px,39%,260px) minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
  assert(layout.includes('@container jdhl-card (max-width:279px)'), 'mobile stacks only when card is narrow');
  assert(layout.includes('font-size:24px'), 'intake blue remains 24px on desktops');
  assert(layout.includes('height:28px'), 'all history rows compact 28px');
@@ -109,7 +109,9 @@ async function main(){
  assert(overflow.includes('aria-label="250 percent of daily goal"'));
  assert(overflow.includes('M38 39 L122 39'));
  assert(overflow.indexOf('fill="#59baf2"')<overflow.indexOf('stroke="#e04444"'));
- assert(overflow.includes('paint-order="stroke"'));
+ assert(overflow.includes('class="cup-target"') && overflow.includes('class="glass-viz"'));
+  assert(layout.includes('.cup-target,.cup-remaining') && layout.includes('font-size:17px'), 'HTML cup labels must be equal, independent of SVG width');
+  assert(layout.includes('const time=this._timeParts(new Date(r.timestamp)).time.slice(0,5)'), 'History must display HH:MM, with edit seconds retained');
  console.log('PASS: over-target level fills open rim, stays capped, red target overlay visible');
 
  console.log('PASS: dashed red target line 16 SVG units lower, 100% fill reaches target, animation present');
