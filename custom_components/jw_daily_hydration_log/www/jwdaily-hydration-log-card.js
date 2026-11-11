@@ -927,10 +927,17 @@ class JwDailyHydrationChartCard extends HTMLElement {
    }
   });
   const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}${this._kind.days?'':` (${fmt(totals[k])} mL)`}</span>`).join('');
+  const anyMissing=this._kind.days&&records.some(r=>!r.hasData);
+  const anyZero=this._kind.days&&records.some(r=>r.hasData&&r.total===0);
+  const missingNote=this._kind.days&&(anyMissing||anyZero)?`<div class="chart-note">${anyMissing?'— No data recorded':''}${anyMissing&&anyZero?' · ':''}${anyZero?'0 = recorded zero intake':''}</div>`:'';
+  const selected=Number.isInteger(this._selectedBucket)?records[this._selectedBucket]:null;
+  const detailLabel=selected?(this._kind.days?selected.label:`Hour ${this._selectedBucket+1} (${String(this._selectedBucket).padStart(2,'0')}:00–${String(this._selectedBucket).padStart(2,'0')}:59)`):'';
+  const selectedKeys=selected?Object.keys(selected.liquids).filter(k=>selected.liquids[k]>0).sort((a,b)=>selected.liquids[b]-selected.liquids[a]):[];
+  const details=!selected?'':`<section class="detail-panel" role="status"><div class="detail-head"><strong>${jdhlEscape(detailLabel)} · ${selected.hasData?`${fmt(selected.total)} mL`:'No data recorded'}</strong><button type="button" data-chart-close aria-label="Close chart details">×</button></div>${selectedKeys.length?`<div class="detail-items">${selectedKeys.map(k=>`<span><i class="swatch" style="display:inline-block;vertical-align:middle;background:${colors.get(k)}"></i> ${jdhlEscape(names[k]||k)}: ${fmt(selected.liquids[k])} mL</span>`).join('')}</div>`:selected.hasData?'<p>No drinks recorded.</p>':'<p>No history is available for this date.</p>'}</section>`;
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div><div class="foot">v1.1.0-beta.22</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.22</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
