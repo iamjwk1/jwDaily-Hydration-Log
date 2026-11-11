@@ -1,10 +1,19 @@
-# jwDaily Hydration Log v1.1.0-beta.23
+# jwDaily Hydration Log v1.1.0-beta.24
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
+
+## What's new in beta.24
+
+- **Liquid, Cup and Quick buttons:** Liquid types now own names/icons/colors; Cup types own names/default volumes; Quick buttons link both. Quick button names automatically follow `Liquid (Cup)` or use an independent custom label. Charts group by canonical Liquid type ID only, never Cup or button label.
+- **Central Settings:** Profile (existing HA options), Daily target, Liquids, Cups, Quick buttons, Migration preview, Export and About in one Settings dialog.
+- **Non-destructive legacy mapping:** read-only proposals (such as Water (beker)/Water (glas) to Water), backed up to downloadable JSON and explicitly confirmed before stored alias mapping. Historic records retain original IDs, amounts and times. Undo mapping is available.
+- **Main card:** intake 19 CSS px; target and remaining 14 CSS px; tinted liquid icons replace Manage color dots; long Today by liquid names wrap while bars shrink and volumes stay aligned.
+- **Excel:** exactly four sheets preserved; added Cup/Quick/historic-ID columns to Hydration log and Cup/Quick sections to sheet 4, canonical Liquid daily totals, original formulas, 19 Date+time width, 44pt row-11 header and color cells retained.
+- **Rollback:** stable beta.23 files and raw data are preserved. User acceptance on live HA remains required.
 
 ## What's new in beta.23
 
