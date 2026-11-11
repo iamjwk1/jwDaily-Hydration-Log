@@ -1,14 +1,8 @@
 name: jwDaily Hydration Log beta.23 — validate and publish
 
+# Historical release workflow. beta.23 is immutable; do not rerun on later
+# integration releases. Manual invocation is preserved for diagnostics only.
 on:
-  push:
-    branches: [main]
-    paths:
-      - custom_components/jw_daily_hydration_log/**
-      - tests/qa_beta23.py
-      - tests/frontend_qa.js
-      - RELEASE_NOTES_v1.1.0-beta.23.md
-      - .github/workflows/publish-v1.1.0-beta.23.yml
   workflow_dispatch:
 
 permissions:
