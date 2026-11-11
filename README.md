@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.19
+# jwDaily Hydration Log v1.1.0-beta.21
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,18 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.19
+## What's new in beta.21
+
+- Right-align the blue daily intake directly beside the glass rim; fixed 24px text in both broad and narrow cards.
+- Shift the cup slightly left, move Today by liquid left, widen the liquid bars and align their volumes and Add drink on one common right edge.
+- Move Add drink to the bottom of the hero zone, reducing redundant vertical white space before Drink history.
+- Use fixed, equal 17px typography for the red target and black remaining volume, independent of SVG scaling.
+- Display HH:MM in Drink history; edit and persistent records retain full HH:MM:SS.
+- Align compact 28px Excel export button at the far left and version number at the far right, without adding reference guide lines.
+- Preserve all profile data, drink history, volume/type settings, the two charts and existing 4-sheet Excel workbook.
+- Browser acceptance at six real Chromium widths, including cup/blue-label separation, font sizes, right alignment, five-row scroll and edit seconds.
+
+## Changes retained from beta.19
 
 - Enlarge the glass in the main card by approximately 10-13%, maintaining side-by-side charts and avoiding collisions with the blue volume and red target label.
 - Make the Excel export button only 28 CSS pixels high, keeping its bottom-left position and the version number at bottom-right.
