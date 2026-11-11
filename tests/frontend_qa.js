@@ -23,14 +23,14 @@ const hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{
  'sensor.jwdhl_jan_willem_drink_count_today':{state:'0',attributes:{}}},
  async callWS(msg){
   wsCalls.push({...msg});
-  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.22',add_drink:true,edit_drink:true,custom_liquid_types:true};
+  if(msg.type==='jw_daily_hydration_log/capabilities')return {version:'1.1.0-beta.23',add_drink:true,edit_drink:true,custom_liquid_types:true};
   if(msg.type==='jw_daily_hydration_log/history'){
    const breakdown=history.reduce((a,r)=>{let x=a.find(t=>t.liquid_type===r.liquid_type);if(!x){x={liquid_type:r.liquid_type,volume_ml:0};a.push(x);}x.volume_ml+=r.volume_ml;return a;},[]);
    const total=history.reduce((a,r)=>a+r.volume_ml,0);
    return {date:msg.date,entries:history.map(x=>({...x})),
     total_ml:total,liquid_types:catalog.map(x=>({...x})),
     day_summary:{date:msg.date,consumed_ml:total,target_ml:3000,drink_count:history.length,liquid_breakdown:breakdown},
-    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.22'};
+    today_breakdown:breakdown,volume_buttons:storedVolumes,backend_version:'1.1.0-beta.23'};
   }
   if(msg.type==='jw_daily_hydration_log/add_liquid_type'){
    const item={id:'custom_'+(++seq),name:msg.name,icon_mdi:msg.icon_mdi||'',icon_svg:msg.icon_svg||'',
@@ -79,20 +79,20 @@ async function main(){
  assert(c.shadowRoot.innerHTML.includes('+ Add drink'));
  assert(!c.shadowRoot.innerHTML.includes('1. Select a liquid'));
  assert(!c.shadowRoot.innerHTML.includes('2. Select a volume'));
- assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.22'));
+ assert(c.shadowRoot.innerHTML.includes('class="card-version">v1.1.0-beta.23'));
  console.log('PASS: single Add button, no exterior selection controls, version bottom-right');
  const layout=c.shadowRoot.innerHTML;
  assert(layout.includes('class="hero-shell"') && layout.includes('class="glass-frame"'));
  assert(layout.includes('grid-template-columns:clamp(185px,39%,260px) minmax(0,1fr)'), 'side-by-side graph on sufficiently wide card');
  assert(layout.includes('@container jdhl-card (max-width:279px)'), 'mobile stacks only when card is narrow');
- assert(layout.includes('font-size:24px'), 'intake blue remains 24px on desktops');
+ assert(layout.includes('font-size:19px'), 'intake blue is 19px on desktops');
  assert(layout.includes('height:28px'), 'all history rows compact 28px');
  assert(layout.includes('class="drink-count"') && layout.includes('drink moments'), 'count below glass preserved');
  assert(layout.includes('background:#B3E5FC'), 'single normal button color');
  assert(layout.includes('background:#EEEEEE'), 'separate manage button styling');
  assert(layout.includes('background:#FFFFFF'), 'date picker remains white');
  assert(layout.includes('.liquid-choice,.volume-choices .amount{font-size:.93rem!important'), 'liquid and amount same text size');
- assert(layout.includes('class="card-version">v1.1.0-beta.22'), 'version footer');
+ assert(layout.includes('class="card-version">v1.1.0-beta.23'), 'version footer');
  assert(!layout.includes('Undo last drink'), 'Undo removed from card');
  assert(!layout.includes('data-action="undo"'), 'no invisible Undo control');
  assert(!layout.includes('aria-live="polite"'), 'no persistent drink-saved placeholder');

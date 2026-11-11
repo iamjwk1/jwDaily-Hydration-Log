@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.22
+# jwDaily Hydration Log v1.1.0-beta.23
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,16 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.22
+## What's new in beta.23
+
+- **Intake and footer geometry:** intake total is 19 CSS px on all card widths; target and remaining volume stay at 17 px. Version is positioned closer to the lower card margin without modifying the Excel button or inserting a divider.
+- **Profile-specific liquid colors:** Edit liquid supports a native color picker, synchronized `#RRGGBB` input, live preview, strict validation and Reset to default. Colors persist using stable per-profile liquid IDs across restarts, reorder, rename and HACS upgrades; missing overrides retain beta.22 defaults.
+- **Consistent charts and choices:** chosen colors update the main-card liquid dot and fill bar, liquid choice buttons with accessible text contrast, both charts, legends and per-bucket details. Default selection buttons retain `#B3E5FC`; Manage controls retain `#EEEEEE`.
+- **Excel:** the existing four-workbook export adds only the `Color` column and matching cell fill to the liquid-type settings sheet; historical-only liquids are retained with available colors. Existing formulas, column widths, row 11 height (44 pt), historical orange headers and date/time formats are preserved.
+- **Non-destructive storage:** all existing profiles, history, time precision and liquid/volume management remain intact. beta.22 remains available for rollback; note that beta.22 does not offer editing color overrides stored by beta.23.
+
+## Previous beta.22 improvements
+
 
 - **Main card completed:** center X drink moments under the glass, keep the 24px intake aligned to the glass, move Add drink up into the cup zone, reduce unused white space, bring liquid names and title slightly left while retaining aligned graph bars and volumes.
 - **Consistent design:** blue volume bars, subtle per-liquid color dots, compact 28px history rows, editable HH:MM display with internal HH:MM:SS, white calendar date field, compact Excel footer.

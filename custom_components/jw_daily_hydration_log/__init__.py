@@ -233,13 +233,14 @@ async def ws_delete_drink(hass:HomeAssistant, connection:websocket_api.ActiveCon
                                   probatio.Required('name'):str,
                                   probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('icon_svg'):str,
-                                  probatio.Optional('default_volume_ml'):float})
+                                  probatio.Optional('default_volume_ml'):float,
+                                  probatio.Optional('color'):str})
 @websocket_api.async_response
 async def ws_add_liquid_type(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         c=_resolve(hass,msg['profile'])
         item=await c.async_add_liquid_type(msg['name'],msg.get('icon_mdi',''),
-                                           msg.get('icon_svg',''),msg.get('default_volume_ml'))
+                                           msg.get('icon_svg',''),msg.get('default_volume_ml'),msg.get('color',''))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return
@@ -266,13 +267,14 @@ async def ws_delete_liquid_type(hass:HomeAssistant,connection:websocket_api.Acti
                                   probatio.Required('name'):str,
                                   probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('icon_svg'):str,
-                                  probatio.Optional('default_volume_ml'):float})
+                                  probatio.Optional('default_volume_ml'):float,
+                                  probatio.Optional('color'):str})
 @websocket_api.async_response
 async def ws_update_liquid_type(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         item=await _resolve(hass,msg['profile']).async_update_liquid_type(
             msg['liquid_type'],msg['name'],msg.get('icon_mdi',''),
-            msg.get('icon_svg',''),msg.get('default_volume_ml'))
+            msg.get('icon_svg',''),msg.get('default_volume_ml'),msg.get('color'))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return

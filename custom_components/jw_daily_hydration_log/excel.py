@@ -20,8 +20,9 @@ import zlib
 from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
+from .const import default_liquid_color
 
-VERSION = '1.1.0-beta.22'
+VERSION = '1.1.0-beta.23'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -177,7 +178,7 @@ def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = No
 
 
 
-def _styles_with_legacy_header() -> tuple[bytes,int]:
+def _styles_with_legacy_header(colors: list[str] | None = None) -> tuple[bytes,int,dict[str,int]]:
     """Extend the original Office XML *without serializing it with ElementTree*.
 
     ElementTree discarded x14ac/x16r2/xr prefix declarations while leaving
@@ -215,8 +216,39 @@ def _styles_with_legacy_header() -> tuple[bytes,int]:
     original = original[:xmatch.start()] + inject(xmatch, ('cellXfs',base),new_style_id+1) + original[xmatch.end():]
     fmatch = re.search(r'<fills([^>]*)>(.*?)</fills>', original, re.S)
     original = original[:fmatch.start()] + inject(fmatch, ('fills',fill),new_fill_id+1) + original[fmatch.end():]
-    ET.fromstring(original)  # XML and namespace syntax gate; Excel structure gate in QA.
-    return original.encode('utf-8'),new_style_id
+    # Only sheet 3 uses these additive solid-fill cell styles. The original
+    # styles, workbook themes, table formatting and formulas remain intact.
+    color_style_ids = {}
+    for color in dict.fromkeys(colors or []):
+        if not isinstance(color, str) or not re.fullmatch(r'#[0-9A-Fa-f]{6}', color):
+            continue
+        color = color.upper()
+        if color in color_style_ids:
+            continue
+        parsed = ET.fromstring(original)
+        color_fills = parsed.find(ns + 'fills')
+        color_xfs = parsed.find(ns + 'cellXfs')
+        fill_id, style_id = len(color_fills), len(color_xfs)
+        fill = (f'<fill><patternFill patternType="solid"><fgColor rgb="FF{color[1:]}"/>'
+                '<bgColor indexed="64"/></patternFill></fill>')
+        # Sheet 3's original settings cells are style 0. Reuse its exact format,
+        # changing only the fill reference.
+        template = ET.tostring(color_xfs[0], encoding='unicode')
+        template = template.replace('ns0:', '').replace(' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', '')
+        template = re.sub(r'\bfillId="[^"]*"', f'fillId="{fill_id}"', template)
+        if 'fillId=' not in template:
+            template = template.replace('<xf ', f'<xf fillId="{fill_id}" ', 1)
+        if 'applyFill=' in template:
+            template = re.sub(r'\bapplyFill="[^"]*"', 'applyFill="1"', template)
+        else:
+            template = template.replace('<xf ', '<xf applyFill="1" ', 1)
+        xmatch = re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
+        original = original[:xmatch.start()] + inject(xmatch, ('cellXfs', template), style_id + 1) + original[xmatch.end():]
+        fmatch = re.search(r'<fills([^>]*)>(.*?)</fills>', original, re.S)
+        original = original[:fmatch.start()] + inject(fmatch, ('fills', fill), fill_id + 1) + original[fmatch.end():]
+        color_style_ids[color] = style_id
+    ET.fromstring(original)  # XML/namespace check; OOXML structure checked in QA.
+    return original.encode('utf-8'),new_style_id,color_style_ids
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
@@ -271,7 +303,28 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         ordered_types=[(lid,lid.title(),False) for lid in _BUILTIN]
         ordered_types += [(lid,name,True) for lid,name in historic.items() if lid not in _BUILTIN]
     liquid_headers=[f'{name}\n(mL)' for _,name,_ in ordered_types]
-    styles_xml,legacy_header_style=_styles_with_legacy_header()
+    # Resolve one effective color per (profile, stable ID), including old IDs
+    # that occur only in that profile's historical records.
+    export_types = []
+    for p in profiles:
+        defs = list(p.get('liquid_definitions') or p.get('custom_liquid_types') or [])
+        known = {str(t.get('id')) for t in defs if t.get('id')}
+        historical_ids = {str(r.get('liquid_type') or 'unknown')
+                          for r in p.get('records', []) if r.get('kind') == 'drink'}
+        for old_id in sorted(historical_ids - known):
+            defs.append({'id': old_id, 'name': old_id, 'icon_mdi': '',
+                         'icon_svg': '', 'default_volume_ml': None,
+                         'custom': old_id not in _BUILTIN, 'hidden': True})
+        colors = p.get('liquid_colors') or {}
+        for position, typ in enumerate(defs, 1):
+            ident = str(typ.get('id') or '')
+            raw = colors.get(ident) or typ.get('color_override') or typ.get('color')
+            color = (str(raw).upper() if isinstance(raw,str) and
+                     __import__('re').fullmatch(r'#[0-9A-Fa-f]{6}', raw)
+                     else default_liquid_color(ident, str(typ.get('name') or ident)))
+            export_types.append((p, position, typ, color))
+    styles_xml,legacy_header_style,color_styles = _styles_with_legacy_header(
+        [color for _, _, _, color in export_types])
     days=[]
     for p in profiles:
         dates={row[8] for row in records if row[0] is p}
@@ -336,17 +389,17 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                      for col,value in enumerate(values,2)]
     if not days:drows[12]=[]
 
-    typesrows={1:[(i,h,1,None) for i,h in enumerate(['Profile','Liquid ID','Name','MDI Icon','SVG Image','Default volume mL','Custom','Button order','Visible in picker'],1)]}
+    typesrows={1:[(i,h,1,None) for i,h in enumerate(['Profile','Liquid ID','Name','MDI Icon','SVG Image','Default volume mL','Custom','Button order','Visible in picker','Color'],1)]}
     buttonsrows={1:[(i,h,1,None) for i,h in enumerate(['Profile','Position','Volume mL','Custom configured'],1)]}
     for p in profiles:
         cfg=p['config']
-        liquid_defs=p.get('liquid_definitions') or p.get('custom_liquid_types') or []
-        for position, typ in enumerate(liquid_defs,1):
+        for _, position, typ, color in (item for item in export_types if item[0] is p):
             row=len(typesrows)+1
             vals=[cfg['name'],typ.get('id',''),typ.get('name',''),typ.get('icon_mdi',''),
                   typ.get('icon_svg',''),typ.get('default_volume_ml'), bool(typ.get('custom',False)),
-                  position,not bool(typ.get('hidden',False))]
-            typesrows[row]=[(i,value,0,None) for i,value in enumerate(vals,1)]
+                  position,not bool(typ.get('hidden',False)),color]
+            typesrows[row]=[(i,value,color_styles.get(color,0) if i==10 else 0,None)
+                            for i,value in enumerate(vals,1)]
         volumes=p.get('volume_buttons')
         if volumes is None:
             volumes=[]
@@ -358,7 +411,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     content=[
      _worksheet(1,logrows,[4,19,16,6,9,9,17,11],f'H{max(12,11+len(records))}',max(12,11+len(records)),True),
      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25],f'I{max(1,len(typesrows))}',len(typesrows)),
+     _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25,15],f'J{max(1,len(typesrows))}',len(typesrows)),
      _worksheet(4,buttonsrows,[16,14,18,25],f'D{max(1,len(buttonsrows))}',len(buttonsrows)),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.

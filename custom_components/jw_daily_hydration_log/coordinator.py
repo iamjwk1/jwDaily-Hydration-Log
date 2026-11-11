@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount
+from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount, default_liquid_color
 
 
 def _local_timestamp(hass: HomeAssistant, day: str | None, clock: str | None) -> str:
@@ -96,6 +96,17 @@ def _safe_svg(svg: str) -> str:
     return svg
 
 
+def _hex_color(value: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+        raise ValueError('Color must be a 6-digit hex code such as #3A87B2')
+    return value.upper()
+
+
+def _color_override(value: str | None) -> str | None:
+    """Empty text resets; absent WS field is handled by the caller."""
+    return _hex_color(value) if value else None
+
+
 def _default_volume(value):
     if value is None or value == '':
         return None
@@ -138,6 +149,9 @@ class HydrationCoordinator:
         self.custom_liquid_types: list[dict[str, Any]] = []
         # Profile-scoped settings; stable liquid IDs preserve all old drink records.
         self.liquid_overrides: dict[str, dict[str, Any]] = {}
+        # Non-destructive additive storage, scoped to this HA config entry.
+        # Overrides are keyed by stable IDs, independent of name and order.
+        self.liquid_colors: dict[str, str] = {}
         self.hidden_builtin_liquids: list[str] = []
         self.liquid_order: list[str] = []
         # None means follow the existing dashboard's quick_add YAML until customized.
@@ -225,6 +239,11 @@ class HydrationCoordinator:
             self.daily_archive = dict(saved.get('daily_archive',{}))
             self.custom_liquid_types = list(saved.get('custom_liquid_types', []))
             self.liquid_overrides = dict(saved.get('liquid_overrides') or {})
+            # Preserve only valid values, never rewrite historic entries.
+            self.liquid_colors = {str(k): _hex_color(v) for k, v in
+                                  (saved.get('liquid_colors') or {}).items()
+                                  if isinstance(k, str) and isinstance(v, str)
+                                  and re.fullmatch(r'#[0-9a-fA-F]{6}', v)}
             self.hidden_builtin_liquids = [ident for ident in (saved.get('hidden_builtin_liquids') or [])
                                            if ident in LIQUID_TYPES]
             self.liquid_order = list(saved.get('liquid_order') or [])
@@ -457,6 +476,7 @@ class HydrationCoordinator:
             records=self.records,source_readings=self.source_readings,daily_archive=self.daily_archive,
             custom_liquid_types=self.custom_liquid_types,
             liquid_overrides=self.liquid_overrides,
+            liquid_colors=self.liquid_colors,
             liquid_order=self.liquid_order,
             hidden_builtin_liquids=self.hidden_builtin_liquids,
             volume_buttons=self.volume_buttons))
@@ -464,6 +484,17 @@ class HydrationCoordinator:
     @callback
     def _dispatch(self) -> None:
         async_dispatcher_send(self.hass,self.signal)
+
+    def liquid_color(self, liquid_id: str, name: str = '') -> str:
+        return self.liquid_colors.get(liquid_id, default_liquid_color(liquid_id, name))
+
+    def liquid_color_map(self) -> dict[str, str]:
+        """Current catalog plus remembered historic color overrides."""
+        defs = {t['id']: self.liquid_color(t['id'], t['name'])
+                for t in self.get_liquid_definitions()}
+        for ident, color in self.liquid_colors.items():
+            defs.setdefault(ident, color)
+        return defs
 
     def get_liquid_definitions(self) -> list[dict]:
         """Ordered definitions, merging built-in display overrides with stable IDs."""
@@ -473,6 +504,10 @@ class HydrationCoordinator:
         for item in base:
             item.update(self.liquid_overrides.get(item['id'], {}))
         items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
+        for item in items:
+            ident = item['id']
+            item['color_override'] = self.liquid_colors.get(ident)
+            item['color'] = self.liquid_color(ident, item['name'])
         priority = {ident: index for index, ident in enumerate(self.liquid_order)}
         fallback = {item['id']: index for index, item in enumerate(items)}
         return sorted(items, key=lambda item: priority.get(item['id'], len(priority) + fallback[item['id']]))
@@ -483,7 +518,7 @@ class HydrationCoordinator:
             any(liquid_type == item['id'] for item in self.custom_liquid_types))
 
     async def async_add_liquid_type(self, name: str, icon_mdi: str = '',
-                                    icon_svg: str = '', default_volume_ml=None) -> dict:
+                                    icon_svg: str = '', default_volume_ml=None, color: str = '') -> dict:
         if not isinstance(name, str):
             raise ValueError('Liquid name is required')
         name = name.strip()
@@ -496,6 +531,7 @@ class HydrationCoordinator:
         if icon_svg:
             icon_svg = _safe_svg(icon_svg)
         vol = _default_volume(default_volume_ml)
+        selected_color = _color_override(color)
         async with self._lock:
             if len(self.custom_liquid_types) >= 30:
                 raise ValueError('Maximum of 30 custom liquids reached')
@@ -505,6 +541,8 @@ class HydrationCoordinator:
                         icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
                         icon_svg=icon_svg, default_volume_ml=vol, custom=True)
             self.custom_liquid_types.append(item)
+            if selected_color:
+                self.liquid_colors[item['id']] = selected_color
             if self.liquid_order:
                 self.liquid_order.append(item['id'])
             await self._save()
@@ -525,7 +563,7 @@ class HydrationCoordinator:
 
     async def async_update_liquid_type(self, liquid_type: str, name: str,
                                       icon_mdi: str = '', icon_svg: str = '',
-                                      default_volume_ml=None) -> dict:
+                                      default_volume_ml=None, color: str | None = None) -> dict:
         """Update any liquid's display metadata. Never rewrite its historical ID."""
         if not isinstance(name, str):
             raise ValueError('Liquid name is required')
@@ -539,6 +577,7 @@ class HydrationCoordinator:
         if icon_svg:
             icon_svg = _safe_svg(icon_svg)
         volume = _default_volume(default_volume_ml)
+        selected_color = _color_override(color) if color is not None else None
         async with self._lock:
             definitions = self.get_liquid_definitions()
             existing = next((item for item in definitions if item['id'] == liquid_type), None)
@@ -554,6 +593,11 @@ class HydrationCoordinator:
                 next(item for item in self.custom_liquid_types if item['id'] == liquid_type).update(props)
             else:
                 self.liquid_overrides[liquid_type] = props
+            if color is not None:
+                if selected_color is None:
+                    self.liquid_colors.pop(liquid_type, None)
+                else:
+                    self.liquid_colors[liquid_type] = selected_color
             await self._save()
             self._dispatch()
             return next(item for item in self.get_liquid_definitions() if item['id'] == liquid_type)
@@ -701,7 +745,8 @@ class HydrationCoordinator:
             bucket['liquids']={k:round(v,3) for k,v in bucket['liquids'].items()}
         return dict(date=day,total_logged_ml=round(sum(b['total_ml'] for b in buckets),3),
                     buckets=buckets,coverage='typed_logged_drinks_only',
-                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()})
+                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()},
+                    liquid_colors=self.liquid_color_map())
 
     def chart_last_7_days(self) -> dict:
         """Exactly seven HA-local calendar days, including today, by stable type ID."""
@@ -722,7 +767,8 @@ class HydrationCoordinator:
                              drink_count=summary['drink_count'],liquids=typed,has_data=has_data))
         return dict(days=rows,total_logged_ml=round(sum(r['total_logged_ml'] for r in rows),3),
                     coverage='typed_logged_drinks_only',
-                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()})
+                    liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()},
+                    liquid_colors=self.liquid_color_map())
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
@@ -733,5 +779,6 @@ class HydrationCoordinator:
                     daily_archive={key:dict(val) for key,val in self.daily_archive.items()},
                     custom_liquid_types=[dict(item) for item in self.custom_liquid_types],
                     liquid_definitions=self.get_liquid_definitions(),
+                    liquid_colors=dict(self.liquid_colors),
                     hidden_builtin_liquids=list(self.hidden_builtin_liquids),
                     volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons))

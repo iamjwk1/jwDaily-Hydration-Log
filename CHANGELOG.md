@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.23
+- 19px intake volume, 17px target and remaining volume; lower-aligned version footer.
+- Accessible liquid color picker/hex/preview/reset, profile-stable overrides with no destructive migration.
+- Color consistency in main bars/dots, liquid choice buttons, hourly/weekly charts and details.
+- Color hex/fill in the existing Excel liquid settings sheet, preserving all other sheets, formulas and schema.
+- Full beta.22 backward compatibility when no user color override exists; beta.22 rollback retained.
+
+
 ## v1.1.0-beta.22
 - Unified main card geometry; drink count aligned under glass and shorter unused whitespace.
 - Fixed stable liquid colors, new 6px type indicators in main card, responsive chart axes and per-bucket drilldown.

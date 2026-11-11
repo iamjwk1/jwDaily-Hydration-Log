@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.22 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.23 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -25,6 +25,17 @@ const jdhlNormalizeTime=value=>{
  else if(/^\d{1,2}:\d{1,2}(:\d{1,2})?$/.test(raw))valueText=raw.split(':').map(v=>v.padStart(2,'0')).join(':');
  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(valueText)?valueText:null;
 };
+
+const jdhlHex=v=>/^#[0-9A-Fa-f]{6}$/.test(String(v||''))?String(v).toUpperCase():null;
+function jdhlContrastInk(hex){
+ const value=jdhlHex(hex);if(!value)return '#14212D';
+ const rgb=[1,3,5].map(i=>parseInt(value.slice(i,i+2),16)/255)
+  .map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);
+ const light=.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
+ const darkRgb=[0x14,0x21,0x2D].map(v=>v/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);
+ const dark=.2126*darkRgb[0]+.7152*darkRgb[1]+.0722*darkRgb[2];
+ return 1.05/(light+.05)>(light+.05)/(dark+.05)?'#FFFFFF':'#14212D';
+}
 
 class JwDailyHydrationLogCard extends HTMLElement {
  constructor(){
@@ -110,6 +121,26 @@ class JwDailyHydrationLogCard extends HTMLElement {
    return;
   }
   if(this._manageOpen&&this._customDraft){
+   if(field==='color_picker'||field==='color_hex'){
+    const draft=this._customDraft;
+    const entered=field==='color_picker'?e.target.value:String(e.target.value).trim();
+    const color=jdhlHex(entered);
+    draft.color_custom=true;
+    draft.color_hex=color&&(field==='color_picker'||e.type==='change')?color:entered;
+    if(color){
+     const picker=this.shadowRoot.querySelector('[data-field="color_picker"]');
+     const hexInput=this.shadowRoot.querySelector('[data-field="color_hex"]');
+     if(picker&&picker!==e.target)picker.value=color.toLowerCase();
+     if(hexInput&&hexInput!==e.target)hexInput.value=color;
+     else if(hexInput&&e.type==='change')hexInput.value=color;
+    }
+    const preview=this.shadowRoot.querySelector('.color-preview');
+    if(preview&&color)preview.style.backgroundColor=color;
+    const error=this.shadowRoot.querySelector('.color-error');
+    if(error){error.textContent=color?'':'Enter a valid color in #RRGGBB format.';
+              error.hidden=!!color;}
+    return;
+   }
    if(field==='custom_svg_file'){
     const file=e.target.files?.[0];if(!file)return;
     if(file.size>16000||!(/\.svg$/i.test(file.name)||file.type==='image/svg+xml')){this._alert('Choose an SVG file up to 16 KB.');return;}
@@ -132,6 +163,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
  _liquidDefs(){return this._history?.liquid_types?.length?this._history.liquid_types:
   JDHL_TYPES.map(([id,name,icon])=>({id,name,icon_mdi:({water:'mdi:water',coffee:'mdi:coffee',tea:'mdi:tea',milk:'mdi:cow',soup:'mdi:bowl-mix',wine:'mdi:glass-wine',other:'mdi:glass-water'})[id],icon_svg:'',default_volume_ml:null,custom:false}));}
  _liquidInfo(id){return this._liquidDefs().find(t=>t.id===id);}
+ _effectiveColor(t){return jdhlHex(t?.color)||jdhlHex(t?.color_override)||jdhlLiquidColor(t?.id,t?.name);}
+ _typeColor(id,name){return this._effectiveColor(this._liquidInfo(id)||{id,name});}
  _liquidIcon(t){if(!t)return '';
   if(t.icon_svg){const src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(t.icon_svg);
    return `<img class="liquid-icon svg-icon" alt="" src="${jdhlEscape(src)}"/>`;}
@@ -139,17 +172,21 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return `<ha-icon class="liquid-icon" icon="${jdhlEscape(icon)}" aria-hidden="true"></ha-icon>`;
  }
  _newLiquidDraft(existing=null){return {custom_name:existing?.name||'',icon_mdi:existing?existing.icon_mdi:'mdi:glass-mug-variant',
-  icon_svg:existing?.icon_svg||'',custom_default_volume_ml:existing?.default_volume_ml??''};}
+  icon_svg:existing?.icon_svg||'',custom_default_volume_ml:existing?.default_volume_ml??'',
+  color_custom:!!jdhlHex(existing?.color_override),
+  color_hex:jdhlHex(existing?.color_override)||this._effectiveColor(existing||{id:'',name:''})};}
  async _saveCustomLiquid(){const draft=this._customDraft;if(!draft||!this._modal||!this._hass?.user?.is_admin)return;
   const name=String(draft.custom_name||'').trim();const amount=String(draft.custom_default_volume_ml??'').trim();
   if(!name||name.length>48){this._alert('Enter a liquid name of 1-48 characters.');return;}
   if(amount&&(!Number.isFinite(Number(amount))||Number(amount)<=0||Number(amount)>100000)){
    this._alert('Default volume must be between 0 and 100,000 mL.');return;}
+  const color=draft.color_custom?jdhlHex(draft.color_hex):null;
+  if(draft.color_custom&&!color){this._alert('Enter a valid color in #RRGGBB format.');return;}
   const existingId=this._editingLiquidId;
   this._busy=true;this._error='';this._status=existingId?'Updating liquid type…':'Saving liquid type…';
   try{await this._ensureBackend();const saved=await this._hass.callWS({type:existingId?'jw_daily_hydration_log/update_liquid_type':'jw_daily_hydration_log/add_liquid_type',
    profile:this._config.profile,...(existingId?{liquid_type:existingId}:{}),name,
-   icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',
+   icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',color:color||'',
    ...(amount?{default_volume_ml:Number(amount)}:{})});
    await this._fetchHistory();this._customDraft=null;this._editingLiquidId=null;
    if(!existingId&&this._modal.mode==='new'){
@@ -224,7 +261,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.22')throw Error(`Frontend v1.1.0-beta.22 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.23')throw Error(`Frontend v1.1.0-beta.23 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -275,6 +312,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(this._customDraft){this._customDraft=null;this._editingLiquidId=null;}
    else this._manageOpen=false;
    this._managePendingDelete=null;this._error='';this._render(true);return;}
+  if(action==='manage-color-reset'){
+   if(!this._customDraft)return;
+   const liquid=this._liquidInfo(this._editingLiquidId);
+   this._customDraft.color_custom=false;
+   this._customDraft.color_hex=jdhlLiquidColor(liquid?.id||'',liquid?.name||this._customDraft.custom_name);
+   this._error='';this._render(true);return;
+  }
   if(action==='manage-save'){await this._saveCustomLiquid();return;}
   if(action==='manage-hide'||action==='manage-remove'){
    const t=this._liquidInfo(el.dataset.value);if(!t)return;
@@ -420,8 +464,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(!data.length)return `<div class="liquid-bars"><div class="bars-title">${heading}</div><p class="muted">${ready?'No classified drinks on this day.':'Loading day…'}</p></div>`;
   const high=Math.max(...data.map(x=>Number(x.volume_ml)));
   return `<div class="liquid-bars" aria-label="Volumes by liquid type on selected day"><div class="bars-title">${heading}</div>
-   ${data.map(x=>`<div class="bar-line"><span title="${jdhlEscape(label(x.liquid_type))}"><i class="type-dot" style="background:${jdhlLiquidColor(x.liquid_type,label(x.liquid_type))}" aria-hidden="true"></i>${jdhlEscape(label(x.liquid_type))}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${(100*Number(x.volume_ml)/high).toFixed(2)}%"></div></div>
+   ${data.map(x=>`<div class="bar-line"><span title="${jdhlEscape(label(x.liquid_type))}"><i class="type-dot" style="background:${this._typeColor(x.liquid_type,label(x.liquid_type))}" aria-hidden="true"></i>${jdhlEscape(label(x.liquid_type))}</span>
+      <div class="bar-track"><div class="bar-fill" style="background:${this._typeColor(x.liquid_type,label(x.liquid_type))};width:${(100*Number(x.volume_ml)/high).toFixed(2)}%"></div></div>
       <strong>${jdhlFmt(Number(x.volume_ml))}</strong></div>`).join('')}</div>`;
  }
  _historyCalendarHTML(){
@@ -464,7 +508,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const all=this._liquidDefs();const visible=all.filter(t=>!t.hidden);
   const hidden=all.filter(t=>t.hidden);
   const list=visible.map((t,index)=>`<div class="saved-liquid" data-testid="liquid-manage-row">
-   ${this._liquidIcon(t)} <strong>${jdhlEscape(t.name)}</strong>
+   <span class="saved-liquid-icon">${this._liquidIcon(t)}<i class="manage-color-dot" style="background:${this._effectiveColor(t)}" aria-label="Color ${this._effectiveColor(t)}" title="${this._effectiveColor(t)}"></i></span> <strong>${jdhlEscape(t.name)}</strong>
    <span class="muted">${t.default_volume_ml?jdhlFmt(t.default_volume_ml):'No default'}</span>
    <button class="secondary small" data-action="manage-up" data-value="${jdhlEscape(t.id)}" ${index===0?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} up">↑</button>
    <button class="secondary small" data-action="manage-down" data-value="${jdhlEscape(t.id)}" ${index===visible.length-1?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} down">↓</button>
@@ -481,11 +525,17 @@ class JwDailyHydrationLogCard extends HTMLElement {
      <label>Material Design Icon<input data-field="icon_mdi" value="${jdhlEscape(d.icon_mdi||'')}" placeholder="mdi:glass-mug-variant"/></label>
      <label class="svg-field">Or SVG icon (.svg, max 16 KB)<input data-field="custom_svg_file" type="file" accept=".svg,image/svg+xml"/></label>
     </div>${d.icon_svg?`<p class="status">SVG selected (${new TextEncoder().encode(d.icon_svg).length} bytes)</p>`:''}
+    <div class="color-editor" role="group" aria-label="Liquid color">
+      <label>Color <input type="color" data-field="color_picker" value="${jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)}" aria-label="Choose liquid color" /></label>
+      <label>Hex color <input type="text" data-field="color_hex" value="${jdhlEscape(d.color_hex)}" maxlength="32" spellcheck="false" autocapitalize="characters" aria-label="Hex color code" placeholder="#RRGGBB" /></label>
+      <span class="color-preview" style="background:${jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)}" role="img" aria-label="Color preview"></span>
+      <button type="button" class="secondary small" data-action="manage-color-reset">Reset to default</button>
+    </div><p class="color-error error" role="alert" ${jdhlHex(d.color_hex)?'hidden':''}>${jdhlHex(d.color_hex)?'':'Enter a valid color in #RRGGBB format.'}</p>
     <div class="dialog-actions"><button class="secondary" data-action="manage-cancel">Back</button>
      <button data-action="manage-save" ${this._busy?'disabled':''}>Save liquid</button></div></div>`:
     `<div class="saved-liquids">${list||'<p class="muted">No visible types. Restore one below or add your own.</p>'}</div>
      ${hidden.length?`<h4>Hidden built-in liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
-        `<div class="hidden-liquid">${this._liquidIcon(t)} <strong>${jdhlEscape(t.name)}</strong>
+        `<div class="hidden-liquid">${this._liquidIcon(t)}<i class="manage-color-dot" style="background:${this._effectiveColor(t)}" title="${this._effectiveColor(t)}" aria-label="Color ${this._effectiveColor(t)}"></i> <strong>${jdhlEscape(t.name)}</strong>
          <button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}">Restore</button></div>`).join('')}</div>`:''}
      ${this._managePendingDelete?`<div class="delete-warning" role="alert">${this._managePendingDelete.custom?
         `Permanently delete ${jdhlEscape(this._managePendingDelete.name)}? Only unused custom types can be deleted.`:
@@ -513,9 +563,12 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  _modalHTML(){if(!this._modal)return '';
   const m=this._modal;
-  const types=this._liquidDefs().filter(t=>!t.hidden||(m.mode==='edit'&&t.id===m.liquid_type)).map(t=>`<button class="liquid-choice ${m.liquid_type===t.id?'selected':''}"
-    data-action="type" data-value="${jdhlEscape(t.id)}" aria-pressed="${m.liquid_type===t.id}">
-    ${this._liquidIcon(t)}<span>${jdhlEscape(t.name)}</span></button>`).join('');
+  const types=this._liquidDefs().filter(t=>!t.hidden||(m.mode==='edit'&&t.id===m.liquid_type)).map(t=>{
+   const chosen=jdhlHex(t.color_override);
+   return `<button class="liquid-choice ${m.liquid_type===t.id?'selected':''} ${chosen?'custom-liquid-color':''}"
+    data-action="type" data-value="${jdhlEscape(t.id)}" aria-pressed="${m.liquid_type===t.id}"
+    ${chosen?`style="--liquid-choice-bg:${chosen};--liquid-choice-ink:${jdhlContrastInk(chosen)}"`:''}>
+    ${this._liquidIcon(t)}<span>${jdhlEscape(t.name)}</span></button>`;}).join('');
   const amounts=this._buttons().map(v=>`<button class="amount ${Number(m.volume_ml)===v?'selected':''}"
      data-action="amount" data-value="${v}">${jdhlFmt(v)}</button>`).join('');
   return `<div class="overlay" role="presentation"><section class="dialog ${this._volumeManageOpen?'dialog-manage-volumes':this._manageOpen?'dialog-manage-liquids':'dialog-drink'}" role="dialog" aria-modal="true"
@@ -569,7 +622,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .glass-side{grid-column:1;grid-row:1;min-width:0;width:100%}
 .glass-stack{display:grid;grid-template-columns:minmax(72px,30%) minmax(0,70%);grid-template-rows:auto 20px;align-items:start;width:100%;min-width:0}
 .taken-slot{position:relative;grid-column:1;grid-row:1;height:100%;min-width:0}
-.taken{position:absolute;right:-26px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:24px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
+.taken{position:absolute;right:-26px;top:var(--fill-y);transform:translateY(-50%);color:#168dd1;font-size:19px;font-weight:700;line-height:1.13;white-space:nowrap;text-align:right}
 .glass-frame{grid-column:2;grid-row:1;min-width:0;width:100%;transform:translateX(-7px)}
 .glass-viz{position:relative;width:100%;aspect-ratio:4/5}
 .glass{display:block;position:absolute;inset:0;width:100%;height:100%;margin:0}
@@ -622,7 +675,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .history-table tr[data-action]:hover{background:color-mix(in srgb,#b3e5fc 30%,white)}
 .card-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;border:0;padding:4px 0 0;min-height:0;margin-left:-5px;margin-right:-13px}.export{margin:0;padding:0;text-align:left}
 .export button{font-size:.72rem;padding:4px 8px;line-height:1.25;min-height:28px;max-width:100%}
-.card-version{margin-left:auto;align-self:flex-end;font-size:.72rem;color:var(--secondary-text-color,#666);padding-bottom:1px}
+.card-version{margin-left:auto;align-self:flex-end;font-size:.72rem;color:var(--secondary-text-color,#666);padding-bottom:0;transform:translateY(5px)}
 /* beta.21: compact footer geometry remains authoritative; intake, cup and right-edge alignment tuned. */
 .card-footer .export button.secondary{font-size:.76rem;line-height:1.05;height:28px;min-height:28px;max-height:28px;padding:3px 8px;box-sizing:border-box;border-radius:9px;white-space:nowrap}
 /* Centralized controls. Disabled and manage actions are deliberately different. */
@@ -649,6 +702,12 @@ button.manage-control:hover:not(:disabled){background:#dcdcdc;border-color:#9e9e
 .liquid-choices,.volume-choices{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .liquid-choice,.volume-choices .amount{font-size:.93rem!important;line-height:1.2;min-height:34px;padding:5px 9px!important}
 .liquid-choice{display:inline-flex;align-items:center;gap:5px}
+button.liquid-choice.custom-liquid-color{background:var(--liquid-choice-bg);color:var(--liquid-choice-ink);border-color:var(--liquid-choice-ink)}
+button.liquid-choice.custom-liquid-color:hover:not(:disabled){background:var(--liquid-choice-bg);color:var(--liquid-choice-ink);border-color:var(--liquid-choice-ink);box-shadow:0 0 0 2px var(--liquid-choice-ink)}
+button.liquid-choice.custom-liquid-color.selected{background:var(--liquid-choice-bg);color:var(--liquid-choice-ink);border-color:var(--liquid-choice-ink);box-shadow:inset 0 0 0 2px var(--liquid-choice-ink),0 0 0 1px var(--liquid-choice-bg);font-weight:750}
+button.liquid-choice.custom-liquid-color:focus-visible{outline:3px solid var(--focus-color,#0578b3);outline-offset:3px}
+button.liquid-choice.custom-liquid-color .svg-icon{filter:brightness(0)}
+button.liquid-choice.custom-liquid-color[style*="#FFFFFF"] .svg-icon{filter:brightness(0) invert(1)}
 .liquid-icon{width:23px;height:23px;min-width:23px;--mdc-icon-size:23px;display:inline-block;object-fit:contain}
 .volume-choices{margin-bottom:8px}
 .add-type,.manage-volumes{margin-top:7px;font-size:.86rem}
@@ -668,6 +727,10 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .manage-intro{font-size:.82rem;line-height:1.35;color:var(--secondary-text-color,#667);margin:2px 0 9px}
 .saved-liquids{display:flex;flex-direction:column;gap:0;margin-top:5px}
 .saved-liquid{display:grid;grid-template-columns:27px minmax(78px,1fr) minmax(60px,auto) 30px 30px 43px 58px;gap:5px;align-items:center;padding:4px 0;border-bottom:1px solid var(--divider-color,#ddd);min-width:0}
+.saved-liquid-icon{position:relative;width:23px;height:25px;display:inline-flex;align-items:flex-start}
+.manage-color-dot{width:8px;height:8px;border-radius:50%;border:1px solid #526070;box-sizing:border-box;flex:0 0 8px}
+.saved-liquid-icon .manage-color-dot{position:absolute;right:-1px;bottom:0}
+.hidden-liquid .manage-color-dot{margin-left:-7px}
 .saved-liquid .muted{font-size:.81rem;white-space:nowrap;text-align:right}
 .saved-liquid strong{font-size:.91rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .saved-liquid button{min-width:0;max-width:100%;padding:4px 4px;font-size:.78rem}
@@ -680,6 +743,14 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .manage-form-grid input{width:100%;min-width:0;box-sizing:border-box;padding:8px;background:#fff;border:1px solid #bbb;border-radius:8px;font:inherit}
 .manage-form-grid .svg-field{grid-column:1/-1}
 .manage-form-grid input[type=file]{font-size:.8rem;padding:6px}
+.color-editor{display:grid;grid-template-columns:50px minmax(115px,1fr) 26px auto;gap:7px;align-items:end;margin-top:9px}
+.color-editor label{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:.77rem}
+.color-editor input[type=color]{width:42px;height:32px;padding:2px;border:1px solid #9cabb4;border-radius:7px;background:#fff;cursor:pointer}
+.color-editor input[type=text]{height:32px;padding:5px 8px;width:100%;min-width:0;box-sizing:border-box;border:1px solid #9cabb4;border-radius:7px;text-transform:uppercase;font-size:.88rem;background:#fff;color:#222}
+.color-preview{width:25px;height:30px;border:1px solid #728390;border-radius:5px;box-sizing:border-box}
+.color-editor button{font-size:.74rem!important;white-space:nowrap;padding:6px 7px!important}
+.color-error{font-size:.8rem;margin:4px 0 0}.color-error[hidden]{display:none}
+.color-editor input:focus-visible{outline:2px solid #0578b3;outline-offset:2px}
 .volume-rows{display:flex;flex-direction:column;gap:2px}
 .volume-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 32px 32px 75px;gap:5px;align-items:center;border-bottom:1px solid var(--divider-color,#ddd);padding:2px 0;height:42px;min-height:42px;max-height:42px;box-sizing:border-box}
 .volume-edit-row label{font-size:.78rem;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;min-width:0;white-space:nowrap}
@@ -704,7 +775,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .hero-side{min-height:0}
  .bar-line{grid-template-columns:clamp(35px,24%,75px) minmax(0,1fr) max-content;gap:3px;margin:6px 0;font-size:.72rem}
  .bar-line strong{font-size:.69rem;justify-self:end}
- .taken{font-size:24px;right:-16px}
+ .taken{font-size:19px;right:-16px}
  .drink-count{font-size:clamp(.75rem,2.1cqw,.88rem)}
 }
 /* At narrow card widths keep the 24px total clear of the cup outline.
@@ -714,6 +785,8 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 }
 @media(max-width:570px){.dialog.dialog-manage-liquids{width:min(98vw,555px)}}
 @media(max-width:475px){
+ .color-editor{grid-template-columns:45px minmax(100px,1fr) 26px;row-gap:4px}
+ .color-editor button{grid-column:1/-1;justify-self:end}
  .saved-liquid{grid-template-columns:25px minmax(90px,1fr) minmax(65px,auto);row-gap:4px}
  .saved-liquid button{grid-row:2}
  .volume-edit-row{grid-template-columns:minmax(95px,1fr) 32px 32px 70px}
@@ -745,7 +818,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" aria-label="Export all data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.22</span>
+    <span class="card-version">v1.1.0-beta.23</span>
    </footer></div></ha-card>`;
  }
 }
@@ -782,23 +855,23 @@ const JDHL_CHART_KINDS=[
  {tag:'jwdaily-hydration-hourly-card',name:'jwDaily Hydration – Today by hour',key:'hourly_intake_today',title:'Today by hour',days:false},
  {tag:'jwdaily-hydration-weekly-card',name:'jwDaily Hydration – Last 7 days',key:'daily_intake_last_7_days',title:'Last 7 days',days:true}
 ];
-const JDHL_PALETTE=['#39a8de','#f2a34a','#67b69a','#9280d0','#dd7ba6','#79a2e7','#c6ad63','#82b5cb'];
+const JDHL_PALETTE=['#39A8DE','#F2A34A','#67B69A','#9280D0','#DD7BA6','#79A2E7','#C6AD63','#82B5CB'];
 /* Shared stable color assignment: the exact same drink uses the exact same
    color on hourly and weekly charts, independent of data/legend order. */
 function jdhlLiquidColor(id,name){
  const key=String(id||'').trim().toLowerCase();
  const label=String(name||id||'').trim().toLowerCase();
  const pair=key+' '+label;
- if(/water/.test(pair)&&/(beker|cup)/.test(pair))return '#9280d0';
- if(/water/.test(pair)&&/(glas|glass)/.test(pair))return '#dd7ba6';
- if(/coffee|koffie/.test(pair))return '#f2a34a';
- if(/tea|thee/.test(pair))return '#67b69a';
- if(/milk|melk/.test(pair))return '#39a8de';
- if(/orange|sinaasappel/.test(pair))return '#d45a38';
- if(/wine|wijn/.test(pair))return '#c6ad63';
- if(/soup|soep/.test(pair))return '#82b5cb';
- if(key==='water'||label==='water')return '#79a2e7';
- if(key==='other'||label==='other'||label==='overige')return '#b89d83';
+ if(/water/.test(pair)&&/(beker|cup)/.test(pair))return '#9280D0';
+ if(/water/.test(pair)&&/(glas|glass)/.test(pair))return '#DD7BA6';
+ if(/coffee|koffie/.test(pair))return '#F2A34A';
+ if(/tea|thee/.test(pair))return '#67B69A';
+ if(/milk|melk/.test(pair))return '#39A8DE';
+ if(/orange|sinaasappel/.test(pair))return '#D45A38';
+ if(/wine|wijn/.test(pair))return '#C6AD63';
+ if(/soup|soep/.test(pair))return '#82B5CB';
+ if(key==='water'||label==='water')return '#79A2E7';
+ if(key==='other'||label==='other'||label==='overige')return '#B89D83';
  let hash=2166136261;for(const ch of key){hash=Math.imul(hash^ch.charCodeAt(0),16777619)>>>0;}
  return JDHL_PALETTE[hash%JDHL_PALETTE.length];
 }
@@ -887,8 +960,9 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.22</div></ha-card>`;return;}
-  const colors=new Map(keys.map(key=>[key,jdhlLiquidColor(key,names[key])]));
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.23</div></ha-card>`;return;}
+  const colorSettings=entity?.attributes?.liquid_colors||{};
+  const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
      24 x-axis hours (1-24) or seven local day labels, plus daily sum labels. */
   const displayWidth=Math.round(this.getBoundingClientRect().width)||720;
@@ -938,7 +1012,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.22</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.23</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -953,4 +1027,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.22');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.23');
