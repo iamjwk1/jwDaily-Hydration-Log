@@ -66,7 +66,7 @@ const puppeteer=require('puppeteer-core');
    });
    console.log('VISUAL_GEOMETRY',width,JSON.stringify(x));
    const right=x.card.right;
-   if(width>=310)assert(x.chart.left>=x.glass.right-1,'chart must remain to the RIGHT of glass at card width '+width);
+   if(width>=310)assert(x.chart.left>=x.glass.left+0.8*x.glass.width+3,'chart must stay to the right of the visible cup outline at card width '+width);
  else assert(x.chart.top>=x.glass.bottom,'narrow cards should stack the chart below glass');
    for(const part of ['glass','taken','chart','button','date','export']){
      const p=x[part];assert(p&&p.left>=x.card.left-4&&p.right<=right+2,part+' outside card: '+JSON.stringify(p));
@@ -98,7 +98,7 @@ const puppeteer=require('puppeteer-core');
     const visualCupLeft=x.glass.left+x.glass.width*0.2;
     const gap=visualCupLeft-x.taken.right;
     assert(gap>=2 && gap<=20,'Blue intake must end just left of actual glass outline, no overlap: '+gap);
-    assert(x.chart.left>=x.glass.right-1,'Graph must be to right of glass');
+    assert(x.chart.left>=x.glass.left+0.8*x.glass.width+3,'Graph must be to right of visible glass outline');
    }
    for(const value of x.barVolumes)assert(Math.abs(value.right-x.button.right)<=2,'Volume labels and Add drink must align on the same right edge');
    assert(x.barStarts.every(left=>left-x.chart.left<=140),'Liquid bar starts too far from liquid name column');
