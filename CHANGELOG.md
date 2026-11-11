@@ -1,5 +1,12 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.21
+- Align consumption number, cup, liquid bars, right-side action, history and Excel/version footer to approved screenshot guides.
+- Fixed 24px blue intake and equal fixed 17px cup labels on all card widths.
+- HH:MM display in history while internally retaining HH:MM:SS.
+- No storage migrations, changes to data, Excel calculations or existing chart cards.
+
+
 ## v1.1.0-beta.19
 - Increase glass width by approximately 10-13% at normal and narrow card widths.
 - Reduce Excel export button height to 28 CSS px without changing its position.
