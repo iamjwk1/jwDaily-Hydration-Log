@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: jwdhl-beta23-publish
+  group: jwdhl-beta23-publish-host-chrome
   cancel-in-progress: false
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
       - name: Real Chromium responsive and color-control rendering
         run: |
           python -m pip install --disable-pip-version-check playwright
-          python -m playwright install --with-deps chromium
+          # Ubuntu hosted runner includes Google Chrome; avoid time-consuming browser installation.
           python tests/browser_beta23.py
 
   hacs:
