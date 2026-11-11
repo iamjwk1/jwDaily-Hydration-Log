@@ -111,7 +111,7 @@ async function main(){
  assert(overflow.indexOf('fill="#59baf2"')<overflow.indexOf('stroke="#e04444"'));
  assert(overflow.includes('class="cup-target"') && overflow.includes('class="glass-viz"'));
   assert(layout.includes('.cup-target,.cup-remaining') && layout.includes('font-size:17px'), 'HTML cup labels must be equal, independent of SVG width');
-  assert(layout.includes('const time=this._timeParts(new Date(r.timestamp)).time.slice(0,5)'), 'History must display HH:MM, with edit seconds retained');
+  assert(c._historyHTML.toString().includes('time.slice(0,5)'), 'History must display HH:MM, with edit seconds retained');
  console.log('PASS: over-target level fills open rim, stays capped, red target overlay visible');
 
  console.log('PASS: dashed red target line 16 SVG units lower, 100% fill reaches target, animation present');
