@@ -587,7 +587,7 @@ header h2{font-size:1.15rem;font-weight:650;margin:0}
 .bar-track{height:11px;min-width:0;border-radius:8px;background:var(--secondary-background-color,#e5e7eb);overflow:hidden}
 .bar-fill{height:100%;background:#34a5dc;border-radius:8px;min-width:2px}
 .type-dot{width:6px;height:6px;min-width:6px;border-radius:50%;display:inline-block;flex:none}
-.hero-actions{position:static;margin-top:auto;display:flex;justify-content:flex-end;align-items:flex-end;width:100%;padding:8px 0 0;min-width:0}
+.hero-actions{position:static;margin-top:auto;display:flex;justify-content:flex-end;align-items:flex-end;width:100%;padding:8px 0 0;min-width:0;transform:translateY(-10px)}
 .hero-actions .add-drink{font-size:.86rem;font-weight:650;min-width:0;max-width:100%;padding:7px 12px;line-height:1.2;border-radius:13px;white-space:nowrap}
 .day-loading{font-size:.93rem;color:var(--secondary-text-color);padding:22px 8px;min-height:140px}
 /* Exactly five 38px data rows are visible, with a separately sticky 35px header.
