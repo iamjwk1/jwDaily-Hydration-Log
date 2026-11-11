@@ -420,7 +420,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(!data.length)return `<div class="liquid-bars"><div class="bars-title">${heading}</div><p class="muted">${ready?'No classified drinks on this day.':'Loading day…'}</p></div>`;
   const high=Math.max(...data.map(x=>Number(x.volume_ml)));
   return `<div class="liquid-bars" aria-label="Volumes by liquid type on selected day"><div class="bars-title">${heading}</div>
-   ${data.map(x=>`<div class="bar-line"><span title="${jdhlEscape(label(x.liquid_type))}">${jdhlEscape(label(x.liquid_type))}</span>
+   ${data.map(x=>`<div class="bar-line"><span title="${jdhlEscape(label(x.liquid_type))}"><i class="type-dot" style="background:${jdhlLiquidColor(x.liquid_type,label(x.liquid_type))}" aria-hidden="true"></i>${jdhlEscape(label(x.liquid_type))}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${(100*Number(x.volume_ml)/high).toFixed(2)}%"></div></div>
       <strong>${jdhlFmt(Number(x.volume_ml))}</strong></div>`).join('')}</div>`;
  }
@@ -807,9 +807,24 @@ function jdhlChartProfile(hass){
  return Object.keys(hass?.states||{}).filter(v=>v.startsWith(prefix)&&v.endsWith(suffix)).sort().map(v=>v.slice(prefix.length,-suffix.length))[0]||'';
 }
 class JwDailyHydrationChartCard extends HTMLElement {
- constructor(){super();this.attachShadow({mode:'open'});this._config=null;this._hass=null;this._kind=this.constructor.chartKind||JDHL_CHART_KINDS[0];}
+ constructor(){
+  super();this.attachShadow({mode:'open'});this._config=null;this._hass=null;
+  this._kind=this.constructor.chartKind||JDHL_CHART_KINDS[0];this._selectedBucket=null;
+  this.shadowRoot.addEventListener('click',e=>{
+   const close=e.target.closest('[data-chart-close]');
+   if(close){this._selectedBucket=null;this._render();return;}
+   const hit=e.target.closest('[data-chart-bucket]');
+   if(hit){this._selectedBucket=Number(hit.dataset.chartBucket);this._render();}
+  });
+  this.shadowRoot.addEventListener('keydown',e=>{
+   if(e.key==='Escape'&&this._selectedBucket!==null){this._selectedBucket=null;this._render();}
+   if(e.key!=='Enter'&&e.key!==' ')return;
+   const hit=e.target.closest('[data-chart-bucket]');
+   if(hit){e.preventDefault();this._selectedBucket=Number(hit.dataset.chartBucket);this._render();}
+  });
+ }
  static getStubConfig(hass){return {type:`custom:${this.chartKind.tag}`,profile:jdhlChartProfile(hass),title:this.chartKind.title};}
- setConfig(config){if(!config)throw Error('Missing chart card configuration');this._config={...config};this._render();}
+ setConfig(config){if(!config)throw Error('Missing chart card configuration');this._config={...config};this._selectedBucket=null;this._render();}
  set hass(hass){this._hass=hass;this._render();}
  getCardSize(){return 3;}
  connectedCallback(){
@@ -833,11 +848,14 @@ class JwDailyHydrationChartCard extends HTMLElement {
    const liquidValues=row.liquids&&typeof row.liquids==='object'?row.liquids:{};
    const liquids=Object.fromEntries(Object.entries(liquidValues).map(([k,v])=>[k,Math.max(0,Number(v)||0)]));
    const total=Math.max(0,Number(row.total_logged_ml??row.total_ml??0));
-   return {label:this._kind.days?formatted:String(i+1),liquids,total};
+   return {label:this._kind.days?formatted:String(i+1),rawDate:original,liquids,total,hasData:!this._kind.days||row.has_data!==false};
   });
-  const keys=[...new Set(records.flatMap(r=>Object.keys(r.liquids)))];
   const names=entity?.attributes?.liquid_names||{};
-  const totals=Object.fromEntries(keys.map(k=>[k,records.reduce((a,r)=>a+(r.liquids[k]||0),0)]));
+  const totals={};for(const r of records)for(const [k,v] of Object.entries(r.liquids))totals[k]=(totals[k]||0)+v;
+  const latest=records.at(-1)?.liquids||{};
+  // Current day totals determine order in both graphs (same as the main card).
+  // Historical-only types come after today's types, ordered by period volume.
+  const keys=Object.keys(totals).sort((a,b)=>(latest[b]||0)-(latest[a]||0)||(totals[b]||0)-(totals[a]||0)||String(names[a]||a).localeCompare(String(names[b]||b)));
   const total=records.reduce((a,r)=>a+r.total,0);
   const highest=Math.max(1,...records.map(r=>r.total));
   const rawTick=highest/4;
@@ -883,7 +901,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
    art+=`<line class="grid-line" x1="${left}" x2="${viewWidth-right}" y1="${y}" y2="${y}"/>`;
    art+=`<text class="axis-text" x="${left-8}" y="${y+4}" text-anchor="end">${fmt(value)}</text>`;
   }
-  art+=`<text class="axis-text" x="12" y="${top+graphH/2}" text-anchor="middle" transform="rotate(-90 12 ${top+graphH/2})">mL</text>`;
+  art+=`<text class="axis-unit" x="13" y="${top+graphH/2}" text-anchor="middle" transform="rotate(-90 13 ${top+graphH/2})">mL</text>`;
   records.forEach((r,i)=>{
    const cx=left+(i+.5)*groupW,x=cx-barW/2;
    let bottomY=plotBottom;
@@ -892,13 +910,21 @@ class JwDailyHydrationChartCard extends HTMLElement {
     if(amount<=0)continue;
     const height=graphH*amount/max;
     bottomY-=height;
-    art+=`<rect x="${x.toFixed(2)}" y="${bottomY.toFixed(2)}" width="${barW.toFixed(2)}" height="${height.toFixed(2)}" rx="1" fill="${colors.get(key)}"><title>${jdhlEscape(names[key]||key)}: ${fmt(amount)} mL</title></rect>`;
+    art+=`<rect x="${x.toFixed(2)}" y="${bottomY.toFixed(2)}" width="${barW.toFixed(2)}" height="${height.toFixed(2)}" rx="1" fill="${colors.get(key)}" data-chart-bucket="${i}" tabindex="0" role="button" aria-label="Show ${jdhlEscape(r.label)} breakdown"><title>${jdhlEscape(names[key]||key)}: ${fmt(amount)} mL. Tap for details</title></rect>`;
+   }
+   if(this._kind.days&&r.total===0){
+    const message=r.hasData?'0':'—';
+    art+=`<text class="empty-marker" x="${cx.toFixed(2)}" y="${plotBottom-8}" text-anchor="middle">${message}</text>`;
+    // Larger tap target for missing/zero days, no fake colored bar.
+    art+=`<rect class="bucket-hit" x="${(cx-groupW*.38).toFixed(2)}" y="${top}" width="${(groupW*.76).toFixed(2)}" height="${graphH}" fill="transparent" data-chart-bucket="${i}" tabindex="0" role="button" aria-label="Details for ${jdhlEscape(r.label)}" />`;
    }
    if(this._kind.days&&r.total>0){
     const y=Math.max(13,plotBottom-graphH*r.total/max-6);
     art+=`<text x="${cx.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--primary-text-color,#243746)">${fmt(r.total)} mL</text>`;
    }
-   art+=`<text class="axis-text" x="${cx.toFixed(2)}" y="${plotBottom+19}" text-anchor="middle" font-size="${this._kind.days?13:11}">${jdhlEscape(r.label)}</text>`;
+   if(this._kind.days||displayWidth>=640||i%2===1){
+    art+=`<text class="axis-text" x="${cx.toFixed(2)}" y="${plotBottom+19}" text-anchor="middle" font-size="${this._kind.days?13:11}">${jdhlEscape(r.label)}</text>`;
+   }
   });
   const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}${this._kind.days?'':` (${fmt(totals[k])} mL)`}</span>`).join('');
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
