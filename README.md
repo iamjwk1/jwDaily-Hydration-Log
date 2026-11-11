@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.25
+# jwDaily Hydration Log v1.1.0-beta.26
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,7 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.25
+## What's included in beta.26 (functionally identical to beta.25)
 
 - **Guided one-time legacy conversion:** `Settings → Advanced → Convert existing data` inventories old liquid types, volume buttons and original drink counts. Rename suggested Cup types, choose explicit Liquid/Cup mappings and confirm them. A read-only preview and downloadable full-profile JSON backup precede one atomic conversion. Existing records, timestamps, IDs and actual volumes are never rewritten. Duplicate conversion is blocked.
 - **Water (beker) + Water (glas):** confirmed mappings aggregate to canonical `Water` in the daily, hourly and seven-day charts; the historical cup assignment remains available. The original per-record liquid ID is retained for rollback. Inconclusive cup associations remain unknown unless the user explicitly chooses one.

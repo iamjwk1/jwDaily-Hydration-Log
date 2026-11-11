@@ -158,7 +158,7 @@ class HydrationCoordinator:
         self.liquid_order: list[str] = []
         # None means follow the existing dashboard's quick_add YAML until customized.
         self.volume_buttons: list[float] | None = None
-        # Additive v1.1.0-beta.25 profile-local catalog. Original data is authoritative.
+        # Additive v1.1.0-beta.26 profile-local catalog. Original data is authoritative.
         # Empty lists do not generate cup or quick-button guesses from legacy amounts.
         self.cup_types: list[dict[str, Any]] = []
         self.quick_buttons: list[dict[str, Any]] = []
@@ -1059,7 +1059,7 @@ class HydrationCoordinator:
                     raise ValueError('Canonical water label must be Water')
                 if 'water' in defs and re.fullmatch(r'water\s*\((beker|glas|glass|cup)\)',defs['water']['name'],re.I):
                     self.liquid_overrides.setdefault('water',{})['name']='Water'
-                self.conversion_state=dict(applied=True,version='1.1.0-beta.25',
+                self.conversion_state=dict(applied=True,version='1.1.0-beta.26',
                     source_revision=expected_revision,record_count=len(ledger))
                 await self._save()
             except Exception:

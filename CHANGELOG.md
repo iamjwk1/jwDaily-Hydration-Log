@@ -1,5 +1,12 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.26
+
+- Reissue of the complete v1.1.0-beta.25 implementation, unchanged functional behavior.
+- Rebuild with consistent beta.26 identifiers after beta.25 GitHub Actions runs did not begin.
+- No changes to saved drinks, migration schema, settings import/export, calculations, chart logic or Excel layout.
+- Publication continues to require successful independent GitHub CI, HACS and Hassfest gates.
+
 ## v1.1.0-beta.25
 
 - Complete, explicit Legacy Liquid/Cup/Quick conversion wizard with backup, rollback-safe original record preservation, idempotency guard and canonical Water chart grouping.
