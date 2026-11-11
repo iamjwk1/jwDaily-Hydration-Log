@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.26 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.27 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -322,7 +322,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.26')throw Error(`Frontend v1.1.0-beta.26 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.27')throw Error(`Frontend v1.1.0-beta.27 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -657,7 +657,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  async _loadConversion(){
   try{this._conversionPlan=await this._hass.callWS({type:'jw_daily_hydration_log/conversion_preview',profile:this._config.profile});
-   this._render(true);}
+   this._conversionConfirmed=false;this._render(true);}
   catch(e){this._alert(e);}
  }
  _profileHTML(){
@@ -702,20 +702,25 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const liquids=this._liquidDefs().filter(x=>!x.hidden);
   return `<div class="settings-section"><h3>Convert existing data</h3>
    <p class="settings-note">This creates Cup types and Quick buttons, and maps historic liquid IDs without changing records or actual volumes. Confirm only after reviewing and saving a backup.</p>
-   ${p.already_converted?'<p class="status">This profile already has a completed conversion.</p>':
-   `<p class="settings-note">${p.record_count} historical drinks · current intake ${jdhlFmt(Number(p.consumed_ml))}. Existing cups and Quick buttons are preserved.</p>
+   <p class="settings-note">${p.already_converted?'Conversion already applied. Review and repair ALL historic mappings below. Existing quick buttons and cups are preserved.':'First conversion: review every historical ID before applying.'}</p><p class="settings-note">${p.record_count} historical drinks from ${p.audit.source_ids} original Liquid IDs · current intake ${jdhlFmt(Number(p.consumed_ml))}. Existing cups and Quick buttons are preserved.</p>
+    <div class="migration-summary"><strong>Full history mapping audit</strong>
+      <p>Classified: ${p.audit.classified_records} / ${p.audit.total_records} drinks · Unclassified: ${p.audit.unclassified_records}</p>
+      <p>Known cup: ${p.audit.cup_assigned_records} · Cup unknown: ${p.audit.cup_unknown_records} (can remain unknown)</p>
+      <p>Total logged volume: ${jdhlFmt(Number(p.audit.total_logged_ml))}. Original times and amounts never change.</p></div>
     <h4>New Cup types</h4>
     ${p.cups.map(c=>`<div class="settings-row"><label>${jdhlFmt(Number(c.default_volume_ml))}<input data-field="convert_cup_name" data-id="${E(c.id)}" value="${E(c.name)}" maxlength="48"/></label></div>`).join('')||'<p>There are no old unused volumes to convert.</p>'}
     <h4>Map existing liquids</h4>
-    ${p.sources.map(source=>`<div class="convert-row"><label class="check-label"><input type="checkbox" data-field="convert_include" data-id="${E(source.legacy_id)}" ${source.include?'checked':''}/><strong>${E(source.name)}</strong> (${source.record_count} drinks)</label>
-      <label>New Liquid<select data-field="convert_liquid" data-id="${E(source.legacy_id)}">${liquids.map(x=>`<option value="${E(x.id)}" ${x.id===source.liquid_type_id?'selected':''}>${E(x.name)}</option>`).join('')}</select></label>
+    ${p.sources.map(source=>`<div class="convert-row"><label class="check-label"><input type="checkbox" data-field="convert_include" data-id="${E(source.legacy_id)}" ${source.include?'checked':''}/><strong>${E(source.name)}</strong> (${source.record_count} drinks · ${jdhlFmt(Number(source.record_volume_ml||0))})
+      ${source.historical_only?'<small>Historic ID no longer defined — select a Liquid</small>':''}
+      ${source.already_mapped?'<small>Previously mapped · can be reviewed</small>':''}</label>
+      <label>New Liquid<select data-field="convert_liquid" data-id="${E(source.legacy_id)}"><option value="">Select Liquid</option>${liquids.map(x=>`<option value="${E(x.id)}" ${x.id===source.liquid_type_id?'selected':''}>${E(x.name)}</option>`).join('')}</select></label>
       <label>Historical Cup (optional)<select data-field="convert_cup" data-id="${E(source.legacy_id)}"><option value="">Unknown</option>${choices.map(x=>`<option value="${E(x.id)}" ${x.id===source.cup_type_id?'selected':''}>${E(x.name)} (${jdhlFmt(Number(x.default_volume_ml))})</option>`).join('')}</select></label>
      </div>`).join('')}
     <div class="migration-summary"><strong>Data integrity guarantee</strong><p>Original drink IDs, date/time and volumes are never rewritten. Only new settings and mappings are saved.</p></div>
     <button class="secondary" data-action="settings-conversion-backup">Download full profile backup (JSON)</button>
     <p class="settings-note">${this._conversionBackupSaved?'Backup download initiated; verify your file before confirming.':'A verified backup is required before conversion.'}</p>
     ${this._conversionConfirmed?'<p class="delete-warning">Final confirmation: apply the reviewed Liquid/Cup/Quick conversion. No drink records will change.</p>':''}
-    <div class="dialog-actions"><button data-action="${this._conversionConfirmed?'settings-conversion-apply':'settings-conversion-confirm'}" ${!this._conversionBackupSaved?'disabled':''}>${this._conversionConfirmed?'Apply conversion':'Review and confirm'}</button></div>`}
+    <div class="dialog-actions"><button data-action="${this._conversionConfirmed?'settings-conversion-apply':'settings-conversion-confirm'}" ${!this._conversionBackupSaved?'disabled':''}>${this._conversionConfirmed?'Apply conversion':'Review and confirm'}</button></div>
    </div>`;
  }
  _settingsHTML(){const page=this._settingsSection;const draft=this._settingsDraft;
@@ -803,7 +808,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
      </div>`:''}</div>`;
   }
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
-  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.26</p>
+  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.27</p>
    <p class="settings-note">Liquid and cup definitions, quick buttons and legacy mappings are stored per Home Assistant profile. Existing drink records are not rewritten by migration.</p></div>`;
   return `<div class="overlay" role="presentation"><section class="dialog dialog-settings" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({convert:'Convert existing data',transfer:'Settings import / export',legacy:'Original volume buttons'}[page]||'Settings')}</h3>
@@ -860,8 +865,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(!this._conversionConfirmed||!this._conversionBackupSaved||!this._conversionPlan)return;
    try{await this._ensureBackend();const p=this._conversionPlan;
     await this._hass.callWS({type:'jw_daily_hydration_log/conversion_apply',profile:this._config.profile,
-      expected_revision:p.revision,plan:{cups:p.cups,sources:p.sources},confirm:true});
-    this._conversionConfirmed=false;this._status='Conversion completed; drink records preserved';
+      expected_revision:p.revision,plan:{cups:p.cups,sources:p.sources,history_revision:p.history_revision},confirm:true});
+    this._conversionConfirmed=false;this._status='Full historic mapping audit complete; drink records preserved';
     await this._fetchHistory();await this._loadConversion();this._render(true);
    }catch(e){this._alert(e);}return;
   }
@@ -1275,6 +1280,24 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 @container jdhl-card (max-width:355px){.history-date-selector input{width:88px;flex-basis:88px;font-size:.76rem}.date-nav{gap:3px}.date-nav button{padding:5px 6px}}
 @media(max-width:380px){.root{padding:12px}.fields{grid-template-columns:1fr}.dialog{padding:12px}}
 
+
+/* beta.27: ONE SHARED THREE-COLUMN GRID for all Today by liquid rows.
+   Independent row grids caused the right bars to begin at different X positions. */
+.liquid-bars:has(.bar-line){display:grid;grid-template-columns:fit-content(52%) minmax(12px,1fr) max-content;
+ column-gap:5px;row-gap:11px;align-items:center;min-width:0}
+.liquid-bars .bars-title{grid-column:1/-1;margin:0 0 2px -10px}
+.liquid-bars .bar-line{display:contents}
+.liquid-bars .bar-line>span{grid-column:1;grid-row:auto;min-width:0;max-width:none;white-space:normal;
+ overflow-wrap:anywhere;margin-left:-10px;display:inline-flex;align-items:center;font-size:.72rem}
+.liquid-bars .bar-line>.bar-track{grid-column:2;grid-row:auto;min-width:12px;width:100%;margin:0}
+.liquid-bars .bar-line>strong{grid-column:3;grid-row:auto;justify-self:end;white-space:nowrap;font-size:.72rem}
+@container jdhl-card (max-width:390px){
+ .liquid-bars:has(.bar-line){grid-template-columns:fit-content(53%) minmax(12px,1fr) max-content;
+  column-gap:3px;row-gap:10px}
+ .liquid-bars .bar-line>span{font-size:.65rem}
+ .liquid-bars .bar-line>strong{font-size:.64rem}
+}
+
    </style><ha-card><div class="root">
    <header class="main-head">${this._config.show_title!==false?`<h2>${jdhlEscape(title)}</h2>`:'<span></span>'}
 
@@ -1298,7 +1321,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" aria-label="Export all data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.26</span>
+    <span class="card-version">v1.1.0-beta.27</span>
    </footer></div></ha-card>`;
  }
 }
@@ -1440,7 +1463,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.26</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.27</div></ha-card>`;return;}
   const colorSettings=entity?.attributes?.liquid_colors||{};
   const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
@@ -1492,7 +1515,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.26</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.27</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -1507,4 +1530,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.26');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.27');

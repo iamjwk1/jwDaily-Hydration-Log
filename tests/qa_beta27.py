@@ -1,4 +1,4 @@
-"""Offline v1.1.0-beta.26 regression: durable settings + conversion + XLSX."""
+"""Offline v1.1.0-beta.27 regression: durable settings + conversion + XLSX."""
 from __future__ import annotations
 import asyncio
 import copy
@@ -48,7 +48,7 @@ def load(name):
     m=importlib.util.module_from_spec(spec);sys.modules[fullname]=m;spec.loader.exec_module(m)
     return m
 const=load('const');mod=load('settings_io');co=load('coordinator');excel=load('excel')
-assert const.VERSION=='1.1.0-beta.26'
+assert const.VERSION=='1.1.0-beta.27'
 
 class Hass:
     def __init__(self):
@@ -175,6 +175,97 @@ async def main():
     restart=co.HydrationCoordinator(h,Entry('alpha','Jan-Willem'));await restart.async_initialize()
     check(restart.name=='New display name' and restart.slug==old_name and restart.records==saved_original,'Profile and history survive Home Assistant restart')
     check(restart.canonical_liquid('custom_water_glas')=='water' and restart.mapped_cup('water')==new_cups[180],'Conversions and Cup metadata survive restart')
-    print('BETA26_BACKEND_STORAGE_EXCEL_PASS')
+    print('BETA27_BACKEND_STORAGE_EXCEL_PASS')
 
 asyncio.run(main())
+
+async def beta27_historical_repair_regression():
+    """Realistic partial beta26 conversion and deleted historic liquid type."""
+    h=Hass()
+    c=co.HydrationCoordinator(h, Entry('repair_v27','Jan-Willem repair'))
+    await c.async_initialize()
+    c.liquid_overrides['water']={'name':'Water (beker)','default_volume_ml':180,'icon_mdi':'mdi:water'}
+    c.liquid_overrides['tea']={'name':'Tea','default_volume_ml':180,'icon_mdi':'mdi:tea'}
+    c.cup_types=[dict(id='cup_180',name='Beker',default_volume_ml=180,icon_mdi='mdi:cup',hidden=False),
+                 dict(id='cup_220',name='Glas',default_volume_ml=220,icon_mdi='mdi:glass-mug-variant',hidden=False)]
+    c.quick_buttons=[dict(id='quick_tea',liquid_type_id='tea',cup_type_id='cup_180',label_mode='automatic',custom_label='',hidden=False)]
+    c.legacy_cup_defaults={'water':'cup_180'}
+    c.conversion_state={'applied':True,'version':'1.1.0-beta.26','record_count':3,
+                        'source_revision':'prior-conversion'}
+    records=[
+        dict(id='old_water',kind='drink',timestamp='2026-11-08T09:00:17+01:00',liquid_type='water',volume_ml=500),
+        dict(id='removed_water_glass',kind='drink',timestamp='2026-11-09T18:35:59+01:00',liquid_type='deleted_water_glass',volume_ml=220),
+        dict(id='old_tea',kind='drink',timestamp='2026-11-10T14:05:08+01:00',liquid_type='tea',volume_ml=180),
+        dict(id='new_tea_cup',kind='drink',timestamp='2026-11-11T20:11:01+01:00',liquid_type='tea',cup_type_id='cup_180',volume_ml=180),
+        dict(id='removed_extra',kind='drink',timestamp='2026-11-11T21:12:59+01:00',liquid_type='retired_fruit_juice',volume_ml=220)
+    ]
+    c.records=copy.deepcopy(records)
+    c.consumed_ml=400;c.manual_consumed_ml=400
+    await c._save()
+    before=copy.deepcopy(c.records)
+    preview=c.conversion_preview()
+    source_ids={x['legacy_id'] for x in preview['sources']}
+    check(source_ids.issuperset({'deleted_water_glass','retired_fruit_juice','water','tea'}),
+          'Repair enumerates ALL historic IDs including deleted liquid definitions')
+    check(preview['already_converted'] and preview['audit']['unclassified_records']==2,
+          'Previously completed beta26 conversion exposes remaining unclassified historical records')
+    check(preview['audit']['cup_unknown_records']==3 and preview['audit']['total_records']==5,
+          'Audit separates Cup unknown from truly unclassified Liquid IDs')
+    bad=copy.deepcopy(preview)
+    for item in bad['sources']:
+        if item['legacy_id']=='retired_fruit_juice':item['include']=False
+    try:await c.async_apply_conversion(bad,bad['revision']);raise AssertionError('incomplete conversion accepted')
+    except ValueError:pass
+    check(c.records==before and c.conversion_state['version']=='1.1.0-beta.26',
+          'Incomplete repair rejected without modifying records or prior conversion state')
+    stale=copy.deepcopy(preview)
+    c.records.append(dict(id='new_during_review',kind='drink',timestamp='2026-11-11T21:20:00+01:00',liquid_type='tea',volume_ml=180))
+    try:await c.async_apply_conversion(stale,stale['revision']);raise AssertionError('stale history accepted')
+    except ValueError:pass
+    c.records.pop()
+    check(c.records==before,'A changed historic ledger invalidates conversion preview')
+    plan=c.conversion_preview()
+    for item in plan['sources']:
+        if item['legacy_id']=='deleted_water_glass':
+            item.update(include=True,liquid_type_id='water',cup_type_id='cup_220')
+        elif item['legacy_id']=='retired_fruit_juice':
+            item.update(include=True,liquid_type_id='other',cup_type_id='')
+        elif item['legacy_id']=='tea':
+            item.update(include=True,liquid_type_id='tea',cup_type_id='cup_180')
+        elif item['legacy_id']=='water':
+            item.update(include=True,liquid_type_id='water',cup_type_id='cup_180')
+        else:item['include']=False
+    result=await c.async_apply_conversion(plan,plan['revision'])
+    check(result['changed'] and result['audit']['classified_records']==5 and result['audit']['unclassified_records']==0,
+          'Repair resolves all historic Liquid IDs, including deleted types')
+    check(result['audit']['cup_unknown_records']==1,
+          'Unprovable historical Cup remains explicitly unknown')
+    check(c.records==before and c.conversion_state['run_count']==2,
+          'Repair is non-destructive and increments the conversion audit revision')
+    check(c.get_history('2026-11-09')[0]['liquid_type']=='water' and
+          c.get_history('2026-11-09')[0]['cup_type_id']=='cup_220',
+          'Deleted historic Water type resolves to canonical Water/Glas without rewriting the record')
+    check(c.get_history('2026-11-10')[0]['cup_type_id']=='cup_180',
+          'Previously uncategorized historic Tea resolves to the confirmed Beker type')
+    after=c.conversion_preview()
+    before_buttons=len(c.quick_buttons)
+    unchanged=await c.async_apply_conversion(after,after['revision'])
+    check(unchanged['applied'] and not unchanged['changed'] and len(c.quick_buttons)==before_buttons,
+          'Repeating the confirmed repair is idempotent and creates no extra buttons')
+    check(c.records==before,'Repeated conversion retains the untouched original ledger')
+    # Both graph aggregations and XLSX use this same canonical path.
+    check(c.liquid_breakdown('2026-11-09')[0]['liquid_type']=='water',
+          'Historical daily breakdown uses canonical Water after repair')
+    check(c.chart_last_7_days()['days'][-2]['liquids'].get('tea',0)==180,
+          'Weekly graph keeps past Tea amount after historical cup mapping')
+    with ZipFile(BytesIO(excel.export_xlsx([c.export_snapshot()],'Europe/Amsterdam'))) as archive:
+        check(archive.testzip() is None and len([x for x in archive.namelist() if re.fullmatch(r'xl/worksheets/sheet\d+\.xml',x)])==4,
+              'Historical conversion retains four valid Excel sheets')
+    await c.async_shutdown()
+    restored=co.HydrationCoordinator(h,Entry('repair_v27','Jan-Willem repair'));await restored.async_initialize()
+    check(restored.records==before and restored.conversion_audit()['unclassified_records']==0 and
+          restored.canonical_liquid('deleted_water_glass')=='water',
+          'All repair mappings and original drink data survive a Home Assistant restart')
+    print('BETA27_FULL_HISTORICAL_REPAIR_PASS')
+
+asyncio.run(beta27_historical_repair_regression())

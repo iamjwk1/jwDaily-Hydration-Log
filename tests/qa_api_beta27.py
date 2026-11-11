@@ -1,4 +1,4 @@
-"""Stubbed Home Assistant WebSocket integration-contract QA for beta.26."""
+"""Stubbed Home Assistant WebSocket integration-contract QA for beta.27."""
 from __future__ import annotations
 import asyncio,copy,importlib.util,json,re,sys,types
 from pathlib import Path
@@ -121,7 +121,7 @@ async def check():
     assert conn.errors and conn.errors[-1][1]=='settings_import_failed'
     print('PASS stale settings import blocked at WS boundary')
     api.ws_conversion_preview(h,conn,dict(id=8,type=const.DOMAIN+'/conversion_preview',profile='jan_willem'))
-    assert conn.last['mode']=='preview'
+    assert conn.last['mode']=='review'
     print('PASS read-only conversion WS API')
-    print('BETA26_WEBSOCKET_PROFILE_API_PASS')
+    print('BETA27_WEBSOCKET_PROFILE_API_PASS')
 asyncio.run(check())
