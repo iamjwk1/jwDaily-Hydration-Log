@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.30
+# jwDaily Hydration Log v1.1.0-beta.31
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,7 +6,15 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## Current release: v1.1.0-beta.30
+## Current release: v1.1.0-beta.31
+
+**Quick button controls:** Settings → Quick buttons now includes **Hide / Restore → Edit → Delete** in the compact row actions. Hide is a smaller, reversible visibility control. Delete is permanent and requires explicit confirmation. Deleting a Quick button never deletes a drink or changes its Liquid, Cup, timestamp or recorded volume. Its historical label remains in the drink record and the Excel export, even if the button catalog entry is removed. Both Cup types and Quick buttons have a single popup title, not duplicate headings.
+
+**Upgrading from beta.30:** The storage schema remains native model 2. Take a Full Backup ZIP plus a Home Assistant backup before upgrading. If you still have beta.29 or older, first complete the documented native model finalization and protective beta.30 upgrade. All independent integration capabilities and the four Excel worksheets are retained.
+
+### Prior beta.30 prerequisites and features
+
+
 
 **Required before upgrading:** Use **beta.29** to complete `Settings → Advanced → Finalize data model` for the entire profile. Verify **Model 2 / Already finalized**, save a Full Backup ZIP, and make a Home Assistant backup. If a profile still uses the old model, beta.30 refuses to start that profile rather than rewriting unknown drink history.
 

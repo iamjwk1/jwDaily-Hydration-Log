@@ -279,7 +279,7 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
                            target_day,definitions[liquid],float(record['volume_ml']),day,liquid,
                            cups.get(cup_id,'') if cup_id else '',
                            cup_details.get(cup_id,{}).get('default_volume_ml') if cup_id else None,
-                           quick.get(quick_id,quick_id)))
+                           record.get('quick_button_label_at_log') or quick.get(quick_id,quick_id)))
     # Chronological presentation, independent of the original storage order.
     # Stable sorting preserves input order for exact ties.
     result.sort(key=lambda row: (row[1], str(row[2]), str(row[9])))
