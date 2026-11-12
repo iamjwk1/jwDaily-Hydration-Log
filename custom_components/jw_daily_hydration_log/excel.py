@@ -22,7 +22,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color
 
-VERSION = '1.1.0-beta.27'
+VERSION = '1.1.0-beta.28'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -271,6 +271,9 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
             raw_liquid=record.get('liquid_type') or 'unknown'
             mapping=mappings.get(raw_liquid) or {}
             liquid=mapping.get('liquid_type_id') or raw_liquid
+            # Mirror coordinator.mapped_cup(): direct Cup > legacy alias Cup
+            # > default assigned to the unchanged legacy Liquid ID. Unknown
+            # Cups must remain unknown (never infer from logged mL).
             cup_id=(record.get('cup_type_id') or mapping.get('cup_type_id')
                     or (p.get('legacy_cup_defaults') or {}).get(raw_liquid) or '')
             quick_id=record.get('quick_button_id') or ''

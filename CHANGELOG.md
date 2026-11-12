@@ -1,5 +1,13 @@
 # jwDaily Hydration Log — changelog
 
+## v1.1.0-beta.28 — legacy Cup Excel export parity
+
+- Include `legacy_cup_defaults` in the backend snapshot used by the XLSX generator. This fixes missing Cup names for previously logged Coffee, Tea, Milk, Water and other liquids that keep the same canonical Liquid ID after conversion.
+- Preserve precedence: explicit record Cup ID, then renamed-liquid mapping Cup ID, then unchanged-liquid historic Cup default, otherwise unknown. Do not infer Cup from mL.
+- Test full backend-versus-XLSX per-record parity, all four sheets and formulas, five-row history, stable record/time/volume values, and Excel Office XML integrity.
+- No existing drinks, profiles, mapping settings, volume buttons or liquid colors are rewritten or automatically converted.
+
+
 ## v1.1.0-beta.27
 
 - Align all Today by liquid bars using a single shared three-column grid; preserve right-justified volumes on narrow and wide cards.
