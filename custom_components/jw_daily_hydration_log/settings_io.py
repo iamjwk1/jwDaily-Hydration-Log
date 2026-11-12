@@ -1,4 +1,4 @@
-"""Strict, non-destructive v1 settings exchange. No personal drink records exported.
+"""Strict, non-destructive v2 settings exchange. No personal drink records exported.
 
 This module is deliberately independent of Home Assistant for offline QA.
 """
@@ -11,11 +11,10 @@ from copy import deepcopy
 from typing import Any
 
 FORMAT = 'jwDaily-Hydration-Log-settings'
-SCHEMA = 1
+SCHEMA = 2
 FIELDS = ('liquid_overrides', 'custom_liquid_types', 'liquid_colors',
-          'hidden_builtin_liquids', 'liquid_order', 'volume_buttons',
-          'cup_types', 'quick_buttons', 'legacy_mappings', 'legacy_cup_defaults',
-          'conversion_state', 'target_override_ml')
+          'hidden_builtin_liquids', 'liquid_order',
+          'cup_types', 'quick_buttons', 'target_override_ml')
 PROFILE_FIELDS = ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')
 BUILTINS = {'water','coffee','tea','milk','soup','wine','other'}
 HEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
@@ -79,16 +78,31 @@ def _number(v, label, zero=False):
 def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
                      include_mappings: bool = False) -> dict:
     """Return a deep-copied, completely verified settings dictionary. No writes."""
-    if not isinstance(raw,dict) or raw.get('format')!=FORMAT or raw.get('schema')!=SCHEMA:
+    if not isinstance(raw,dict) or raw.get('format')!=FORMAT or raw.get('schema') not in (1,2):
         raise ValueError('Unknown settings format or schema version')
     if len(canonical(raw))>MAX_BYTES:
         raise ValueError('Settings file exceeds 256 KB')
     settings=raw.get('settings')
-    if not isinstance(settings,dict) or any(k not in FIELDS for k in settings):
-        raise ValueError('Unknown or malformed settings fields')
+    if not isinstance(settings,dict):
+        raise ValueError('Malformed settings payload')
+    historical={'volume_buttons','legacy_mappings','legacy_cup_defaults','conversion_state'}
+    if any(k not in FIELDS and not (raw['schema']==1 and k in historical) for k in settings):
+        raise ValueError('Unknown settings field')
     if any(key not in settings for key in FIELDS):
         raise ValueError('Incomplete settings payload')
-    s=deepcopy(settings)
+    s={key:deepcopy(settings[key]) for key in FIELDS}
+    # Safe compatibility import for beta.29 Settings/Full Backup. Legacy aliases
+    # whose own IDs were already migrated disappear from the active catalogue;
+    # a matching schema-v2 Data file must still validate its canonical references.
+    if raw.get('schema')==1:
+        retired=set((settings.get('legacy_mappings') or {}).keys())
+        quick_sources={q.get('liquid_type_id') for q in s.get('quick_buttons', []) if isinstance(q, dict)}
+        retired -= quick_sources
+        s['custom_liquid_types']=[v for v in s['custom_liquid_types'] if v.get('id') not in retired]
+        s['liquid_order']=[ident for ident in s['liquid_order'] if ident not in retired]
+        s['liquid_colors']={k:v for k,v in s['liquid_colors'].items() if k not in retired}
+        s['custom_liquid_types']=[{k:v for k,v in typ.items() if k!='default_volume_ml'} for typ in s['custom_liquid_types']]
+        s['liquid_overrides']={k:{a:b for a,b in v.items() if a!='default_volume_ml'} for k,v in s['liquid_overrides'].items()}
     all_ids=set(BUILTINS)
     custom=_list(s['custom_liquid_types'],'Custom liquids',30)
     liquid_ids=_ids(custom,'Custom liquids')
@@ -101,7 +115,7 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
             raise ValueError('Invalid liquid icon')
         if t.get('icon_svg') and (not isinstance(t['icon_svg'],str) or len(t['icon_svg'].encode())>16000):
             raise ValueError('Invalid liquid SVG')
-        if t.get('default_volume_ml') is not None:_number(t['default_volume_ml'],'Legacy liquid volume')
+        if t.get('default_volume_ml') is not None:_number(t['default_volume_ml'],'Liquid volume')
     overrides=s['liquid_overrides']
     if not isinstance(overrides,dict) or not set(overrides)<=BUILTINS or not all(isinstance(v,dict) for v in overrides.values()):
         raise ValueError('Invalid built-in liquid overrides')
@@ -116,11 +130,6 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
     if len(set(hidden))!=len(hidden) or not set(hidden)<=BUILTINS:raise ValueError('Invalid hidden liquid IDs')
     order=_list(s['liquid_order'],'Liquid order',37)
     if len(set(order))!=len(order) or not set(order)<=all_ids:raise ValueError('Invalid liquid order')
-    volumes=s['volume_buttons']
-    if volumes is not None:
-        _list(volumes,'Legacy volumes',24)
-        if len(set(volumes))!=len(volumes):raise ValueError('Duplicate volume buttons')
-        for v in volumes:_number(v,'Legacy volume')
     cups=_list(s['cup_types'],'Cup types',40)
     cup_ids=set(_ids(cups,'Cup types'))
     cup_names=set()
@@ -142,33 +151,6 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
         if button.get('label_mode','automatic') not in ('automatic','custom'):raise ValueError('Invalid button label mode')
         if button.get('label_mode')=='custom':_name(button.get('custom_label'),'Custom button label')
         if type(button.get('hidden',False)) is not bool:raise ValueError('Invalid button visibility')
-    mappings=s['legacy_mappings']
-    if not isinstance(mappings,dict) or len(mappings)>100:raise ValueError('Invalid legacy mappings')
-    if include_mappings:
-        if existing_legacy_ids is None:raise ValueError('Mapping import requires the target profile history')
-        for old, mapping in mappings.items():
-            if old not in existing_legacy_ids or not isinstance(mapping,dict):raise ValueError('Mapping refers to unknown historical record type')
-            if mapping.get('liquid_type_id') not in all_ids or mapping['liquid_type_id']==old:
-                raise ValueError('Mapping target is not a valid distinct liquid')
-            if mapping['liquid_type_id'] in mappings:raise ValueError('Chained mappings are forbidden')
-            if mapping.get('cup_type_id') and mapping['cup_type_id'] not in cup_ids:
-                raise ValueError('Mapping refers to unknown cup')
-        cup_defaults=s['legacy_cup_defaults']
-        if not isinstance(cup_defaults,dict) or len(cup_defaults)>100:raise ValueError('Invalid legacy Cup mappings')
-        for old,cid in cup_defaults.items():
-            if old not in existing_legacy_ids or cid not in cup_ids:
-                raise ValueError('Legacy cup default refers to unknown history or Cup type')
-    else:
-        s['legacy_mappings']={}
-        s['legacy_cup_defaults']={}
-        s['conversion_state']={}
-    conversion_state=s['conversion_state']
-    if not isinstance(conversion_state,dict) or len(canonical(conversion_state))>2000:
-        raise ValueError('Invalid conversion metadata')
-    if conversion_state and (type(conversion_state.get('applied')) is not bool or
-                             not isinstance(conversion_state.get('version',''),str) or
-                             not isinstance(conversion_state.get('source_revision',''),str)):
-        raise ValueError('Invalid conversion metadata fields')
     _number(s['target_override_ml'],'Target override',zero=True)
     return s
 

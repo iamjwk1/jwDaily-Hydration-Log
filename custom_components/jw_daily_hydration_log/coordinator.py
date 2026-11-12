@@ -157,17 +157,10 @@ class HydrationCoordinator:
         self.liquid_colors: dict[str, str] = {}
         self.hidden_builtin_liquids: list[str] = []
         self.liquid_order: list[str] = []
-        # None means follow the existing dashboard's quick_add YAML until customized.
-        self.volume_buttons: list[float] | None = None
-        # Additive v1.1.0-beta.29 profile-local catalog. Original data is authoritative.
-        # Empty lists do not generate cup or quick-button guesses from legacy amounts.
+        # Native v2 profile-scoped Cup and Quick catalogs.
         self.cup_types: list[dict[str, Any]] = []
         self.quick_buttons: list[dict[str, Any]] = []
-        # Legacy ID -> canonical liquid ID + optional cup ID. Never rewrite records.
-        self.legacy_mappings: dict[str, dict[str, str]] = {}
-        self.legacy_cup_defaults: dict[str,str] = {}
-        self.conversion_state: dict[str, Any] = {}
-        self.data_model_version: int = 1
+        self.data_model_version: int = 2
         self.profile_display_name: str = self.name
 
     def _now(self) -> datetime:
@@ -235,9 +228,106 @@ class HydrationCoordinator:
     def _rolled(self) -> None:
         self._reset_without_write(self._today())
 
+    def _assert_native_ledger(self) -> None:
+        """Refuse writes if ANY historic drink is not independently addressable."""
+        liquids = set(LIQUID_TYPES) | {x['id'] for x in self.custom_liquid_types}
+        cups = {x['id'] for x in self.cup_types}
+        ids = set()
+        for r in self.records:
+            rid = r.get('id')
+            if not isinstance(rid, str) or not rid or rid in ids:
+                raise ValueError('Native ledger has invalid or duplicate record IDs')
+            ids.add(rid)
+            if r.get('kind') != 'drink':
+                continue
+            if r.get('liquid_type_id') not in liquids:
+                raise ValueError('Unmigrated/unknown Liquid in record '+rid+'; restore beta.29 and finalize migration')
+            if r.get('cup_type_id') not in (None, *cups):
+                raise ValueError('Unknown Cup in record '+rid+'; repair before cleanup')
+            volume = r.get('volume_ml')
+            if type(volume) not in (float,int) or not math.isfinite(volume) or volume <= 0:
+                raise ValueError('Invalid historical volume in '+rid)
+            if not isinstance(r.get('timestamp'), str) or len(r['timestamp']) < 10:
+                raise ValueError('Invalid historical timestamp in '+rid)
+        self.data_model_version = 2
+
+    async def _validated_native_store(self, raw: dict) -> dict:
+        """One-time isolated pre-beta30 archive and fail-closed native cleanup."""
+        if not isinstance(raw, dict) or int(raw.get('data_model_version', 1)) != 2:
+            raise ValueError('beta.30 requires finalized data model 2. Reinstall beta.29, export Full Backup and finalize data first.')
+        from copy import deepcopy
+        original = deepcopy(raw)
+        liquid_ids = set(LIQUID_TYPES) | {x['id'] for x in raw.get('custom_liquid_types', [])}
+        cups = {c['id'] for c in raw.get('cup_types', [])}
+        ids = set()
+        for r in raw.get('records', []):
+            ident = r.get('id')
+            if not isinstance(ident,str) or not ident or ident in ids:
+                raise ValueError('Native cleanup blocked: invalid/duplicate record ID')
+            ids.add(ident)
+            if r.get('kind') != 'drink': continue
+            lid = r.get('liquid_type_id')
+            if lid not in liquid_ids or (r.get('liquid_type') and r['liquid_type'] != lid):
+                raise ValueError('Native cleanup blocked: incomplete/contradictory Liquid reference')
+            cup = r.get('cup_type_id')
+            if cup is not None and cup not in cups:
+                raise ValueError('Native cleanup blocked: orphaned Cup ID')
+            vol = r.get('volume_ml')
+            if type(vol) not in (int,float) or not math.isfinite(vol) or vol <= 0:
+                raise ValueError('Native cleanup blocked: invalid drink volume')
+            if not isinstance(r.get('timestamp'),str) or len(r['timestamp']) < 10:
+                raise ValueError('Native cleanup blocked: invalid timestamp')
+        clean = deepcopy(raw)
+        legacy_keys=('volume_buttons','legacy_mappings','legacy_cup_defaults','conversion_state')
+        for key in legacy_keys:clean.pop(key,None)
+        obsolete = set((raw.get('legacy_mappings') or {}).keys())
+        used = {r['liquid_type_id'] for r in raw.get('records', []) if r.get('kind') == 'drink'}
+        quick = {q.get('liquid_type_id') for q in raw.get('quick_buttons', [])}
+        obsolete -= used | quick
+        # Only obsolete custom definitions already mapped away; not user-owned active types.
+        clean['custom_liquid_types'] = [dict((k,v) for k,v in typ.items() if k != 'default_volume_ml')
+            for typ in raw.get('custom_liquid_types', []) if typ.get('id') not in obsolete]
+        clean['liquid_overrides'] = {key:{k:v for k,v in override.items() if k!='default_volume_ml'}
+            for key,override in (raw.get('liquid_overrides') or {}).items()}
+        clean['liquid_order'] = [x for x in raw.get('liquid_order', []) if x not in obsolete]
+        clean['liquid_colors'] = {k:v for k,v in (raw.get('liquid_colors') or {}).items() if k not in obsolete}
+        for r in clean.get('records', []):
+            if r.get('kind') != 'drink':continue
+            for k in ('liquid_type','source_legacy_liquid_id'):r.pop(k,None)
+            r.setdefault('cup_type_id',None)
+        clean['data_model_version'] = 2
+        if clean == raw:
+            return clean
+        # The separate Store archive is intentionally not deleted automatically.
+        archive = Store(self.hass,1,f'{DOMAIN}.{self.entry_id}.pre_beta30')
+        archived = await archive.async_load()
+        if archived is None:
+            import hashlib
+            from .settings_io import canonical
+            archived = {'format':'jwDaily-pre-beta30-backup','sha256':hashlib.sha256(canonical(original)).hexdigest(),
+                        'profile_entry_id':self.entry_id,'payload':original}
+            await archive.async_save(archived)
+        if archived.get('format') != 'jwDaily-pre-beta30-backup' or archived.get('profile_entry_id') != self.entry_id:
+            raise ValueError('Native cleanup blocked: unexpected archive payload')
+        from .settings_io import canonical
+        import hashlib
+        if hashlib.sha256(canonical(archived['payload'])).hexdigest() != archived['sha256']:
+            raise ValueError('Native cleanup blocked: invalid original backup checksum')
+        if archived['payload'] != original:
+            # It may contain a previous authoritative cleanup backup; do not overwrite it.
+            if clean == archived['payload']:
+                return clean
+            # Updating data since the archived snapshot is valid; preserve oldest recoverable backup.
+        await self._store.async_save(clean)
+        verified = await self._store.async_load()
+        if verified != clean:
+            raise ValueError('Native cleanup blocked: HA storage readback mismatch')
+        return clean
+
     async def async_initialize(self) -> None:
         saved = await self._store.async_load()
         if saved:
+            saved = await self._validated_native_store(saved)
             self.consumed_ml = float(saved.get('consumed_ml',0.0))
             self.manual_consumed_ml = float(saved.get('manual_consumed_ml',0.0))
             self.last_reset_date = saved.get('last_reset_date', self._today())
@@ -245,9 +335,6 @@ class HydrationCoordinator:
             self._last_source_value = saved.get('last_source_value')
             self._source_baseline_ml = float(saved.get('source_baseline',0.0))
             self.records = list(saved.get('records',[]))
-            for item in self.records:
-                if item.get('kind') == 'drink':
-                    item.setdefault('liquid_type', 'unknown')  # Historical v1.0.2, never assume water.
             self.source_readings = list(saved.get('source_readings',[]))
             self.daily_archive = dict(saved.get('daily_archive',{}))
             self.custom_liquid_types = list(saved.get('custom_liquid_types', []))
@@ -260,14 +347,9 @@ class HydrationCoordinator:
             self.hidden_builtin_liquids = [ident for ident in (saved.get('hidden_builtin_liquids') or [])
                                            if ident in LIQUID_TYPES]
             self.liquid_order = list(saved.get('liquid_order') or [])
-            if saved.get('volume_buttons') is not None:
-                self.volume_buttons = list(saved['volume_buttons'])
             self.cup_types = list(saved.get('cup_types') or [])
             self.quick_buttons = list(saved.get('quick_buttons') or [])
-            self.legacy_mappings = dict(saved.get('legacy_mappings') or {})
-            self.legacy_cup_defaults = dict(saved.get('legacy_cup_defaults') or {})
-            self.conversion_state = dict(saved.get('conversion_state') or {})
-            self.data_model_version = int(saved.get('data_model_version', 1))
+            self.data_model_version = 2
             self.profile_display_name = saved.get('profile_display_name') or self.name
             self.name = self.profile_display_name
         if self.last_reset_date != self._today():
@@ -323,7 +405,6 @@ class HydrationCoordinator:
                     self.consumed_ml += amount_ml
             record = self._entry('drink',origin,before,amount_ml,float(amount),unit)
             record['timestamp'] = timestamp
-            record['liquid_type'] = liquid_type
             record['liquid_type_id'] = liquid_type
             record['cup_default_volume_ml_at_log'] = next((float(c['default_volume_ml']) for c in self.cup_types if c['id'] == cup_type_id), None)
             if cup_type_id:
@@ -382,7 +463,7 @@ class HydrationCoordinator:
             next_day = timestamp[:10]
             # Replace first so archive counts reflect the new timestamp/date.
             record.update(timestamp=timestamp, volume_ml=round(amount_ml, 4),
-                          liquid_type=liquid_type, liquid_type_id=liquid_type, input_volume=float(amount), input_unit='mL',
+                          liquid_type_id=liquid_type, input_volume=float(amount), input_unit='mL',
                           cup_default_volume_ml_at_log=next((float(c['default_volume_ml']) for c in self.cup_types if c['id'] == cup_type_id), None))
             # An explicit user edit may change the cup; never infer it from volume.
             if cup_type_id:
@@ -526,10 +607,7 @@ class HydrationCoordinator:
             liquid_colors=self.liquid_colors,
             liquid_order=self.liquid_order,
             hidden_builtin_liquids=self.hidden_builtin_liquids,
-            volume_buttons=self.volume_buttons,
             cup_types=self.cup_types, quick_buttons=self.quick_buttons,
-            legacy_mappings=self.legacy_mappings,
-            legacy_cup_defaults=self.legacy_cup_defaults, conversion_state=self.conversion_state,
             data_model_version=self.data_model_version,
             profile_display_name=self.profile_display_name))
 
@@ -551,16 +629,11 @@ class HydrationCoordinator:
     def get_liquid_definitions(self) -> list[dict]:
         """Ordered definitions, merging built-in display overrides with stable IDs."""
         base = [dict(id=key, name=name, icon_mdi=icon, icon_svg='',
-                     default_volume_ml=None, custom=False, hidden=key in self.hidden_builtin_liquids)
+                     custom=False, hidden=key in self.hidden_builtin_liquids)
                 for key, name, icon in _BUILTIN_LIQUIDS]
         for item in base:
             item.update(self.liquid_overrides.get(item['id'], {}))
         items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
-        for item in items:
-            # Legacy source IDs remain in the store and export, but are no longer
-            # offered as separate options once the user accepts a canonical mapping.
-            if item['id'] in self.legacy_mappings:
-                item['hidden'] = True
         for item in items:
             ident = item['id']
             item['color_override'] = self.liquid_colors.get(ident)
@@ -575,7 +648,7 @@ class HydrationCoordinator:
             any(liquid_type == item['id'] for item in self.custom_liquid_types))
 
     async def async_add_liquid_type(self, name: str, icon_mdi: str = '',
-                                    icon_svg: str = '', default_volume_ml=None, color: str = '') -> dict:
+                                    icon_svg: str = '', color: str = '') -> dict:
         if not isinstance(name, str):
             raise ValueError('Liquid name is required')
         name = name.strip()
@@ -587,7 +660,6 @@ class HydrationCoordinator:
             raise ValueError('Invalid MDI icon (example: mdi:coffee)')
         if icon_svg:
             icon_svg = _safe_svg(icon_svg)
-        vol = _default_volume(default_volume_ml)
         selected_color = _color_override(color)
         async with self._lock:
             if len(self.custom_liquid_types) >= 30:
@@ -596,7 +668,7 @@ class HydrationCoordinator:
                 raise ValueError('Liquid name already exists')
             item = dict(id='custom_' + uuid4().hex[:12], name=name,
                         icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
-                        icon_svg=icon_svg, default_volume_ml=vol, custom=True)
+                        icon_svg=icon_svg, custom=True)
             self.custom_liquid_types.append(item)
             if selected_color:
                 self.liquid_colors[item['id']] = selected_color
@@ -611,12 +683,10 @@ class HydrationCoordinator:
             item = next((x for x in self.custom_liquid_types if x['id'] == liquid_type), None)
             if item is None:
                 raise ValueError('Custom liquid not found')
-            if any(x.get('kind') == 'drink' and x.get('liquid_type') == liquid_type for x in self.records):
+            if any(x.get('kind') == 'drink' and x.get('liquid_type_id') == liquid_type for x in self.records):
                 raise ValueError('This liquid is used in drink history and cannot be deleted')
             if any(q.get('liquid_type_id') == liquid_type for q in self.quick_buttons):
                 raise ValueError('This liquid is used by Quick buttons; hide it instead')
-            if any(v.get('liquid_type_id') == liquid_type for v in self.legacy_mappings.values()):
-                raise ValueError('This liquid is a migration target; clear the mapping first')
             self.custom_liquid_types.remove(item)
             self.liquid_order = [key for key in self.liquid_order if key != liquid_type]
             await self._save()
@@ -624,7 +694,7 @@ class HydrationCoordinator:
 
     async def async_update_liquid_type(self, liquid_type: str, name: str,
                                       icon_mdi: str = '', icon_svg: str = '',
-                                      default_volume_ml=None, color: str | None = None) -> dict:
+                                      color: str | None = None) -> dict:
         """Update any liquid's display metadata. Never rewrite its historical ID."""
         if not isinstance(name, str):
             raise ValueError('Liquid name is required')
@@ -637,7 +707,6 @@ class HydrationCoordinator:
             raise ValueError('Invalid MDI icon (example: mdi:coffee)')
         if icon_svg:
             icon_svg = _safe_svg(icon_svg)
-        volume = _default_volume(default_volume_ml)
         selected_color = _color_override(color) if color is not None else None
         async with self._lock:
             definitions = self.get_liquid_definitions()
@@ -649,7 +718,7 @@ class HydrationCoordinator:
                 raise ValueError('Liquid name already exists')
             props = dict(name=name,
                          icon_mdi=icon_mdi or ('mdi:glass-water' if not icon_svg else ''),
-                         icon_svg=icon_svg, default_volume_ml=volume)
+                         icon_svg=icon_svg)
             if existing['custom']:
                 next(item for item in self.custom_liquid_types if item['id'] == liquid_type).update(props)
             else:
@@ -698,20 +767,8 @@ class HydrationCoordinator:
             self._dispatch()
             return list(self.liquid_order)
 
-    async def async_set_volume_buttons(self, volumes: list[float]) -> list[float]:
-        """Store ordered quick-add volumes, including an intentionally empty list."""
-        if not isinstance(volumes, list) or len(volumes) > 24:
-            raise ValueError('Choose 0 to 24 volume buttons')
-        cleaned = [_default_volume(value) for value in volumes]
-        if any(value is None for value in cleaned) or len(set(cleaned)) != len(cleaned):
-            raise ValueError('Volumes must be positive, unique and between 0 and 100,000 mL')
-        async with self._lock:
-            self.volume_buttons = cleaned
-            await self._save()
-            self._dispatch()
-            return list(self.volume_buttons)
 
-    # --- beta.24 catalog and explicit legacy aliases ---
+    # Native Liquid and Cup catalogs (no legacy aliases).
     @staticmethod
     def _catalog_name(value: str, label: str = 'Name') -> str:
         if not isinstance(value, str) or not (1 <= len(value.strip()) <= 48):
@@ -811,7 +868,7 @@ class HydrationCoordinator:
                     raise ValueError('Quick button not found')
                 item['hidden'] = action == 'hide'
             else:
-                if not self._valid_liquid_type(liquid_type_id) or liquid_type_id in self.legacy_mappings:
+                if not self._valid_liquid_type(liquid_type_id):
                     raise ValueError('Choose an active liquid type')
                 if not self.valid_cup(cup_type_id):
                     raise ValueError('Choose an active cup type')
@@ -843,100 +900,27 @@ class HydrationCoordinator:
             self._dispatch()
             return self.get_quick_buttons()
 
-    def canonical_liquid(self, liquid_id: str) -> str:
-        if self.data_model_version >= 2:
-            return str(liquid_id)
-        # No aliases are traversed recursively: only explicit direct mappings
-        # to an unmapped currently defined target are permitted.
-        alias = self.legacy_mappings.get(liquid_id, {})
-        return str(alias.get('liquid_type_id') or liquid_id)
 
-    def mapped_cup(self, liquid_id: str, direct_cup: str | None = None) -> str | None:
-        if self.data_model_version >= 2:
-            return direct_cup
-        return (direct_cup or self.legacy_mappings.get(liquid_id, {}).get('cup_type_id')
-                or self.legacy_cup_defaults.get(liquid_id) or None)
 
-    def migration_preview(self) -> dict:
-        defs = self.get_liquid_definitions()
-        active = {d['id']: d for d in defs}
-        counts: dict[str, dict] = {}
-        for r in self.records:
-            if r.get('kind') != 'drink':
-                continue
-            key = str(r.get('liquid_type') or 'unknown')
-            data = counts.setdefault(key, {'count':0, 'total_ml':0.0})
-            data['count'] += 1
-            data['total_ml'] += float(r.get('volume_ml', 0))
-        proposals = []
-        for old_id, value in counts.items():
-            known = active.get(old_id)
-            label = known['name'] if known else old_id
-            suggestion = None
-            # Suggest only an obvious Water subtype. Do not apply automatically.
-            match = re.fullmatch(r'water\s*\((beker|glas|glass|cup)\)',label,re.I)
-            if match and 'water' in active and old_id != 'water':
-                preferred = match.group(1).casefold()
-                cup = next((c for c in self.cup_types if c['name'].casefold() == preferred), None)
-                suggestion = dict(liquid_type_id='water', cup_type_id=cup['id'] if cup else '')
-            assigned = self.legacy_mappings.get(old_id)
-            target = active.get((assigned or suggestion or {}).get('liquid_type_id',''))
-            old_color = self.liquid_color(old_id, label)
-            proposals.append(dict(legacy_id=old_id,legacy_name=label,
-                count=value['count'],total_ml=round(value['total_ml'],3),
-                old_color=old_color, current_mapping=assigned,
-                proposal=suggestion, target_color=target['color'] if target else '',
-                color_conflict=bool(target and target['color'] != old_color)))
-        return dict(proposals=proposals,record_count=sum(v['count'] for v in counts.values()),
-                    total_logged_ml=round(sum(v['total_ml'] for v in counts.values()),3))
 
-    async def async_set_legacy_mapping(self, old_id: str, new_liquid_id: str,
-                                       cup_type_id: str = '') -> dict:
-        if old_id == new_liquid_id:
-            raise ValueError('Select a different canonical liquid type')
-        if self.data_model_version >= 2:
-            raise ValueError('Native data model is final; legacy mappings are read-only')
-        if not self._valid_liquid_type(new_liquid_id) or new_liquid_id in self.legacy_mappings:
-            raise ValueError('Canonical target must be a defined, unmapped liquid')
-        if old_id not in {str(r.get('liquid_type')) for r in self.records if r.get('kind')=='drink'}:
-            raise ValueError('Legacy ID has no historic drink records')
-        if cup_type_id and not self.valid_cup(cup_type_id):
-            raise ValueError('Select an existing cup or leave cup unknown')
-        async with self._lock:
-            self.legacy_mappings[old_id] = dict(liquid_type_id=new_liquid_id,
-                                                cup_type_id=cup_type_id)
-            await self._save()
-            self._dispatch()
-            return self.migration_preview()
 
-    async def async_clear_legacy_mapping(self, old_id: str) -> dict:
-        if self.data_model_version >= 2:
-            raise ValueError('Native data model is final; legacy mappings are read-only')
-        async with self._lock:
-            self.legacy_mappings.pop(old_id, None)
-            await self._save()
-            self._dispatch()
-            return self.migration_preview()
 
-    # Beta.25: all imports and conversions are validated as a whole before writing.
+    # Strict native Settings import; the drink ledger remains independent.
     def settings_revision(self) -> str:
         return digest(extract(self))
 
     async def async_import_settings(self, settings: dict, expected_revision: str,
                                     include_mappings: bool = False) -> dict:
-        history_ids = {str(r.get('liquid_type') or 'unknown') for r in self.records
-                       if r.get('kind') == 'drink'}
         cleaned = validate_payload(dict(format='jwDaily-Hydration-Log-settings',
-            schema=1, settings=settings), existing_legacy_ids=history_ids,
-            include_mappings=include_mappings)
+            schema=2, settings=settings))
         # A settings-only import must not orphan any persisted drink references.
         allowable = set(('water','coffee','tea','milk','soup','wine','other')) | {t['id'] for t in cleaned['custom_liquid_types']}
         available_cups = {cup['id'] for cup in cleaned['cup_types']}
         for record in self.records:
             if record.get('kind') != 'drink':
                 continue
-            lid = self.canonical_liquid(record.get('liquid_type_id') or record.get('liquid_type','unknown'))
-            cup = self.mapped_cup(record.get('liquid_type','unknown'), record.get('cup_type_id'))
+            lid = record['liquid_type_id']
+            cup = record.get('cup_type_id')
             if lid not in allowable or (cup and cup not in available_cups):
                 raise ValueError('Settings import would orphan existing Liquid/Cup references; restore matching Data or use Full Backup')
         # Imported user SVGs require the same security filter as direct uploads.
@@ -973,231 +957,16 @@ class HydrationCoordinator:
             self._dispatch()
             return dict(name=self.name, slug=self.slug)
 
-    def _historic_liquid_inventory(self) -> dict[str, dict]:
-        """Every drink's original liquid ID, including deleted/hidden definitions."""
-        inventory: dict[str, dict] = {}
-        for record in self.records:
-            if record.get('kind') != 'drink':
-                continue
-            original = str(record.get('liquid_type') or 'unknown')
-            item = inventory.setdefault(original, dict(count=0, total_ml=0.0,
-                                                        direct_cup_count=0))
-            item['count'] += 1
-            item['total_ml'] += float(record.get('volume_ml') or 0)
-            if record.get('cup_type_id'):
-                item['direct_cup_count'] += 1
-        for entry in inventory.values():
-            entry['total_ml'] = round(entry['total_ml'], 3)
-        return inventory
 
-    def _ledger_revision(self) -> str:
-        """Protect against drinks being added/edited/deleted after preview."""
-        return digest([(r.get('id'), r.get('timestamp'), r.get('liquid_type'),
-                        r.get('cup_type_id'), r.get('volume_ml'))
-                       for r in self.records if r.get('kind') == 'drink'])
 
-    def conversion_audit(self) -> dict:
-        """Global historic coverage. Unknown Cups are explicitly NOT invented."""
-        inventory = self._historic_liquid_inventory()
-        defs = {d['id'] for d in self.get_liquid_definitions()}
-        unknown_liquid = 0
-        resolved_cups = 0
-        for record in self.records:
-            if record.get('kind') != 'drink':
-                continue
-            original = str(record.get('liquid_type') or 'unknown')
-            if self.canonical_liquid(original) not in defs:
-                unknown_liquid += 1
-            resolved = self.mapped_cup(original, record.get('cup_type_id'))
-            if resolved and self.valid_cup(resolved, include_hidden=True):
-                resolved_cups += 1
-        total = sum(x['count'] for x in inventory.values())
-        return dict(total_records=total, classified_records=total-unknown_liquid,
-                    unclassified_records=unknown_liquid,
-                    cup_assigned_records=resolved_cups,
-                    cup_unknown_records=total-resolved_cups,
-                    source_ids=len(inventory),
-                    total_logged_ml=round(sum(x['total_ml'] for x in inventory.values()),3))
 
-    def conversion_preview(self) -> dict:
-        """Read-only inventory of ALL historic IDs and already accepted mappings."""
-        definitions = self.get_liquid_definitions()
-        active = {d['id']: d for d in definitions}
-        inventory = self._historic_liquid_inventory()
-        volume_values = list(self.volume_buttons or [])
-        for d in definitions:
-            v = d.get('default_volume_ml')
-            if isinstance(v,(int,float)) and v>0 and v not in volume_values:
-                volume_values.append(v)
-        existing_volumes = {c.get('default_volume_ml') for c in self.cup_types}
-        cups = []
-        for v in sorted(set(volume_values)):
-            if not isinstance(v,(float,int)) or not math.isfinite(v) or v<=0 or v in existing_volumes:
-                continue
-            key = str(round(float(v),2)).replace('.','_')
-            item = dict(id='cup_migrated_'+key, name=f'Cup {v:g} mL',
-                        default_volume_ml=v, icon_mdi='mdi:cup', hidden=False)
-            hints = [d['name'] for d in definitions if d.get('default_volume_ml')==v]
-            if any(re.search(r'\(beker\)', name,re.I) for name in hints):item['name']='Beker'
-            elif any(re.search(r'\(glas|glass\)',name,re.I) for name in hints):item['name']='Glas'
-            cups.append(item)
-        sources = []
-        # Include both every defined Liquid and all orphaned historical IDs.
-        all_source_ids = [d['id'] for d in definitions]
-        all_source_ids += sorted(k for k in inventory if k not in active)
-        for old in all_source_ids:
-            definition = active.get(old)
-            name = definition['name'] if definition else old
-            existing_map = self.legacy_mappings.get(old) or {}
-            existing_cup = (existing_map.get('cup_type_id')
-                            or self.legacy_cup_defaults.get(old) or '')
-            canonical = existing_map.get('liquid_type_id') or (old if definition else '')
-            # Water with a cup suffix is only a SUGGESTION until explicitly approved.
-            if not existing_map and re.fullmatch(r'water\s*\((beker|glas|glass|cup)\)', name, re.I):
-                if old != 'water' and 'water' in active:
-                    canonical = 'water'
-            suggested_cup = existing_cup
-            v = definition.get('default_volume_ml') if definition else None
-            if not suggested_cup and v:
-                match = next((c for c in self.cup_types+cups
-                              if c.get('default_volume_ml') == v),None)
-                if match:suggested_cup=match['id']
-            historical = inventory.get(old) or {'count':0,'total_ml':0.0,'direct_cup_count':0}
-            sources.append(dict(legacy_id=old,name=name,record_count=historical['count'],
-                                record_volume_ml=historical['total_ml'],
-                                direct_cup_count=historical['direct_cup_count'],
-                                default_volume_ml=v, liquid_type_id=canonical,
-                                cup_type_id=suggested_cup,
-                                include=bool(historical['count'] or v),
-                                historical_only=definition is None,
-                                already_mapped=bool(existing_map or old in self.legacy_cup_defaults)))
-        return dict(profile=self.name, revision=self.settings_revision(),
-                    history_revision=self._ledger_revision(),
-                    record_count=sum(x['count'] for x in inventory.values()),
-                    consumed_ml=self.consumed_ml, mode='review',
-                    audit=self.conversion_audit(), existing_cups=self.get_cup_types(),
-                    cups=cups, sources=sources, existing_quick_buttons=self.get_quick_buttons(),
-                    already_converted=bool(self.conversion_state.get('applied')),
-                    canonical_water_name='Water')
 
-    async def async_apply_conversion(self, plan: dict, expected_revision: str) -> dict:
-        """Repeatable catalog+alias repair; no historic ledger or aggregate mutation."""
-        if self.data_model_version >= 2:
-            raise ValueError('The data model is already finalized; edit native records directly')
-        if not isinstance(plan,dict):raise ValueError('Invalid conversion plan')
-        cups=plan.get('cups',[]); sources=plan.get('sources',[])
-        if not isinstance(cups,list) or len(cups)>40 or not isinstance(sources,list) or len(sources)>120:
-            raise ValueError('Invalid conversion plan size')
-        async with self._lock:
-            if self.settings_revision()!=expected_revision:
-                raise ValueError('Settings changed since preview; refresh the mapping')
-            if self._ledger_revision()!=plan.get('history_revision'):
-                raise ValueError('Drink history changed since preview; refresh the mapping')
-            old={key:deepcopy(getattr(self,key)) for key in
-                 ('cup_types','quick_buttons','legacy_mappings','legacy_cup_defaults',
-                  'conversion_state','liquid_overrides')}
-            ledger=[(r.get('id'),r.get('timestamp'),r.get('volume_ml'),r.get('liquid_type'),
-                     r.get('cup_type_id')) for r in self.records]
-            before_audit=self.conversion_audit()
-            defs={d['id']:d for d in self.get_liquid_definitions()}
-            history=self._historic_liquid_inventory()
-            new_cups=deepcopy(self.cup_types)
-            cup_ids={c['id'] for c in new_cups}
-            cup_names={c['name'].casefold() for c in new_cups}
-            for cup in cups:
-                if not isinstance(cup,dict):raise ValueError('Invalid Cup entry')
-                cid=cup.get('id','');name=self._catalog_name(cup.get('name'),'Cup name')
-                if not re.fullmatch(r'cup_migrated_[0-9_]+',cid) or cid in cup_ids or name.casefold() in cup_names:
-                    raise ValueError('Cup ID/name conflict in conversion')
-                volume=_default_volume(cup.get('default_volume_ml'))
-                icon=cup.get('icon_mdi','mdi:cup')
-                if volume is None or not re.fullmatch(r'mdi:[a-z0-9-]{2,70}',icon):
-                    raise ValueError('Invalid cup volume or icon')
-                new_cups.append(dict(id=cid,name=name,default_volume_ml=volume,
-                                     icon_mdi=icon,hidden=False))
-                cup_ids.add(cid);cup_names.add(name.casefold())
-            if len(new_cups)>40:raise ValueError('Maximum 40 Cup types')
-            new_map=deepcopy(self.legacy_mappings)
-            new_defaults=deepcopy(self.legacy_cup_defaults)
-            new_quick=deepcopy(self.quick_buttons)
-            combinations={(q['liquid_type_id'],q['cup_type_id']) for q in new_quick}
-            seen=set()
-            for source in sources:
-                if not isinstance(source,dict):raise ValueError('Invalid liquid mapping')
-                ident=source.get('legacy_id');target=source.get('liquid_type_id') or ''
-                cup_id=source.get('cup_type_id') or ''
-                if not isinstance(ident,str) or ident in seen or (ident not in defs and ident not in history):
-                    raise ValueError('Unknown or repeated historical Liquid source')
-                if cup_id and cup_id not in cup_ids:
-                    raise ValueError('Historical Cup does not exist')
-                seen.add(ident)
-                if not source.get('include',False):
-                    if ident in history and ident not in defs and ident not in new_map:
-                        raise ValueError('Unclassified historical Liquid must be mapped')
-                    continue
-                if target not in defs or target in new_map and target != ident:
-                    raise ValueError('Choose a defined, unmapped canonical Liquid for every selected history type')
-                if ident != target:
-                    new_map[ident]=dict(liquid_type_id=target,cup_type_id=cup_id)
-                    new_defaults.pop(ident,None)
-                elif cup_id:
-                    new_map.pop(ident,None)
-                    new_defaults[ident]=cup_id
-                else:
-                    new_map.pop(ident,None)
-                    new_defaults.pop(ident,None)
-                if cup_id and (target,cup_id) not in combinations:
-                    new_quick.append(dict(id='quick_'+uuid4().hex[:12],
-                        liquid_type_id=target,cup_type_id=cup_id,
-                        label_mode='automatic',custom_label='',hidden=False))
-                    combinations.add((target,cup_id))
-            if len(new_quick)>48:raise ValueError('Maximum 48 Quick buttons')
-            # Reject alias chains and ALL unclassified historic sources, even if
-            # they were not present in the old active liquid catalog.
-            for old_id in history:
-                resolved=(new_map.get(old_id) or {}).get('liquid_type_id') or old_id
-                if resolved not in defs or resolved in new_map:
-                    raise ValueError('Incomplete conversion: historical Liquid ID '+old_id+' remains unclassified')
-            rename_water = ('water' in defs and bool(re.fullmatch(
-                r'water\s*\((beker|glas|glass|cup)\)', defs['water']['name'], re.I)))
-            if (new_cups==self.cup_types and new_quick==self.quick_buttons and
-                new_map==self.legacy_mappings and new_defaults==self.legacy_cup_defaults and
-                self.conversion_state.get('applied') and not rename_water):
-                return dict(applied=True,changed=False,profile=self.name,
-                            records_unchanged=len(ledger),audit=self.conversion_audit())
-            try:
-                self.cup_types,self.quick_buttons,self.legacy_mappings,self.legacy_cup_defaults=(
-                    new_cups,new_quick,new_map,new_defaults)
-                if 'water' in defs and re.fullmatch(r'water\s*\((beker|glas|glass|cup)\)',defs['water']['name'],re.I):
-                    self.liquid_overrides.setdefault('water',{})['name']='Water'
-                audit=self.conversion_audit()
-                if audit['unclassified_records']:
-                    raise ValueError('Conversion left unclassified historical drinks')
-                if audit['total_records']!=before_audit['total_records'] or audit['total_logged_ml']!=before_audit['total_logged_ml']:
-                    raise ValueError('Conversion must preserve all drink totals')
-                self.conversion_state=dict(applied=True,version='1.1.0-beta.29',
-                    source_revision=expected_revision,record_count=len(ledger),
-                    run_count=int(old['conversion_state'].get('run_count',1 if old['conversion_state'].get('applied') else 0))+1,
-                    classified_records=audit['classified_records'],
-                    cup_unknown_records=audit['cup_unknown_records'])
-                await self._save()
-            except Exception:
-                for k,v in old.items():setattr(self,k,v)
-                raise
-            assert ledger==[(r.get('id'),r.get('timestamp'),r.get('volume_ml'),r.get('liquid_type'),
-                             r.get('cup_type_id')) for r in self.records]
-            self._dispatch()
-            return dict(applied=True,changed=True,profile=self.name,
-                        records_unchanged=len(ledger),cups=len(self.cup_types),
-                        quick_buttons=len(self.quick_buttons),mappings=len(self.legacy_mappings),
-                        audit=self.conversion_audit())
 
     def get_history(self, date: str | None = None) -> list[dict]:
         day = date or self._today()
         values = [dict(id=r['id'],timestamp=r['timestamp'],volume_ml=r['volume_ml'],
-                       liquid_type=self.canonical_liquid(r.get('liquid_type_id') or r.get('liquid_type', 'unknown')),
-                       original_liquid_type=r.get('source_legacy_liquid_id') or r.get('liquid_type', 'unknown'),
-                       cup_type_id=self.mapped_cup(r.get('liquid_type','unknown'), r.get('cup_type_id')),
+                       liquid_type=r['liquid_type_id'],
+                       cup_type_id=r.get('cup_type_id'),
                        cup_default_volume_ml_at_log=r.get('cup_default_volume_ml_at_log'),
                        quick_button_id=r.get('quick_button_id'),origin=r.get('origin', ''))
                   for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
@@ -1213,7 +982,7 @@ class HydrationCoordinator:
         for record in self.records:
             if record.get('kind') != 'drink' or record.get('timestamp', '')[:10] != day:
                 continue
-            liquid = self.canonical_liquid(record.get('liquid_type', 'unknown'))
+            liquid = record['liquid_type_id']
             totals[liquid] = totals.get(liquid, 0.0) + float(record.get('volume_ml', 0))
         return [dict(liquid_type=key, volume_ml=round(volume, 3))
                 for key, volume in sorted(totals.items()) if volume > 0]
@@ -1283,7 +1052,7 @@ class HydrationCoordinator:
             except (TypeError,ValueError,IndexError):
                 continue
             bucket=buckets[hour]
-            liquid=self.canonical_liquid(str(record.get('liquid_type') or 'unknown'))
+            liquid=record['liquid_type_id']
             bucket['total_ml']+=volume
             bucket['liquids'][liquid]=bucket['liquids'].get(liquid,0.0)+volume
         for bucket in buckets:
@@ -1316,95 +1085,13 @@ class HydrationCoordinator:
                     liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()},
                     liquid_colors=self.liquid_color_map())
 
-    def model_migration_preview(self) -> dict:
-        """Proof of complete canonical references before a one-time storage rewrite."""
-        before = [(r.get('id'), r.get('timestamp'), r.get('volume_ml'))
-                  for r in self.records if r.get('kind') == 'drink']
-        liquids = {t['id'] for t in self.get_liquid_definitions()}
-        cups = {c['id'] for c in self.cup_types}
-        unresolved = []
-        missing_cup = 0
-        for r in self.records:
-            if r.get('kind') != 'drink':
-                continue
-            canonical = self.canonical_liquid(r.get('liquid_type_id') or r.get('liquid_type', 'unknown'))
-            cup = self.mapped_cup(r.get('liquid_type', 'unknown'), r.get('cup_type_id'))
-            if canonical not in liquids:
-                unresolved.append(dict(record_id=r.get('id'), liquid_id=r.get('liquid_type')))
-            if cup and cup not in cups:
-                unresolved.append(dict(record_id=r.get('id'), invalid_cup=cup))
-            if not cup:
-                missing_cup += 1
-        return dict(profile=self.slug, completed=self.data_model_version >= 2,
-                    revision=self.settings_revision(), history_revision=self._ledger_revision(),
-                    drink_count=len(before), unclassified=unresolved[:200],
-                    unclassified_count=len(unresolved), cup_unknown_count=missing_cup,
-                    all_ids_preserved=True,
-                    total_logged_ml=round(sum(float(r.get('volume_ml') or 0)
-                                              for r in self.records if r.get('kind')=='drink'), 3))
 
-    async def async_finalize_model(self, settings_rev: str, history_rev: str,
-                                   allow_unknown_cups: bool) -> dict:
-        """One-time atomic ledger canonicalization. Old aliases stay until beta.30 rollback retirement."""
-        async with self._lock:
-            plan = self.model_migration_preview()
-            if plan['revision'] != settings_rev or plan['history_revision'] != history_rev:
-                raise ValueError('Data or settings changed after migration preview')
-            if plan['completed']:
-                return dict(changed=False, **plan)
-            if plan['unclassified_count']:
-                raise ValueError('Resolve all unknown Liquid/Cup references first')
-            if plan['cup_unknown_count'] and not allow_unknown_cups:
-                raise ValueError('Confirm that unresolved historical Cups will remain Unknown')
-            original = deepcopy(self.records)
-            old_version, old_state = self.data_model_version, deepcopy(self.conversion_state)
-            ids_before = [(r.get('id'),r.get('timestamp'),r.get('volume_ml'),r.get('kind')) for r in original]
-            try:
-                for r in self.records:
-                    if r.get('kind') != 'drink':
-                        continue
-                    old = r.get('liquid_type') or 'unknown'
-                    new = self.canonical_liquid(old)
-                    cup = self.mapped_cup(old, r.get('cup_type_id'))
-                    if new != old:
-                        r['source_legacy_liquid_id'] = old
-                    r['liquid_type'] = r['liquid_type_id'] = new
-                    r['cup_type_id'] = cup or None
-                    # The original Cup default is unknown for old events.
-                    r.setdefault('cup_default_volume_ml_at_log', None)
-                self.data_model_version = 2
-                self.conversion_state = {**self.conversion_state, 'applied': True,
-                                         'version': '1.1.0-beta.29', 'source_revision': settings_rev,
-                                         'model_finalized': True, 'model_version': 2}
-                if ids_before != [(r.get('id'),r.get('timestamp'),r.get('volume_ml'),r.get('kind'))
-                                  for r in self.records]:
-                    raise ValueError('Migration altered original drink data')
-                if self.model_migration_preview()['unclassified_count']:
-                    raise ValueError('Migration left unresolved references')
-                await self._save()
-            except Exception:
-                self.records, self.data_model_version, self.conversion_state = original, old_version, old_state
-                raise
-            self._dispatch()
-            return dict(changed=True, **self.model_migration_preview())
 
     def data_revision(self) -> str:
         return data_io.sha(data_io.extract(self))
 
     def export_data(self) -> dict:
-        document = data_io.export_payload(self)
-        # An export never rewrites HA storage; canonicalize copy using accepted mappings.
-        for r in document['data']['records']:
-            if r.get('kind') != 'drink':
-                continue
-            old = r.get('liquid_type') or 'unknown'
-            canonical = self.canonical_liquid(r.get('liquid_type_id') or old)
-            if canonical != old:
-                r['source_legacy_liquid_id'] = old
-            r['liquid_type_id'] = r['liquid_type'] = canonical
-            r['cup_type_id'] = self.mapped_cup(old, r.get('cup_type_id'))
-            r.setdefault('cup_default_volume_ml_at_log', None)
-        return document
+        return data_io.export_payload(self)
 
     def _validate_import_data(self, raw: dict, *, settings: dict | None = None) -> dict:
         from .settings_io import BUILTINS
@@ -1438,8 +1125,7 @@ class HydrationCoordinator:
                 for k, v in result.items():
                     setattr(self, '_source_baseline_ml' if k=='source_baseline' else
                             '_last_source_value' if k=='last_source_value' else k, deepcopy(v))
-                self.data_model_version = 2 if all(r.get('liquid_type_id') for r in self.records
-                                                    if r.get('kind')=='drink') else 1
+                self._assert_native_ledger()
                 await self._save()
             except Exception:
                 for k, v in old.items():
@@ -1474,10 +1160,7 @@ class HydrationCoordinator:
         if (raw_settings.get('source_profile') or {}).get('slug') != self.slug or \
            (raw_data.get('source_profile') or {}).get('slug') != self.slug:
             raise ValueError('Full restore is restricted to the same profile ID')
-        history_ids = {str(r.get('source_legacy_liquid_id') or r.get('liquid_type') or 'unknown')
-                       for r in raw_data.get('data', {}).get('records', []) if r.get('kind') == 'drink'}
-        history_ids |= set((raw_settings.get('settings') or {}).get('legacy_mappings') or {})
-        settings = validate_payload(raw_settings, existing_legacy_ids=history_ids, include_mappings=True)
+        settings = validate_payload(raw_settings)
         for item in settings['custom_liquid_types']:
             if item.get('icon_svg'):_safe_svg(item['icon_svg'])
         for item in settings['liquid_overrides'].values():
@@ -1511,8 +1194,7 @@ class HydrationCoordinator:
                 for k, v in data.items():
                     setattr(self, '_source_baseline_ml' if k=='source_baseline' else
                             '_last_source_value' if k=='last_source_value' else k, deepcopy(v))
-                self.data_model_version = 2 if all(r.get('liquid_type_id') for r in self.records
-                                                    if r.get('kind')=='drink') else 1
+                self._assert_native_ledger()
                 await self._save()
                 # Native Home Assistant options are the durable owner of profile preferences.
                 options={**self.entry.options,**preferences}
@@ -1542,10 +1224,4 @@ class HydrationCoordinator:
                     liquid_definitions=self.get_liquid_definitions(),
                     liquid_colors=dict(self.liquid_colors),
                     hidden_builtin_liquids=list(self.hidden_builtin_liquids),
-                    volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons),
-                    cup_types=self.get_cup_types(),quick_buttons=self.get_quick_buttons(),
-                    legacy_mappings={key:dict(value) for key,value in self.legacy_mappings.items()},
-                    # Same-Liquid legacy Cup assignments are stored separately
-                    # from renamed-Liquid aliases. Excel needs BOTH mappings to
-                    # match get_history() for every historic drink record.
-                    legacy_cup_defaults=dict(self.legacy_cup_defaults))
+                    cup_types=self.get_cup_types(),quick_buttons=self.get_quick_buttons())
