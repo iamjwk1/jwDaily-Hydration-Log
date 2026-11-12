@@ -411,6 +411,9 @@ class HydrationCoordinator:
                 record['cup_type_id'] = cup_type_id
             if quick_button_id:
                 record['quick_button_id'] = quick_button_id
+                # Preserve the button's label as it was at logging time.
+                record['quick_button_label_at_log'] = next(
+                    q['label'] for q in self.get_quick_buttons() if q['id'] == quick_button_id)
             self.records.append(record)
             if not is_today:
                 self._adjust_archive(timestamp[:10], amount_ml)
@@ -472,8 +475,11 @@ class HydrationCoordinator:
                 record.pop('cup_type_id', None)
             if quick_button_id:
                 record['quick_button_id'] = quick_button_id
+                record['quick_button_label_at_log'] = next(
+                    q['label'] for q in self.get_quick_buttons() if q['id'] == quick_button_id)
             else:
                 record.pop('quick_button_id', None)
+                record.pop('quick_button_label_at_log', None)
             if previous_day == self.last_reset_date:
                 self._adjust_current(-previous_ml)
             else:
@@ -854,9 +860,32 @@ class HydrationCoordinator:
                                  liquid_type_id: str = '', cup_type_id: str = '',
                                  label_mode: str = 'automatic', custom_label: str = '',
                                  order: list[str] | None = None) -> list[dict]:
-        if action not in ('add','update','hide','restore','reorder'):
+        if action not in ('add','update','hide','restore','reorder','delete'):
             raise ValueError('Invalid quick-button action')
         async with self._lock:
+            if action == 'delete':
+                item = next((q for q in self.quick_buttons if q['id'] == quick_id), None)
+                if item is None:
+                    raise ValueError('Quick button not found')
+                # This removes ONLY the shortcut. Preserve historical Liquid, Cup,
+                # timestamps, volumes and a human-readable button label.
+                label = next(q['label'] for q in self.get_quick_buttons()
+                             if q['id'] == quick_id)
+                previous_buttons = deepcopy(self.quick_buttons)
+                previous_records = deepcopy(self.records)
+                try:
+                    for record in self.records:
+                        if record.get('kind') == 'drink' and record.get('quick_button_id') == quick_id:
+                            record.setdefault('quick_button_label_at_log', label)
+                            record.pop('quick_button_id', None)
+                    self.quick_buttons = [q for q in self.quick_buttons if q['id'] != quick_id]
+                    await self._save()
+                except Exception:
+                    self.quick_buttons = previous_buttons
+                    self.records = previous_records
+                    raise
+                self._dispatch()
+                return self.get_quick_buttons()
             if action == 'reorder':
                 if not isinstance(order, list) or set(order) != {q['id'] for q in self.quick_buttons} or len(order) != len(self.quick_buttons):
                     raise ValueError('Quick-button order must include every button exactly once')
@@ -968,7 +997,9 @@ class HydrationCoordinator:
                        liquid_type=r['liquid_type_id'],
                        cup_type_id=r.get('cup_type_id'),
                        cup_default_volume_ml_at_log=r.get('cup_default_volume_ml_at_log'),
-                       quick_button_id=r.get('quick_button_id'),origin=r.get('origin', ''))
+                       quick_button_id=r.get('quick_button_id'),
+                       quick_button_label_at_log=r.get('quick_button_label_at_log'),
+                       origin=r.get('origin', ''))
                   for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
         return sorted(values, key=lambda r: (r['timestamp'],r['id']))
 

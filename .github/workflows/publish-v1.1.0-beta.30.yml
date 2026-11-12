@@ -1,13 +1,6 @@
 name: jwDaily Hydration Log beta.30 — validate and publish
+# Historical beta.30 release publisher; manual-only after beta.31.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/qa_beta30.py'
-      - 'tests/browser_beta30.py'
-      - 'RELEASE_NOTES_v1.1.0-beta.30.md'
-      - '.github/workflows/publish-v1.1.0-beta.30.yml'
   workflow_dispatch:
 permissions:
   contents: write

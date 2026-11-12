@@ -148,6 +148,11 @@ def validate(raw, *, liquids, cups):
                 _number(item['cup_default_volume_ml_at_log'], 'historical Cup volume', zero=False)
             if item.get('quick_button_id') is not None and not isinstance(item['quick_button_id'], str):
                 raise ValueError('Invalid Quick ID')
+            historic_label = item.get('quick_button_label_at_log')
+            if historic_label is not None and (not isinstance(historic_label, str)
+                                                or len(historic_label) > 100
+                                                or any(ord(ch) < 32 for ch in historic_label)):
+                raise ValueError('Invalid historic Quick button label')
         if item.get('details') is not None and not isinstance(item['details'], dict):
             raise ValueError('Invalid record details')
     daily = clean['daily_archive']

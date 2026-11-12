@@ -1,3 +1,10 @@
+## v1.1.0-beta.31
+
+- Quick buttons can now be permanently deleted with an in-popup confirmation; deleting a button leaves all drink moments, Liquid/Cup references, timestamps and actual volumes unchanged. Previous Quick button labels remain available in history, backups and Excel.
+- A failed Quick button deletion is rolled back without partial in-memory or stored changes.
+- Cup types and Quick buttons show their section title only once; Hide/Restore controls are compact and appear before Edit. Quick actions wrap responsively without losing Delete on narrow cards.
+- New and edited drinks store a Quick label snapshot at entry time; Data import validates optional historical labels. Existing Settings/Data/Full Backup, migration guard and four-sheet Excel retained.
+
 ## v1.1.0-beta.30
 
 - Four independent Drink history columns: Time, Liquid, Cup, Volume; compact responsive layouts.
