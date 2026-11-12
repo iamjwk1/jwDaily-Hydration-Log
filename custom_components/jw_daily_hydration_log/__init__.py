@@ -110,18 +110,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_update_liquid_type)
     websocket_api.async_register_command(hass,ws_set_builtin_liquid_visibility)
     websocket_api.async_register_command(hass,ws_set_liquid_order)
-    websocket_api.async_register_command(hass,ws_set_volume_buttons)
     websocket_api.async_register_command(hass,ws_manage_cup)
     websocket_api.async_register_command(hass,ws_manage_quick)
-    websocket_api.async_register_command(hass,ws_legacy_preview)
-    websocket_api.async_register_command(hass,ws_migration_backup)
-    websocket_api.async_register_command(hass,ws_legacy_mapping)
     websocket_api.async_register_command(hass,ws_set_target)
     websocket_api.async_register_command(hass,ws_settings_export)
     websocket_api.async_register_command(hass,ws_settings_preview)
     websocket_api.async_register_command(hass,ws_settings_apply)
-    websocket_api.async_register_command(hass,ws_conversion_preview)
-    websocket_api.async_register_command(hass,ws_conversion_apply)
     websocket_api.async_register_command(hass,ws_profiles_list)
     websocket_api.async_register_command(hass,ws_profile_edit)
     websocket_api.async_register_command(hass,ws_profile_create)
@@ -131,8 +125,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_full_export)
     websocket_api.async_register_command(hass,ws_full_preview)
     websocket_api.async_register_command(hass,ws_full_apply)
-    websocket_api.async_register_command(hass,ws_model_preview)
-    websocket_api.async_register_command(hass,ws_model_finalize)
     websocket_api.async_register_command(hass,ws_export)
     return True
 
@@ -172,8 +164,8 @@ def ws_capabilities(hass:HomeAssistant,connection:websocket_api.ActiveConnection
     """Confirm that the Python backend matches the frontend before any write."""
     connection.send_result(msg['id'],{'version':VERSION,'add_drink':True,
                                       'edit_drink':True,'custom_liquid_types':True,'builtin_liquid_visibility':True,
-                                      'cup_types':True,'quick_buttons':True,'legacy_mapping':True,'central_settings':True,
-                                      'settings_transfer':True,'conversion_wizard':True,'profile_management':True})
+                                      'cup_types':True,'quick_buttons':True,'central_settings':True,
+                                      'settings_transfer':True,'native_model':True,'profile_management':True})
 
 
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/history',probatio.Required('profile'):str,
@@ -199,13 +191,10 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'count':len(records),'total_ml':round(sum(x['volume_ml'] for x in records),2),
         'consumed_ml':round(c.consumed_ml,2),'target_ml':c.target_ml,
         'liquid_types':c.get_liquid_definitions(),
-        'volume_buttons':None if c.volume_buttons is None else list(c.volume_buttons),
         'today_breakdown':c.today_breakdown(),
         'cup_types':c.get_cup_types(), 'quick_buttons':c.get_quick_buttons(),
         'profile_settings':dict(name=c.name,age=c.age,gender=c.gender,unit=c.unit,
                                 source_mode=c.source_mode),
-        'migration_active':bool(c.legacy_mappings),
-        'conversion_applied':bool(c.conversion_state.get('applied')),
         'data_model_version':c.data_model_version, 
         'backend_version':VERSION,
     })
@@ -278,14 +267,13 @@ async def ws_delete_drink(hass:HomeAssistant, connection:websocket_api.ActiveCon
                                   probatio.Required('name'):str,
                                   probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('icon_svg'):str,
-                                  probatio.Optional('default_volume_ml'):float,
                                   probatio.Optional('color'):str})
 @websocket_api.async_response
 async def ws_add_liquid_type(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         c=_resolve(hass,msg['profile'])
         item=await c.async_add_liquid_type(msg['name'],msg.get('icon_mdi',''),
-                                           msg.get('icon_svg',''),msg.get('default_volume_ml'),msg.get('color',''))
+                                           msg.get('icon_svg',''),msg.get('color',''))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return
@@ -312,14 +300,13 @@ async def ws_delete_liquid_type(hass:HomeAssistant,connection:websocket_api.Acti
                                   probatio.Required('name'):str,
                                   probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('icon_svg'):str,
-                                  probatio.Optional('default_volume_ml'):float,
                                   probatio.Optional('color'):str})
 @websocket_api.async_response
 async def ws_update_liquid_type(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         item=await _resolve(hass,msg['profile']).async_update_liquid_type(
             msg['liquid_type'],msg['name'],msg.get('icon_mdi',''),
-            msg.get('icon_svg',''),msg.get('default_volume_ml'),msg.get('color'))
+            msg.get('icon_svg',''),msg.get('color'))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return
@@ -356,18 +343,6 @@ async def ws_set_liquid_order(hass:HomeAssistant,connection:websocket_api.Active
     connection.send_result(msg['id'],{'order':order})
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_volume_buttons',
-                                  probatio.Required('profile'):str,
-                                  probatio.Required('volumes'):[float]})
-@websocket_api.async_response
-async def ws_set_volume_buttons(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
-    try:
-        volumes=await _resolve(hass,msg['profile']).async_set_volume_buttons(msg['volumes'])
-    except (ValueError,ServiceValidationError) as exc:
-        connection.send_error(msg['id'],'invalid_volume_buttons',str(exc))
-        return
-    connection.send_result(msg['id'],{'volumes':volumes})
 
 
 # Central-settings APIs: all changes remain admin-gated, profile scoped and validated.
@@ -414,62 +389,10 @@ async def ws_manage_quick(hass, connection, msg):
     connection.send_result(msg['id'],{'quick_buttons':result})
 
 
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_preview',
-                                  probatio.Required('profile'):str})
-@callback
-def ws_legacy_preview(hass, connection, msg):
-    try:
-        result=_resolve(hass,msg['profile']).migration_preview()
-    except ServiceValidationError as exc:
-        connection.send_error(msg['id'],'not_found',str(exc));return
-    connection.send_result(msg['id'],result)
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_backup',
-                                  probatio.Required('profile'):str})
-@websocket_api.async_response
-async def ws_migration_backup(hass, connection, msg):
-    """Return the unmodified persisted profile store for a user-held rollback.
-
-    This is a read-only operation. It deliberately does not write any HA file,
-    change the Store schema, or silently enable a migration.
-    """
-    try:
-        c=_resolve(hass,msg['profile'])
-        saved=await c._store.async_load()
-        if not isinstance(saved,dict):
-            raise ValueError('No stored profile snapshot to back up')
-        data=json.dumps(saved,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode('utf-8')
-        digest=hashlib.sha256(data).hexdigest()
-    except (ValueError,ServiceValidationError) as exc:
-        connection.send_error(msg['id'],'backup_error',str(exc));return
-    connection.send_result(msg['id'],{
-        'filename':f'jwDaily Hydration Log {c.slug} pre-beta28-conversion.json',
-        'base64':base64.b64encode(data).decode('ascii'),
-        'sha256':digest,'bytes':len(data),'version':VERSION})
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/legacy_mapping',
-                                  probatio.Required('profile'):str,
-                                  probatio.Required('action'):str,
-                                  probatio.Required('legacy_id'):str,
-                                  probatio.Optional('liquid_type_id'):str,
-                                  probatio.Optional('cup_type_id'):str})
-@websocket_api.async_response
-async def ws_legacy_mapping(hass, connection, msg):
-    try:
-        c=_resolve(hass,msg['profile'])
-        if msg['action']=='apply':
-            result=await c.async_set_legacy_mapping(msg['legacy_id'],msg.get('liquid_type_id',''),msg.get('cup_type_id',''))
-        elif msg['action']=='clear':
-            result=await c.async_clear_legacy_mapping(msg['legacy_id'])
-        else:
-            raise ValueError('Unknown legacy mapping action')
-    except (ValueError,ServiceValidationError) as exc:
-        connection.send_error(msg['id'],'invalid_mapping',str(exc));return
-    connection.send_result(msg['id'],result)
 
 
 @websocket_api.require_admin
@@ -500,19 +423,15 @@ async def ws_settings_export(hass, connection, msg):
         c=_resolve(hass,msg['profile']);raw=canonical(export_payload(c))
         connection.send_result(msg['id'], dict(filename=f'jwDaily Hydration Log {c.slug} Settings.json',
             base64=base64.b64encode(raw).decode('ascii'),size=len(raw),sha256=hashlib.sha256(raw).hexdigest(),
-            schema=1,profile=c.name,revision=c.settings_revision()))
+            schema=2,profile=c.name,revision=c.settings_revision()))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'settings_export_failed',str(exc))
 
 
-def _settings_candidate(c,content,with_mappings=False):
+def _settings_candidate(c, content):
     payload=parse_settings_json(content)
-    history_ids={str(r.get('liquid_type') or 'unknown') for r in c.records if r.get('kind')=='drink'}
-    if with_mappings and (payload.get('source_profile') or {}).get('slug') != c.slug:
-        raise ValueError('Historical mappings can only be restored to their original profile')
-    cleaned=validate_payload(payload,existing_legacy_ids=history_ids,include_mappings=with_mappings)
-    return cleaned, payload
-
+    cleaned=validate_payload(payload)
+    return cleaned,payload
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/settings_import_preview',
@@ -524,12 +443,11 @@ def ws_settings_preview(hass, connection, msg):
     try:
         c=_resolve(hass,msg['profile'])
         source=parse_settings_json(msg['content'])
-        include=bool(msg.get('include_mappings',(source.get('source_profile') or {}).get('slug')==c.slug))
-        new, payload=_settings_candidate(c,msg['content'],include)
+        new,payload=_settings_candidate(c,msg['content'])
         preview=settings_preview(c,new)
         preview.update(source_profile=(payload.get('source_profile') or {}).get('name','Unknown'),
                        import_sha256=digest(new),exclude_history=True,
-                       include_mappings=include)
+                       include_mappings=False)
         connection.send_result(msg['id'],preview)
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'settings_validation_failed',str(exc))
@@ -549,38 +467,16 @@ async def ws_settings_apply(hass, connection, msg):
         if msg['confirm'] is not True:raise ValueError('Explicit confirmation required')
         c=_resolve(hass,msg['profile'])
         source=parse_settings_json(msg['content'])
-        include=bool(msg.get('include_mappings',(source.get('source_profile') or {}).get('slug')==c.slug))
-        new,_=_settings_candidate(c,msg['content'],include)
+        new,_=_settings_candidate(c,msg['content'])
         if digest(new)!=msg['import_sha256']:raise ValueError('Import contents changed after preview')
-        result=await c.async_import_settings(new,msg['expected_revision'],include)
+        result=await c.async_import_settings(new,msg['expected_revision'],False)
         connection.send_result(msg['id'],dict(applied=True,**result))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'settings_import_failed',str(exc))
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/conversion_preview',
-                                  probatio.Required('profile'):str})
-@callback
-def ws_conversion_preview(hass, connection, msg):
-    try:connection.send_result(msg['id'],_resolve(hass,msg['profile']).conversion_preview())
-    except ServiceValidationError as exc:connection.send_error(msg['id'],'not_found',str(exc))
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/conversion_apply',
-                                  probatio.Required('profile'):str,
-                                  probatio.Required('plan'):dict,
-                                  probatio.Required('expected_revision'):str,
-                                  probatio.Required('confirm'):bool})
-@websocket_api.async_response
-async def ws_conversion_apply(hass, connection, msg):
-    try:
-        if msg['confirm'] is not True:raise ValueError('Explicit confirmation required')
-        result=await _resolve(hass,msg['profile']).async_apply_conversion(msg['plan'],msg['expected_revision'])
-        connection.send_result(msg['id'],result)
-    except (ValueError,ServiceValidationError) as exc:
-        connection.send_error(msg['id'],'conversion_failed',str(exc))
 
 
 @websocket_api.require_admin
@@ -659,20 +555,7 @@ async def ws_profile_create(hass, connection, msg):
         entry=result['result']
         if template:
             settings=extract(template)
-            mapped_legacy_ids=set(settings['legacy_mappings'])
-            settings['legacy_mappings']={}  # Never copy historic aliases between people.
-            settings['legacy_cup_defaults']={}
-            settings['conversion_state']={}
-            # Exclude old alias-only custom liquids; the new profile has no
-            # legacy drink history for which those IDs would be meaningful.
-            settings['custom_liquid_types']=[item for item in settings['custom_liquid_types']
-                                             if item['id'] not in mapped_legacy_ids]
-            settings['liquid_colors']={key:value for key,value in settings['liquid_colors'].items()
-                                       if key not in mapped_legacy_ids}
-            settings['liquid_order']=[key for key in settings['liquid_order']
-                                      if key not in mapped_legacy_ids]
-            settings['quick_buttons']=[item for item in settings['quick_buttons']
-                                        if item['liquid_type_id'] not in mapped_legacy_ids]
+            # A new profile copies only the native Liquid/Cup/Quick catalogs.
             # A fresh profile has no history; each profile owns its own settings copy.
             store=Store(hass,1,f'{DOMAIN}.{entry.entry_id}')
             current=await store.async_load() or {}
@@ -792,10 +675,7 @@ async def ws_full_apply(hass, connection, msg):
         actual=c.full_restore_preview(settings_raw,data_raw,checksum)
         if actual != msg['preview']:
             raise ValueError('Backup or profile changed after preview')
-        existing_ids={str(r.get('source_legacy_liquid_id') or r.get('liquid_type') or 'unknown')
-                      for r in data_raw['data']['records'] if r.get('kind')=='drink'}
-        existing_ids|=set(settings_raw['settings'].get('legacy_mappings') or {})
-        settings=validate_payload(settings_raw,existing_legacy_ids=existing_ids,include_mappings=True)
+        settings=validate_payload(settings_raw)
         data=c._validate_import_data(data_raw,settings=settings)
         prefs=c._validate_restored_preferences(settings_raw.get('profile_preferences'))
         result=await c.async_restore_full(settings,data,msg['preview'],prefs)
@@ -805,31 +685,8 @@ async def ws_full_apply(hass, connection, msg):
         connection.send_error(msg['id'],'full_restore_failed',str(exc))
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/model_migration_preview',
-                                  probatio.Required('profile'):str})
-@callback
-def ws_model_preview(hass,connection,msg):
-    try:connection.send_result(msg['id'],_resolve(hass,msg['profile']).model_migration_preview())
-    except (ValueError,ServiceValidationError) as exc:connection.send_error(msg['id'],'model_preview_failed',str(exc))
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/model_migration_finalize',
-                                  probatio.Required('profile'):str,
-                                  probatio.Required('settings_revision'):str,
-                                  probatio.Required('history_revision'):str,
-                                  probatio.Required('allow_unknown_cups'):bool,
-                                  probatio.Required('confirm'):bool})
-@websocket_api.async_response
-async def ws_model_finalize(hass,connection,msg):
-    try:
-        if not msg['confirm']:raise ValueError('Final migration confirmation required')
-        result=await _resolve(hass,msg['profile']).async_finalize_model(
-            msg['settings_revision'],msg['history_revision'],msg['allow_unknown_cups'])
-        connection.send_result(msg['id'],result)
-    except (ValueError,ServiceValidationError) as exc:
-        connection.send_error(msg['id'],'model_migration_failed',str(exc))
 
 
 @websocket_api.require_admin

@@ -140,7 +140,9 @@ def validate(raw, *, liquids, cups):
             cup = item.get('cup_type_id')
             if cup is not None and (not isinstance(cup, str) or cup not in valid_cups):
                 raise ValueError('Data import references unknown Cup ID')
-            item['liquid_type'] = item['liquid_type_id'] = liquid
+            item['liquid_type_id'] = liquid
+            item.pop('liquid_type', None)
+            item.pop('source_legacy_liquid_id', None)
             item['cup_type_id'] = cup  # None is explicitly unknown; never guess based on volume.
             if item.get('cup_default_volume_ml_at_log') is not None:
                 _number(item['cup_default_volume_ml_at_log'], 'historical Cup volume', zero=False)

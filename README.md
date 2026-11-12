@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.29
+# jwDaily Hydration Log v1.1.0-beta.30
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -6,26 +6,23 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
 
-## What's new in beta.28
+## Current release: v1.1.0-beta.30
 
-- Fix Excel export of historical Cups: the coordinator now includes the profile's `legacy_cup_defaults` in the snapshot passed to the four-sheet XLSX writer.
-- Both kinds of mapping are respected: renamed-liquid aliases (`legacy_mappings`) and unchanged-liquid defaults (`legacy_cup_defaults`). Record-level Cup IDs take priority, as in Drink history.
-- Add an Excel-to-backend regression covering every historical record, original values, unknown Cups, and ZIP/OOXML structure. **No drink records or settings are migrated/modified by this release.**
+**Required before upgrading:** Use **beta.29** to complete `Settings → Advanced → Finalize data model` for the entire profile. Verify **Model 2 / Already finalized**, save a Full Backup ZIP, and make a Home Assistant backup. If a profile still uses the old model, beta.30 refuses to start that profile rather than rewriting unknown drink history.
 
-## What's new in beta.27
+**Drink history:** Four columns **Time | Liquid | Cup | Volume**. Tap a row to independently edit Liquid, Cup, date/time and actual volume. Unknown Cups remain `Unknown`; they are never inferred from recorded mL.
 
-- **Aligned bars:** all Today by liquid bars begin at the same horizontal coordinate and end before right-aligned volumes.
-- **Full-history conversion audit:** all historic Liquid IDs are included, even for types no longer defined. The wizard supports correcting incomplete beta.26 mappings, counts unknown Cups separately, and refuses changes if the preview is stale.
+**Native storage cleanup:** Once all per-record references are verified, startup makes a separate SHA-256-verified pre-beta30 profile Store backup, then safely deletes old mapping and volume-button metadata, historic per-record aliases and obsolete Liquid default volumes. Drink IDs, timestamps, actual amounts and other events are unchanged. The archive is retained for recovery, not used by the live integration.
 
+**No old converter:** The migration wizard, historic ID-mapping WS routes, and old volume-button editor are no longer part of normal operation. Cups and Quick buttons define reusable volumes; Liquid types own only name, icon and color.
 
-- **Guided, repeatable historical mapping review:** `Settings → Advanced → Convert existing data` inventories old liquid types, volume buttons and original drink counts. Rename suggested Cup types, choose explicit Liquid/Cup mappings and confirm them. A read-only preview and downloadable full-profile JSON backup precede one atomic conversion. Existing records, timestamps, IDs and actual volumes are never rewritten. Repeated confirmed mappings are idempotent; already converted profiles can repair missing historical Liquid/Cup associations.
-- **Water (beker) + Water (glas):** confirmed mappings aggregate to canonical `Water` in the daily, hourly and seven-day charts; the historical cup assignment remains available. The original per-record liquid ID is retained for rollback. Inconclusive cup associations remain unknown unless the user explicitly chooses one.
-- **Profile-scoped settings JSON import/export:** `Settings → Advanced → Settings import / export` exports all Liquid, Cup, Quick, color, legacy-volume and mapping settings, with SHA-256 metadata, but **no drink history, readings, sensor IDs or consumption totals**. Import validates schema, volumes, colors, SVG safety, cross-references and profile; presents all changes; requires explicit confirmation; detects stale revisions. Historical mappings can be restored only to their original profile.
-- **Manage profiles:** directly add and edit profiles, with an option to copy a source profile's Liquid/Cup/Quick configuration without copying history or personal targets. Display-name edits preserve original profile slugs, entity IDs and current dashboard bindings. HA's native config flow retains ownership of the original profile settings.
-- **UI:** neutral Settings navigation with purpose-specific MDI icons; no separate About/Excel/Legacy-volume tiles; the Excel button remains on the main card. Add drink has a Settings control in the bottom-left of its footer instead of two redundant Manage buttons. The main card places Settings on the left and Add drink on the right of one row below the hero.
-- **Responsive charts:** the Today by liquid name, bar and numeric total stay on one row at narrow and wide card widths; shorter bars preserve the full liquid name. Drink moments remain underneath the cup and outside the chart. The remaining-to-drink figure is displayed whenever positive, even when the cup is almost full.
-- **Excel:** the four approved workbooks, column widths, formulas and date formats remain intact. Charts group by stable canonical Liquid IDs, never Cup or Quick button label.
-- **Rollback:** the full beta.24 prerelease and its original store data remain available. New settings are additive; conversion can only occur after a user-reviewed backup and confirmation. Live Home Assistant acceptance still required.
+**Import & Export:** Separate schema-v2 Settings and Data JSON; Data modes Merge, Update existing and Replace all; checksummed Full Backup ZIP/restore. v1 beta.29 Settings JSON is still accepted via a validation/normalization path; historic raw Data from before native finalization must be migrated in beta.29 first.
+
+**Excel:** The four worksheets are **Hydration log**, **Daily intake**, **Settings - Liquid Types**, and **Settings - Cups and Quick**. Historical records use native Liquid and Cup IDs; the log distinguishes actual mL from the current Cup default mL. No obsolete alias columns or legacy preset section.
+
+**Rollback:** A plain downgrade to beta.29 is not sufficient once old fields are retired. Restore the full Home Assistant backup or the protected pre-beta30 Store snapshot if you need to revert the storage model.
+
+Older release notes follow below for history; their migration/menu instructions are **not** instructions for beta.30.
 
 ## What's new in beta.24
 
@@ -152,7 +149,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 - **QA:** full backend/frontend regressions, XML order verification and real Chrome geometry checks on 888/721/412/360-px cards. No changes to history storage or existing sensor IDs.
 
 
-- **Reference-matched Excel:** Export now follows the user-edited four-sheet workbook: `Hydration log`, `Daily Totals`, `Settings - Liquid Types` and `Settings - Volume Buttons`, including the chosen B2 export header, B4–B8 metadata, B11 table header, frozen rows, original styles and native Excel percentage formulas. The workbook uses the literal file naming format `YYYYMMDD-HHMM jwDaily Hydration Log - All Data.xlsx`.
+- **Reference-matched Excel:** Export now follows the user-edited four-sheet workbook: `Hydration log`, `Daily Totals`, `Settings - Liquid Types` and `Settings - Cups and Quick`, including the chosen B2 export header, B4–B8 metadata, B11 table header, frozen rows, original styles and native Excel percentage formulas. The workbook uses the literal file naming format `YYYYMMDD-HHMM jwDaily Hydration Log - All Data.xlsx`.
 - **The selected day controls everything:** the open glass, blue volume, remaining volume, red goal, count and drink-type bar chart now show the day chosen in history. Historical days read archived totals and their historic target when saved; missing external source values are not invented.
 - **Responsive layout rebuilt:** card-width-based columns keep the cup and blue total to the left, all chart volumes and the smaller Add control visible on the right at card widths 721/888 px and mobile sizes.
 - **Improved history readability:** larger date selector text and larger drink moment fonts. Excel export stays compact at bottom left.
@@ -187,7 +184,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 - **Smart volume default:** standard liquid types do not select a volume automatically. A custom type only preselects its volume after you explicitly select that type and only if a default was configured. New drink popups otherwise start with no type or volume selected.
 - **Safety for SVGs:** uploads are sanitized by the backend against scripts, remote resources and unsupported XML elements; previewed as inert image elements (not inline markup).
 - **Animated glass:** rising water level on changes plus a gently moving wave. The red dashed 100% target is **16 SVG units (~15 displayed px)** lower than before. The top stays open, with the 100% fill level aligned to the target line.
-- **Excel export:** four reference-matched worksheets with native Excel tables: **Hydration log**, **Daily Totals**, **Settings - Liquid Types** and **Settings - Volume Buttons**. All saved drink moments are retained in Hydration log, including custom liquid names.
+- **Excel export:** four reference-matched worksheets with native Excel tables: **Hydration log**, **Daily Totals**, **Settings - Liquid Types** and **Settings - Cups and Quick**. All saved drink moments are retained in Hydration log, including custom liquid names.
 - Existing drink modifications replace stored values. Deletions remove the integration's record. Previously saved records from v1.0.2 show **Unknown (legacy)** if they lack a type. Changes to existing historical records are not archived separately.
 - The `hourly_pace` sensor, pace settings and pace calculations remain removed since beta.1.
 
@@ -245,7 +242,7 @@ The beta branch must pass Python offline tests, JavaScript browser-shell tests, 
 
 With **Add drink** open, choose **⚙ Manage liquid types**. The list supports **Edit** for built-in and custom types, **↑ / ↓** for order and **Delete** only for unused custom types. Enter a display name, MDI icon or uploaded safe SVG, and optional default volume. The original liquid ID is never changed; existing historical records remain associated with that type. Choose **Back to drink** when finished.
 
-Choose **⚙ Manage volume buttons** within the same Add/Edit popup. Add, change, remove or reorder any of the 0–24 presets, and save the new sequence. These profile-specific buttons override the original dashboard `quick_add` only after you save them. All choices persist across restarts and are included in the four-tab Excel export.
+In beta.30, use **Settings → Cup types / Quick buttons** for reusable amounts; the old volume-button manager is retired. The `quick_add` YAML card values remain optional fallback display choices, not persistent legacy volume-button settings.
 
 **Over-target:** The red dashed goal stays 15px below the rim; 100% fill meets that line, and when consumption exceeds the goal the blue fill is capped at the open top. The red target line and target label remain legible above the blue. The numeric intake remains uncapped.
 
@@ -253,4 +250,4 @@ Choose **⚙ Manage volume buttons** within the same Add/Edit popup. Add, change
 
 Use **Settings → Advanced → Import & Export** to download independent Settings JSON, Data JSON, and Full Backup ZIP files. Before importing or finalizing, make a Home Assistant backup and verify a downloaded Full Backup ZIP. Data import modes are Merge (missing record IDs), Update existing (matching record IDs updated), and Replace all (data only; same profile). Settings-only imports never rewrite drink history and cannot orphan linked Liquid/Cup IDs. Full restore is limited to the same profile ID and restores both Settings, Data and profile preferences. The ZIP includes SHA-256 checksums for each JSON member.
 
-Use **Settings → Advanced → Convert existing data** to review mappings, then **Finalize data model** to rewrite each historic drink record to direct canonical Liquid/Cup IDs. The migration is not automatic. Original IDs, timestamps and recorded mL remain unchanged, and missing Cups stay explicitly unknown. Existing aliases remain stored temporarily only for rollback to previous beta versions; operational reads use the direct new fields after finalization. A future cleanup release can remove legacy code after live acceptance.
+Historical beta.29-only instruction: use **Settings → Advanced → Convert existing data** followed by **Finalize data model** before upgrading to beta.30. The migration is not automatic. Original IDs, timestamps and recorded mL remain unchanged, and missing Cups stay explicitly unknown. Existing aliases remain stored temporarily only for rollback to previous beta versions; operational reads use the direct new fields after finalization. A future cleanup release can remove legacy code after live acceptance.

@@ -1,3 +1,11 @@
+## v1.1.0-beta.30
+
+- Four independent Drink history columns: Time, Liquid, Cup, Volume; compact responsive layouts.
+- Protected cleanup of fully migrated native v2 profile records and storage, retaining original event identity, date/time and actual volumes, plus verified pre-cleanup Store archive.
+- Remove retired legacy converters, mapping APIs, volume-button settings and historic alias presentation; refuse cleanup of incomplete/orphaned records.
+- Direct Liquid/Cup Excel and chart reads; remove legacy-specific columns and rename sheet 4 to Settings - Cups and Quick.
+- Preserve separate Settings/Data JSON import/export and Full Backup ZIP, including native-schema validation and safe beta.29 Settings import compatibility.
+
 ## v1.1.0-beta.29
 
 - Native one-time historical Liquid/Cup record migration after audit, preserving IDs/times/volumes.
