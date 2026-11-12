@@ -1,10 +1,16 @@
-# jwDaily Hydration Log v1.1.0-beta.27
+# jwDaily Hydration Log v1.1.0-beta.28
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
+
+## What's new in beta.28
+
+- Fix Excel export of historical Cups: the coordinator now includes the profile's `legacy_cup_defaults` in the snapshot passed to the four-sheet XLSX writer.
+- Both kinds of mapping are respected: renamed-liquid aliases (`legacy_mappings`) and unchanged-liquid defaults (`legacy_cup_defaults`). Record-level Cup IDs take priority, as in Drink history.
+- Add an Excel-to-backend regression covering every historical record, original values, unknown Cups, and ZIP/OOXML structure. **No drink records or settings are migrated/modified by this release.**
 
 ## What's new in beta.27
 

@@ -158,7 +158,7 @@ class HydrationCoordinator:
         self.liquid_order: list[str] = []
         # None means follow the existing dashboard's quick_add YAML until customized.
         self.volume_buttons: list[float] | None = None
-        # Additive v1.1.0-beta.27 profile-local catalog. Original data is authoritative.
+        # Additive v1.1.0-beta.28 profile-local catalog. Original data is authoritative.
         # Empty lists do not generate cup or quick-button guesses from legacy amounts.
         self.cup_types: list[dict[str, Any]] = []
         self.quick_buttons: list[dict[str, Any]] = []
@@ -1148,7 +1148,7 @@ class HydrationCoordinator:
                     raise ValueError('Conversion left unclassified historical drinks')
                 if audit['total_records']!=before_audit['total_records'] or audit['total_logged_ml']!=before_audit['total_logged_ml']:
                     raise ValueError('Conversion must preserve all drink totals')
-                self.conversion_state=dict(applied=True,version='1.1.0-beta.27',
+                self.conversion_state=dict(applied=True,version='1.1.0-beta.28',
                     source_revision=expected_revision,record_count=len(ledger),
                     run_count=int(old['conversion_state'].get('run_count',1 if old['conversion_state'].get('applied') else 0))+1,
                     classified_records=audit['classified_records'],
@@ -1301,4 +1301,8 @@ class HydrationCoordinator:
                     hidden_builtin_liquids=list(self.hidden_builtin_liquids),
                     volume_buttons=None if self.volume_buttons is None else list(self.volume_buttons),
                     cup_types=self.get_cup_types(),quick_buttons=self.get_quick_buttons(),
-                    legacy_mappings={key:dict(value) for key,value in self.legacy_mappings.items()})
+                    legacy_mappings={key:dict(value) for key,value in self.legacy_mappings.items()},
+                    # Same-Liquid legacy Cup assignments are stored separately
+                    # from renamed-Liquid aliases. Excel needs BOTH mappings to
+                    # match get_history() for every historic drink record.
+                    legacy_cup_defaults=dict(self.legacy_cup_defaults))
