@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.28 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.29 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -49,6 +49,9 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._migrationPreview=null;this._mappingDraft=null;this._mappingConfirmation=false;this._migrationBackupSaved=false;
   this._conversionPlan=null;this._conversionBackupSaved=false;this._conversionConfirmed=false;
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
+  this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
+  this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
+  this._modelPreview=null;this._modelUnknownConfirmed=false;
   this._profilesData=null;this._profileDraft=null;this._profileEditSlug='';
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
@@ -81,6 +84,9 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._migrationPreview=null;this._mappingDraft=null;this._mappingConfirmation=false;this._migrationBackupSaved=false;
   this._conversionPlan=null;this._conversionBackupSaved=false;this._conversionConfirmed=false;
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
+  this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
+  this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
+  this._modelPreview=null;this._modelUnknownConfirmed=false;
   this._profilesData=null;this._profileDraft=null;this._profileEditSlug='';
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._history=null;this._lastState='';this._lastRender='';this._render(true);this._fetchHistory();
@@ -127,6 +133,28 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }catch(e){this._alert(e);}finally{this._fetching=false;if(this._fetchAgain){this._fetchAgain=false;this._fetchHistory();}}
  }
  async _field(e){const field=e.target?.dataset?.field;if(!field)return;
+  if(field==='data_import_mode'&&e.type==='change'){
+   this._dataImportMode=e.target.value;this._dataImportPreview=null;this._render(true);return;
+  }
+  if(field==='full_backup_verified'){this._fullBackupSaved=!!e.target.checked;this._render(true);return;}
+  if(field==='model_unknown_confirmed'){
+   this._modelUnknownConfirmed=!!e.target.checked;return;
+  }
+  if((field==='data_import_file'||field==='full_restore_file')&&e.type==='change'){
+   const file=e.target.files?.[0];if(!file)return;
+   const max=field==='data_import_file'?12000000:14000000;
+   if(file.size>max){this._alert('Import file exceeds maximum allowed size.');return;}
+   try{
+    if(field==='data_import_file'){
+     this._dataImportContent=await file.text();this._dataImportFilename=file.name;this._dataImportPreview=null;
+    }else{
+     const b=await file.arrayBuffer();const data=new Uint8Array(b);let chunks=[];
+     for(let i=0;i<data.length;i+=8192)chunks.push(String.fromCharCode(...data.subarray(i,i+8192)));
+     this._fullRestoreContent=btoa(chunks.join(''));this._fullRestoreFilename=file.name;this._fullRestorePreview=null;
+    }
+    this._error='';this._render(true);
+   }catch(err){this._alert(err);}return;
+  }
   if(field==='settings_import_file'&&e.type==='change'){
    const file=e.target.files?.[0];if(!file)return;
    if(file.size>256000){this._alert('Settings file must be 256 KB or smaller.');return;}
@@ -322,7 +350,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.28')throw Error(`Frontend v1.1.0-beta.28 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.29')throw Error(`Frontend v1.1.0-beta.29 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -459,7 +487,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    this._viewDate=date===this._todayISO()?null:date;this._history=null;this._error='';this._render(true);this._fetchHistory();return;
   }
   if(action==='export'){await this._export();return;}
-  if(action.startsWith('settings-')){await this._settingsClick(action,el);return;}
+  if(['settings-','data-','full-','model-'].some(prefix=>action.startsWith(prefix))){await this._settingsClick(action,el);return;}
  }
  async _saveModal(){let p;try{p=this._payload();}catch(e){this._alert(e);return;}
   const m=this._modal;this._busy=true;this._error='';this._status='Saving drink…';this._render(true);
@@ -645,6 +673,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(section==='migration'){this._migrationBackupSaved=false;this._loadMigrationPreview();}
   if(section==='convert'){this._conversionBackupSaved=false;this._conversionConfirmed=false;this._loadConversion();}
   if(section==='profile')this._loadProfiles();
+  if(section==='finalize')this._loadModelPreview();
+ }
+ async _loadModelPreview(){
+  try{this._modelPreview=await this._hass.callWS({type:'jw_daily_hydration_log/model_migration_preview',profile:this._config.profile});this._render(true);}
+  catch(e){this._alert(e);}
  }
  async _loadMigrationPreview(){
   try{const result=await this._hass.callWS({type:'jw_daily_hydration_log/migration_preview',profile:this._config.profile});
@@ -694,7 +727,38 @@ class JwDailyHydrationLogCard extends HTMLElement {
        <p>Drink history: unchanged (${p.drink_count} existing records)</p><p>Historic mappings: ${p.include_mappings?'included for this same profile':'not imported (other profile or not selected)'}</p>
        <p class="settings-note">Save an export of your current settings before importing. The import is blocked if settings changed after preview.</p>
        <div class="dialog-actions"><button data-action="settings-import-apply" class="danger">Confirm and import settings</button></div></div>`:''}
-   </div></div>`;
+   </div>
+   <div class="settings-edit"><h4>Data — drink history and snapshots</h4>
+     <p class="settings-note">Data JSON contains the original record IDs, drink entries, source measurements and day archives. Settings are never overwritten by Data import.</p>
+     <div class="dialog-actions"><button data-action="data-export-json">Export Data JSON</button></div>
+     <label>Choose Data JSON<input type="file" accept=".json,application/json" data-field="data_import_file"/></label>
+     ${this._dataImportFilename?`<p>Selected: ${E(this._dataImportFilename)}</p>`:''}
+     <label>Import mode<select data-field="data_import_mode">
+      ${[['merge','Merge — add missing IDs only'],['update','Update existing — update matching IDs'],['replace','Replace all — remove all existing Data first']]
+       .map(([v,t])=>`<option value="${v}" ${this._dataImportMode===v?'selected':''}>${t}</option>`).join('')}</select></label>
+     <button class="secondary" data-action="data-import-preview" ${!this._dataImportContent?'disabled':''}>Preview Data import</button>
+     ${this._dataImportPreview?`<div class="migration-summary"><strong>Data preview — ${E(this._dataImportPreview.mode)}</strong>
+      <p>Existing ${this._dataImportPreview.counts.existing_drinks} · Incoming ${this._dataImportPreview.counts.incoming_drinks} · New ${this._dataImportPreview.counts.new_ids} · Matching ${this._dataImportPreview.counts.matching_ids}</p>
+      <p>Changed IDs ${this._dataImportPreview.counts.changed_matching_ids} · Final drinks ${this._dataImportPreview.counts.total_result_drinks}</p>
+      <p>${E(this._dataImportPreview.warning)}</p>
+      ${this._dataImportMode==='replace'?'<p class="delete-warning">REPLACE ALL deletes the current profile Data before restoring the chosen file; this cannot be undone without a backup.</p>':''}
+      <p class="settings-note">Download and verify a current Full Backup ZIP before confirming. The saved file must be accessible outside Home Assistant.</p>
+      <button data-action="data-import-apply" class="danger" ${!this._fullBackupSaved?'disabled':''}>Confirm Data import</button></div>`:''}
+   </div>
+   <div class="settings-edit"><h4>Full backup / restore</h4>
+    <p class="settings-note">ZIP containing settings.json, data.json and a checksummed manifest. Restore requires the original profile ID and replaces both Settings and Data together.</p>
+    <div class="dialog-actions"><button data-action="full-backup-export">Export Full Backup ZIP</button></div>
+    <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I verified that the Full Backup ZIP is saved and opens correctly.</label>
+    <label>Choose Full Backup ZIP<input type="file" accept=".zip,application/zip" data-field="full_restore_file"/></label>
+    ${this._fullRestoreFilename?`<p>Selected: ${E(this._fullRestoreFilename)}</p>`:''}
+    <button class="secondary" data-action="full-restore-preview" ${!this._fullRestoreContent?'disabled':''}>Preview Full restore</button>
+    ${this._fullRestorePreview?`<div class="migration-summary"><strong>Full restore preview</strong>
+      <p>Existing drinks ${this._fullRestorePreview.counts.current_records} → Restore ${this._fullRestorePreview.counts.records}</p>
+      <p>Cups ${this._fullRestorePreview.counts.cups} · Quick buttons ${this._fullRestorePreview.counts.quick_buttons}</p>
+      <p class="delete-warning">This overwrites the entire current profile. Review your backup and explicitly confirm.</p>
+      <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm and restore Full Backup</button></div>`:''}
+   </div>
+   </div>`;
  }
  _conversionHTML(){const E=jdhlEscape,p=this._conversionPlan;
   if(!p)return '<p>Loading read-only conversion preview…</p>';
@@ -729,7 +793,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ['liquids','Liquid types','Names, icons and colors','mdi:water'],
     ['cups','Cup types','Reusable containers and volumes','mdi:glass-mug-variant'],
     ['quick','Quick buttons','Liquid + cup combinations and labels','mdi:gesture-tap-button'],
-    ['advanced','Advanced','Convert existing data and import/export settings','mdi:wrench']];
+    ['advanced','Advanced','Migration and separate Settings/Data transfer','mdi:wrench']];
   const E=jdhlEscape;
   const choice=(items,valueField,labelField,selected,empty='Select')=>`<option value="">${E(empty)}</option>`+
    items.map(t=>`<option value="${E(t[valueField])}" ${t[valueField]===selected?'selected':''}>${E(t[labelField])}</option>`).join('');
@@ -745,12 +809,27 @@ class JwDailyHydrationLogCard extends HTMLElement {
   else if(page==='legacy')body=this._volumeManageHTML();
   else if(page==='advanced')body=`<div class="settings-section"><h3>Advanced</h3>
    <div class="settings-nav">
-    <button class="settings-nav-item secondary" data-action="settings-page" data-value="convert"><ha-icon icon="mdi:database-sync"></ha-icon><span><strong>Convert existing data</strong><small>Move legacy liquids and volumes into Liquid, Cup and Quick buttons</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>
-    <button class="settings-nav-item secondary" data-action="settings-page" data-value="transfer"><ha-icon icon="mdi:database-arrow-down-outline"></ha-icon><span><strong>Settings import / export</strong><small>Validated profile settings JSON, never drink history</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>
+    ${this._history?.data_model_version!==2?`<button class="settings-nav-item secondary" data-action="settings-page" data-value="convert"><ha-icon icon="mdi:database-sync"></ha-icon><span><strong>Convert existing data</strong><small>Move legacy liquids and volumes into Liquid, Cup and Quick buttons</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>`:''}
+    <button class="settings-nav-item secondary" data-action="settings-page" data-value="finalize"><ha-icon icon="mdi:database-check"></ha-icon><span><strong>Finalize data model</strong><small>One-time rewrite to native Liquid and Cup fields after backup</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>
+    <button class="settings-nav-item secondary" data-action="settings-page" data-value="transfer"><ha-icon icon="mdi:database-arrow-down-outline"></ha-icon><span><strong>Import & Export</strong><small>Separate Settings and Data, plus Full Backup ZIP</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>
     ${!this._history?.conversion_applied?`<button class="settings-nav-item secondary" data-action="settings-page" data-value="legacy"><ha-icon icon="mdi:history"></ha-icon><span><strong>Original volume buttons</strong><small>Old configuration for rollback</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>`:''}
    </div></div>`;
   else if(page==='transfer')body=this._transferHTML();
   else if(page==='convert')body=this._conversionHTML();
+  else if(page==='finalize'){
+   const m=this._modelPreview;
+   body=`<div class="settings-section"><h3>Finalize canonical data model</h3>
+     <p class="settings-note">One-time conversion of existing drink records to direct Liquid/Cup references. Keep the original backup safely. Record ID, timestamp and consumed volume never change.</p>
+     ${!m?'<p>Loading full ledger audit…</p>':`<div class="migration-summary">
+      <p>Model ${m.completed?'Already finalized':'Legacy / mixed'} · Drink records ${m.drink_count} · Logged ${jdhlFmt(Number(m.total_logged_ml))}</p>
+      <p>Unclassified ${m.unclassified_count} · Cup unknown ${m.cup_unknown_count} (not inferred)</p>
+      ${m.unclassified_count?'<p class="delete-warning">Resolve all unclassified Liquid and invalid Cup references in Convert existing data before finalizing.</p>':''}</div>
+      ${!m.completed?`<label class="check-label"><input type="checkbox" data-field="model_unknown_confirmed" ${this._modelUnknownConfirmed?'checked':''}/> I accept that historical Cups without reliable evidence remain Unknown.</label>
+       <button data-action="model-finalize-apply" class="danger" ${m.unclassified_count||!this._fullBackupSaved?'disabled':''}>Finalize native Liquid/Cup model</button>`:'<p>Native data model active. Historic mappings are no longer used for normal reads; legacy code is retained for rollback until the next cleanup release.</p>'}`}
+     <button class="secondary" data-action="full-backup-export">Export Full Backup before finalizing</button>
+     <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I verified that the Full Backup ZIP can be opened.</label>
+    </div>`;
+  }
   else if(page==='cups'){
    const cups=this._cupDefs();body=`<div class="settings-section"><h3>Cup types</h3><p class="settings-note">A cup defines a default volume. Existing drink volumes never change.</p>
     ${draft?`<div class="settings-edit"><label>Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
@@ -808,10 +887,10 @@ class JwDailyHydrationLogCard extends HTMLElement {
      </div>`:''}</div>`;
   }
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
-  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.28</p>
+  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.29</p>
    <p class="settings-note">Liquid and cup definitions, quick buttons and legacy mappings are stored per Home Assistant profile. Existing drink records are not rewritten by migration.</p></div>`;
   return `<div class="overlay" role="presentation"><section class="dialog dialog-settings" role="dialog" aria-modal="true" aria-label="Settings">
-    <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({convert:'Convert existing data',transfer:'Settings import / export',legacy:'Original volume buttons'}[page]||'Settings')}</h3>
+    <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({convert:'Convert existing data',finalize:'Finalize data model',transfer:'Import & Export',legacy:'Original volume buttons'}[page]||'Settings')}</h3>
     <button class="secondary small" data-action="settings-close" aria-label="Close settings">✕</button></div>
     ${this._error?`<p class="error" role="alert">${E(this._error)}</p>`:''}
     ${body}
@@ -827,6 +906,57 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  async _settingsClick(action,el){const id=el.dataset.value||'';
   if(action==='settings-open'){this._settingsOpen();return;}
+  if(action==='data-export-json'||action==='full-backup-export'){
+   try{
+    const full=action==='full-backup-export';
+    const resp=await this._hass.callWS({type:'jw_daily_hydration_log/'+(full?'full_backup_export':'data_export'),profile:this._config.profile});
+    if(!resp.base64||!/^([a-f0-9]{64})$/.test(resp.sha256||''))throw Error('Invalid backup response');
+    const a=document.createElement('a');a.href='data:'+(full?'application/zip':'application/json')+';base64,'+resp.base64;
+    a.download=resp.filename;this.shadowRoot.appendChild(a);a.click();a.remove();
+    if(full)this._fullBackupSaved=false;
+    this._status=full?'Full Backup download initiated — verify file before importing':'Data JSON download initiated';this._render(true);
+   }catch(e){this._alert(e);}return;
+  }
+  if(action==='data-import-preview'){
+   try{this._dataImportPreview=await this._hass.callWS({type:'jw_daily_hydration_log/data_import_preview',
+    profile:this._config.profile,content:this._dataImportContent,mode:this._dataImportMode});
+    this._error='';this._render(true);
+   }catch(e){this._dataImportPreview=null;this._alert(e);}return;
+  }
+  if(action==='data-import-apply'){
+   if(!this._fullBackupSaved||!this._dataImportPreview)return;
+   if(!window.confirm('Import Data in '+this._dataImportMode+' mode? Check your Full Backup first.'))return;
+   if(this._dataImportMode==='replace'&&!window.confirm('REPLACE ALL PROFILE DATA? Current drink records and daily snapshots will be replaced.'))return;
+   try{await this._hass.callWS({type:'jw_daily_hydration_log/data_import_apply',profile:this._config.profile,
+    content:this._dataImportContent,mode:this._dataImportMode,preview:this._dataImportPreview,confirm:true});
+    this._dataImportPreview=null;this._dataImportContent='';this._dataImportFilename='';
+    this._status='Data imported';this._history=null;await this._fetchHistory();this._render(true);
+   }catch(e){this._alert(e);}return;
+  }
+  if(action==='full-restore-preview'){
+   try{this._fullRestorePreview=await this._hass.callWS({type:'jw_daily_hydration_log/full_restore_preview',
+     profile:this._config.profile,content_base64:this._fullRestoreContent});this._error='';this._render(true);
+   }catch(e){this._fullRestorePreview=null;this._alert(e);}return;
+  }
+  if(action==='full-restore-apply'){
+   if(!this._fullBackupSaved||!this._fullRestorePreview)return;
+   if(!window.confirm('Replace this entire profile — Settings AND Data?'))return;
+   if(!window.confirm('FINAL CONFIRMATION: restore this full backup over the current profile?'))return;
+   try{await this._hass.callWS({type:'jw_daily_hydration_log/full_restore_apply',profile:this._config.profile,
+     content_base64:this._fullRestoreContent,preview:this._fullRestorePreview,confirm:true});
+    this._fullRestorePreview=null;this._fullRestoreContent='';this._fullRestoreFilename='';this._history=null;
+    this._status='Full Backup restored';await this._fetchHistory();this._render(true);
+   }catch(e){this._alert(e);}return;
+  }
+  if(action==='model-finalize-apply'){
+   const p=this._modelPreview;
+   if(!p||p.completed||p.unclassified_count||!this._fullBackupSaved||!this._modelUnknownConfirmed)return;
+   if(!window.confirm('Finalize all historic records to the new Liquid/Cup storage model? Your verified Full Backup is required.'))return;
+   try{await this._hass.callWS({type:'jw_daily_hydration_log/model_migration_finalize',profile:this._config.profile,
+    settings_revision:p.revision,history_revision:p.history_revision,allow_unknown_cups:true,confirm:true});
+    this._status='One-time native model migration complete';this._history=null;await this._loadModelPreview();await this._fetchHistory();this._render(true);
+   }catch(e){this._alert(e);}return;
+  }
   if(action==='settings-export-json'){
    try{const res=await this._hass.callWS({type:'jw_daily_hydration_log/settings_export',profile:this._config.profile});
     if(!res.base64||!/^([a-f0-9]{64})$/.test(res.sha256)||res.size>256000)throw Error('Invalid settings export');
@@ -893,7 +1023,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    }catch(e){this._alert(e);}return;
   }
   if(action==='settings-close'){this._settingsSection=null;this._settingsDraft=null;this._manageOpen=false;this._volumeManageOpen=false;this._render(true);return;}
-  if(action==='settings-home'){this._settingsOpen(['convert','transfer','legacy'].includes(this._settingsSection)?'advanced':'home');return;}
+  if(action==='settings-home'){this._settingsOpen(['convert','finalize','transfer','legacy'].includes(this._settingsSection)?'advanced':'home');return;}
   if(action==='settings-page'){this._settingsOpen(id);return;}
   if(action==='settings-discard'){this._settingsDraft=null;this._settingsEditId=null;this._render(true);return;}
   if(action==='settings-cup-add'||action==='settings-cup-edit'){
@@ -1321,7 +1451,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._modalHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" aria-label="Export all data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.28</span>
+    <span class="card-version">v1.1.0-beta.29</span>
    </footer></div></ha-card>`;
  }
 }
@@ -1463,7 +1593,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.28</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.29</div></ha-card>`;return;}
   const colorSettings=entity?.attributes?.liquid_colors||{};
   const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
@@ -1515,7 +1645,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.28</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.29</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -1530,4 +1660,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.28');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.29');

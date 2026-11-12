@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.28
+# jwDaily Hydration Log v1.1.0-beta.29
 
 **Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
 
@@ -248,3 +248,9 @@ With **Add drink** open, choose **⚙ Manage liquid types**. The list supports *
 Choose **⚙ Manage volume buttons** within the same Add/Edit popup. Add, change, remove or reorder any of the 0–24 presets, and save the new sequence. These profile-specific buttons override the original dashboard `quick_add` only after you save them. All choices persist across restarts and are included in the four-tab Excel export.
 
 **Over-target:** The red dashed goal stays 15px below the rim; 100% fill meets that line, and when consumption exceeds the goal the blue fill is capped at the open top. The red target line and target label remain legible above the blue. The numeric intake remains uncapped.
+
+## v1.1.0-beta.29 — data transfer and one-time model finalization
+
+Use **Settings → Advanced → Import & Export** to download independent Settings JSON, Data JSON, and Full Backup ZIP files. Before importing or finalizing, make a Home Assistant backup and verify a downloaded Full Backup ZIP. Data import modes are Merge (missing record IDs), Update existing (matching record IDs updated), and Replace all (data only; same profile). Settings-only imports never rewrite drink history and cannot orphan linked Liquid/Cup IDs. Full restore is limited to the same profile ID and restores both Settings, Data and profile preferences. The ZIP includes SHA-256 checksums for each JSON member.
+
+Use **Settings → Advanced → Convert existing data** to review mappings, then **Finalize data model** to rewrite each historic drink record to direct canonical Liquid/Cup IDs. The migration is not automatic. Original IDs, timestamps and recorded mL remain unchanged, and missing Cups stay explicitly unknown. Existing aliases remain stored temporarily only for rollback to previous beta versions; operational reads use the direct new fields after finalization. A future cleanup release can remove legacy code after live acceptance.

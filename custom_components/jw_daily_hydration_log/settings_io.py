@@ -16,7 +16,7 @@ FIELDS = ('liquid_overrides', 'custom_liquid_types', 'liquid_colors',
           'hidden_builtin_liquids', 'liquid_order', 'volume_buttons',
           'cup_types', 'quick_buttons', 'legacy_mappings', 'legacy_cup_defaults',
           'conversion_state', 'target_override_ml')
-PROFILE_FIELDS = ('age','gender','pregnancy','lactation','unit','source_mode')
+PROFILE_FIELDS = ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')
 BUILTINS = {'water','coffee','tea','milk','soup','wine','other'}
 HEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
 MDI = re.compile(r'^mdi:[a-z0-9-]{2,70}$')

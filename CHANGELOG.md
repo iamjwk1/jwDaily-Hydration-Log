@@ -1,6 +1,12 @@
+## v1.1.0-beta.29
+
+- Native one-time historical Liquid/Cup record migration after audit, preserving IDs/times/volumes.
+- Separate Settings, Data (merge/update/replace) and Full Backup ZIP import/export with strict schema validation and rollback.
+- Four-sheet Excel export: current Cup default in Hydration log and expanded, accurate settings sheets.
+
 # jwDaily Hydration Log — changelog
 
-## v1.1.0-beta.28 — legacy Cup Excel export parity
+## v1.1.0-beta.29 — legacy Cup Excel export parity
 
 - Include `legacy_cup_defaults` in the backend snapshot used by the XLSX generator. This fixes missing Cup names for previously logged Coffee, Tea, Milk, Water and other liquids that keep the same canonical Liquid ID after conversion.
 - Preserve precedence: explicit record Cup ID, then renamed-liquid mapping Cup ID, then unchanged-liquid historic Cup default, otherwise unknown. Do not infer Cup from mL.
