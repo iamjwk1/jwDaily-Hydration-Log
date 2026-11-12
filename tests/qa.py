@@ -127,6 +127,7 @@ async def test_coordinator():
     # Load a v1.0.2-style historic record and make sure its category is unknown, not water.
     legacy=await reloaded.async_add_drink(80,'mL','dashboard','other')
     legacy.pop('liquid_type')
+    legacy.pop('liquid_type_id',None)  # A real v1.0.2 record predates both fields.
     await reloaded._save();await reloaded.async_shutdown()
     reloaded=coordinator.HydrationCoordinator(h,FakeConfigEntry());await reloaded.async_initialize()
     check('Legacy v1.0.2 drinks treated as unknown',any(r['liquid_type']=='unknown' for r in reloaded.get_history()))
@@ -296,7 +297,7 @@ async def test_coordinator():
               and '<v>275' in catalog_sheet and 'Visible in picker' in catalog_sheet
               and 'Spring water' in catalog_sheet and 'mdi:water-plus' in catalog_sheet)
         check('Volume settings exported in reference sheet 4',
-              'Volume mL' in pref_sheet and '<v>333' in pref_sheet
+              'Original volume mL' in pref_sheet and '<v>333' in pref_sheet
               and '<v>120' in pref_sheet)
         check('Both reference Excel tables have dynamic ranges',
               'tblHydrationLog' in z.read('xl/tables/table1.xml').decode()

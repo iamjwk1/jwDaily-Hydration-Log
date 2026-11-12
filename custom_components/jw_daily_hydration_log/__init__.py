@@ -8,6 +8,7 @@ import logging
 import math
 from copy import deepcopy
 from homeassistant.helpers.storage import Store
+from . import data_io
 from .settings_io import (FORMAT as SETTINGS_FORMAT, export_payload, parse_settings_json,
                           validate_payload, settings_preview, extract, digest, canonical)
 import voluptuous as vol
@@ -124,6 +125,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_profiles_list)
     websocket_api.async_register_command(hass,ws_profile_edit)
     websocket_api.async_register_command(hass,ws_profile_create)
+    websocket_api.async_register_command(hass,ws_data_export)
+    websocket_api.async_register_command(hass,ws_data_preview)
+    websocket_api.async_register_command(hass,ws_data_apply)
+    websocket_api.async_register_command(hass,ws_full_export)
+    websocket_api.async_register_command(hass,ws_full_preview)
+    websocket_api.async_register_command(hass,ws_full_apply)
+    websocket_api.async_register_command(hass,ws_model_preview)
+    websocket_api.async_register_command(hass,ws_model_finalize)
     websocket_api.async_register_command(hass,ws_export)
     return True
 
@@ -196,7 +205,8 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'profile_settings':dict(name=c.name,age=c.age,gender=c.gender,unit=c.unit,
                                 source_mode=c.source_mode),
         'migration_active':bool(c.legacy_mappings),
-        'conversion_applied':bool(c.conversion_state.get('applied')), 
+        'conversion_applied':bool(c.conversion_state.get('applied')),
+        'data_model_version':c.data_model_version, 
         'backend_version':VERSION,
     })
 
@@ -678,6 +688,148 @@ async def ws_profile_create(hass, connection, msg):
             entry_id=entry.entry_id,copied_settings=bool(template),history_copied=False))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'profile_create_failed',str(exc))
+
+
+# Beta29 authenticated profile transfer. Each operation is admin-only.
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/data_export',
+                                  probatio.Required('profile'):str})
+@callback
+def ws_data_export(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        content=data_io.canonical(c.export_data())
+        connection.send_result(msg['id'],dict(filename=f'jwDaily Hydration Log {c.slug} Data.json',
+            mime_type='application/json',base64=base64.b64encode(content).decode('ascii'),
+            sha256=hashlib.sha256(content).hexdigest(),size=len(content),schema=2,
+            data_revision=c.data_revision()))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'data_export_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/data_import_preview',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('content'):str,
+                                  probatio.Required('mode'):str})
+@callback
+def ws_data_preview(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        document=data_io.parse(msg['content'])
+        result=c.data_import_preview(document,msg['mode'])
+        c._pending_data_import=data_io.sha(result)
+        connection.send_result(msg['id'],result)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'data_validation_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/data_import_apply',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('content'):str,
+                                  probatio.Required('mode'):str,
+                                  probatio.Required('preview'):dict,
+                                  probatio.Required('confirm'):bool})
+@websocket_api.async_response
+async def ws_data_apply(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        if not msg['confirm'] or c.__dict__.get('_pending_data_import') != data_io.sha(msg['preview']):
+            raise ValueError('Review a fresh data import preview and explicitly confirm')
+        document=data_io.parse(msg['content'])
+        result=await c.async_import_data(document,msg['mode'],msg['preview'])
+        c._pending_data_import=None
+        connection.send_result(msg['id'],result)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'data_import_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/full_backup_export',
+                                  probatio.Required('profile'):str})
+@callback
+def ws_full_export(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        content=c.full_backup()
+        connection.send_result(msg['id'],dict(filename=f'jwDaily Hydration Log {c.slug} Full Backup.zip',
+            mime_type='application/zip',base64=base64.b64encode(content).decode('ascii'),
+            sha256=hashlib.sha256(content).hexdigest(),size=len(content),schema=1))
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'full_backup_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/full_restore_preview',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('content_base64'):str})
+@callback
+def ws_full_preview(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        settings,data,checksum=data_io.parse_full(msg['content_base64'])
+        preview=c.full_restore_preview(settings,data,checksum)
+        c._pending_full_restore=data_io.sha(preview)
+        connection.send_result(msg['id'],preview)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'full_restore_invalid',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/full_restore_apply',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('content_base64'):str,
+                                  probatio.Required('preview'):dict,
+                                  probatio.Required('confirm'):bool})
+@websocket_api.async_response
+async def ws_full_apply(hass, connection, msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        if not msg['confirm'] or c.__dict__.get('_pending_full_restore') != data_io.sha(msg['preview']):
+            raise ValueError('Preview this exact full backup before restoring')
+        settings_raw,data_raw,checksum=data_io.parse_full(msg['content_base64'])
+        actual=c.full_restore_preview(settings_raw,data_raw,checksum)
+        if actual != msg['preview']:
+            raise ValueError('Backup or profile changed after preview')
+        existing_ids={str(r.get('source_legacy_liquid_id') or r.get('liquid_type') or 'unknown')
+                      for r in data_raw['data']['records'] if r.get('kind')=='drink'}
+        existing_ids|=set(settings_raw['settings'].get('legacy_mappings') or {})
+        settings=validate_payload(settings_raw,existing_legacy_ids=existing_ids,include_mappings=True)
+        data=c._validate_import_data(data_raw,settings=settings)
+        prefs=c._validate_restored_preferences(settings_raw.get('profile_preferences'))
+        result=await c.async_restore_full(settings,data,msg['preview'],prefs)
+        c._pending_full_restore=None
+        connection.send_result(msg['id'],result)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'full_restore_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/model_migration_preview',
+                                  probatio.Required('profile'):str})
+@callback
+def ws_model_preview(hass,connection,msg):
+    try:connection.send_result(msg['id'],_resolve(hass,msg['profile']).model_migration_preview())
+    except (ValueError,ServiceValidationError) as exc:connection.send_error(msg['id'],'model_preview_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/model_migration_finalize',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('settings_revision'):str,
+                                  probatio.Required('history_revision'):str,
+                                  probatio.Required('allow_unknown_cups'):bool,
+                                  probatio.Required('confirm'):bool})
+@websocket_api.async_response
+async def ws_model_finalize(hass,connection,msg):
+    try:
+        if not msg['confirm']:raise ValueError('Final migration confirmation required')
+        result=await _resolve(hass,msg['profile']).async_finalize_model(
+            msg['settings_revision'],msg['history_revision'],msg['allow_unknown_cups'])
+        connection.send_result(msg['id'],result)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'model_migration_failed',str(exc))
 
 
 @websocket_api.require_admin

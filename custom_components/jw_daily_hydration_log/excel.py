@@ -22,7 +22,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color
 
-VERSION = '1.1.0-beta.28'
+VERSION = '1.1.0-beta.29'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Volume Buttons']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -158,9 +158,9 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
 def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None) -> bytes:
     """Structured Excel tables, including table filters and header layout."""
     if table_number==1:
-        label='tblHydrationLog'; right='K'
+        label='tblHydrationLog'; right='L'
         headers=['Date+time','Profile','Age','Gender','Target_x000a_(mL)',
-                 'Liquid name','Volume_x000a_(mL)','Cup type','Quick button','Legacy liquid ID']
+                 'Liquid name','Volume_x000a_(mL)','Cup type','Current Cup default_x000a_(mL)','Quick button','Legacy liquid ID']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
     else:
         label='tblDailyIntake'
@@ -259,7 +259,8 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
     for p in profiles:
         cfg=p['config']; target=p.get('target_ml',0)
         definitions={v['id']:v.get('name',v['id']) for v in p.get('liquid_definitions',[])}
-        cups={c['id']:c.get('name',c['id']) for c in p.get('cup_types',[])}
+        cup_details={c['id']:c for c in p.get('cup_types',[])}
+        cups={ident:item.get('name',ident) for ident,item in cup_details.items()}
         quick={q['id']:q.get('label',q['id']) for q in p.get('quick_buttons',[])}
         mappings=p.get('legacy_mappings') or {}
         for record in p.get('records',[]):
@@ -279,11 +280,13 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
             quick_id=record.get('quick_button_id') or ''
             # The reference deliberately displays built-in IDs in lowercase;
             # only user-created liquids use their chosen display names.
-            display=(liquid if liquid in _BUILTIN else definitions.get(liquid, 'Unknown (legacy)' if liquid=='unknown' else liquid))
+            display=definitions.get(liquid, 'Unknown (legacy)' if liquid=='unknown' else liquid.title())
             result.append((p,_serial(local),cfg['name'],cfg.get('age'),cfg.get('gender'),
                            target_day,display,float(record.get('volume_ml',0)),day,liquid,
-                           cups.get(cup_id,cup_id),quick.get(quick_id,quick_id),
-                           raw_liquid if raw_liquid != liquid else ''))
+                           cups.get(cup_id,cup_id),
+                           cup_details.get(cup_id,{}).get('default_volume_ml'),
+                           quick.get(quick_id,quick_id),
+                           record.get('source_legacy_liquid_id') or (raw_liquid if raw_liquid != liquid else '')))
     # Chronological presentation, independent of the original storage order.
     # Stable sorting preserves input order for exact ties.
     result.sort(key=lambda row: (row[1], str(row[2]), str(row[9])))
@@ -379,15 +382,15 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
 
     logrows=summary('Home Assistant jwDaily Hydration log - Hydration log','Drink log rows',len(records))
     heads=['Date+time','Profile','Age','Gender','Target\n(mL)','Liquid name','Volume\n(mL)',
-           'Cup type','Quick button','Legacy liquid ID']
-    hstyles=[10,11,11,11,11,23,24,11,11,11]
+           'Cup type','Current Cup default\n(mL)','Quick button','Legacy liquid ID']
+    hstyles=[10,11,11,11,11,23,24,11,13,11,11]
     logrows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(heads,hstyles),2)]
     for rownum,r in enumerate(records,12):
-        _,stamp,name,age,gender,target,liquid,volume,_,_,cup_name,button_label,legacy_id=r
-        sty=[25,26,27,27,27,26,28,26,26,26]
+        _,stamp,name,age,gender,target,liquid,volume,_,_,cup_name,cup_default,button_label,legacy_id=r
+        sty=[25,26,27,27,27,26,28,26,28,26,26]
         if rownum==len(records)+11:
-            sty=[29,30,31,31,31,30,32,30,30,30]
-        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_name,button_label,legacy_id],2)]
+            sty=[29,30,31,31,31,30,32,30,32,30,30]
+        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_name,cup_default,button_label,legacy_id],2)]
     if not records:
         logrows[12]=[]
 
@@ -408,29 +411,30 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                      for col,value in enumerate(values,2)]
     if not days:drows[12]=[]
 
-    typesrows={1:[(i,h,1,None) for i,h in enumerate(['Profile','Liquid ID','Name','MDI Icon','SVG Image','Legacy default volume mL','Custom','Button order','Visible in picker','Color'],1)]}
-    # Sheet 4 keeps the original legacy volume-button area and adds two independent
-    # sections below it. A second sheet or duplicated volume source is forbidden.
-    buttonsrows={1:[(i,h,1,None) for i,h in enumerate(['Profile','Position','Volume mL','Custom configured'],1)]}
+    # Settings sheet 3: active catalogue and old aliases are explicitly separate.
+    typesrows={1:[(i,h,1,None) for i,h in enumerate(
+       ['Profile','Liquid ID','Name','MDI Icon','SVG Image','Original default volume mL',
+        'Custom','Liquid order','Visible in picker','Color','Classification','Mapped to Liquid','Historical drink count'],1)]}
     for p in profiles:
         cfg=p['config']
-        for _, position, typ, color in (item for item in export_types if item[0] is p):
+        mappings=p.get('legacy_mappings') or {}
+        hist=collections.Counter(str(r.get('source_legacy_liquid_id') or r.get('liquid_type') or 'unknown')
+                                 for r in p.get('records',[]) if r.get('kind')=='drink')
+        for _,position,typ,color in (item for item in export_types if item[0] is p):
+            ident=typ.get('id','')
+            legacy_target=(mappings.get(ident) or {}).get('liquid_type_id','')
             row=len(typesrows)+1
-            vals=[cfg['name'],typ.get('id',''),typ.get('name',''),typ.get('icon_mdi',''),
-                  typ.get('icon_svg',''),typ.get('default_volume_ml'), bool(typ.get('custom',False)),
-                  position,not bool(typ.get('hidden',False)),color]
+            vals=[cfg['name'],ident,typ.get('name',''),typ.get('icon_mdi',''),
+                  typ.get('icon_svg',''),typ.get('default_volume_ml'),bool(typ.get('custom',False)),
+                  position,not bool(typ.get('hidden',False)),color,
+                  'Historic alias' if legacy_target else ('Hidden' if typ.get('hidden') else 'Active'),
+                  legacy_target,hist[ident]]
             typesrows[row]=[(i,value,color_styles.get(color,0) if i==10 else 0,None)
                             for i,value in enumerate(vals,1)]
-        volumes=p.get('volume_buttons')
-        if volumes is None:
-            volumes=[]
-        for position, volume in enumerate(volumes,1):
-            row=len(buttonsrows)+1
-            vals=[cfg['name'],position,volume,True]
-            buttonsrows[row]=[(i,value,0,None) for i,value in enumerate(vals,1)]
-    row=len(buttonsrows)+3
-    buttonsrows[row]=[(1,'Cup types',2,None)]
-    row+=1
+
+    # Sheet 4: current Cup and Quick configuration first, old buttons last.
+    buttonsrows={1:[(1,'Cup types — current configuration',2,None)]}
+    row=2
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
        ['Profile','Cup ID','Name','Default volume mL','MDI icon','Order','Visible'],1)]
     for p in profiles:
@@ -439,27 +443,51 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             vals=[p['config']['name'],cup.get('id',''),cup.get('name',''),
                   cup.get('default_volume_ml'),cup.get('icon_mdi',''),pos,not cup.get('hidden',False)]
             buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
-    row+=2
-    buttonsrows[row]=[(1,'Quick buttons',2,None)]
+    row+=3
+    buttonsrows[row]=[(1,'Quick buttons — current configuration',2,None)]
     row+=1
-    headers=['Profile','Button ID','Liquid ID','Cup ID','Label mode',
-             'Effective button label','Custom label','Order','Visible','Default volume mL']
+    headers=['Profile','Button ID','Liquid ID','Liquid name','Cup ID','Cup name',
+             'Label mode','Effective button label','Order','Default volume mL','Visible','Custom label']
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(headers,1)]
     for p in profiles:
         cups={c.get('id'):c for c in p.get('cup_types') or []}
+        liquids={c.get('id'):c.get('name',c.get('id')) for c in p.get('liquid_definitions') or []}
         for pos,q in enumerate(p.get('quick_buttons') or [],1):
             row+=1
-            vals=[p['config']['name'],q.get('id',''),q.get('liquid_type_id',''),
-                  q.get('cup_type_id',''),q.get('label_mode','automatic'),q.get('label',''),
-                  q.get('custom_label',''),pos,not q.get('hidden',False),
-                  cups.get(q.get('cup_type_id'),{}).get('default_volume_ml')]
+            cid=q.get('cup_type_id','');lid=q.get('liquid_type_id','')
+            vals=[p['config']['name'],q.get('id',''),lid,liquids.get(lid,lid),cid,
+                  cups.get(cid,{}).get('name',cid),q.get('label_mode','automatic'),
+                  q.get('label',''),pos,cups.get(cid,{}).get('default_volume_ml'),
+                  not q.get('hidden',False),q.get('custom_label','')]
             buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
-
+    row+=3
+    buttonsrows[row]=[(1,'Profile settings — exported values',2,None)]
+    row+=1
+    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
+       ['Profile','Age','Gender','Unit','Source mode','Source sensor','Daily target mL',
+        'Target override mL','Pregnancy','Lactation'],1)]
+    for p in profiles:
+        row+=1
+        cfg=p['config']
+        values=[cfg.get('name'),cfg.get('age'),cfg.get('gender'),cfg.get('unit'),
+                cfg.get('source_mode'),cfg.get('source_sensor') or '',p.get('target_ml'),
+                p.get('target_override_ml'),cfg.get('pregnancy',False),cfg.get('lactation',False)]
+        buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
+    row+=3
+    buttonsrows[row]=[(1,'Original volume buttons — legacy / reference only',2,None)]
+    row+=1
+    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
+       ['Profile','Position','Original volume mL','Custom configured'],1)]
+    for p in profiles:
+        for pos,v in enumerate(p.get('volume_buttons') or [],1):
+            row+=1
+            buttonsrows[row]=[(i,value,0,None) for i,value in enumerate(
+                [p['config']['name'],pos,v,True],1)]
     content=[
-     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,19,26,24],f'K{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,19,16,26,24],f'L{max(12,11+len(records))}',max(12,11+len(records)),True),
      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25,15],f'J{max(1,len(typesrows))}',len(typesrows)),
-     _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,15,18,24],f'J{max(1,max(buttonsrows))}',len(buttonsrows)),
+     _worksheet(3,typesrows,[16,24,22,23,18,25,13,19,25,15,19,23,21],f'M{max(1,len(typesrows))}',len(typesrows)),
+     _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24],f'L{max(1,max(buttonsrows))}',len(buttonsrows)),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.
     buffer=BytesIO()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 from .settings_io import extract, digest, validate_payload, settings_preview
+from . import data_io
 from datetime import datetime, date, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 import math
@@ -158,7 +159,7 @@ class HydrationCoordinator:
         self.liquid_order: list[str] = []
         # None means follow the existing dashboard's quick_add YAML until customized.
         self.volume_buttons: list[float] | None = None
-        # Additive v1.1.0-beta.28 profile-local catalog. Original data is authoritative.
+        # Additive v1.1.0-beta.29 profile-local catalog. Original data is authoritative.
         # Empty lists do not generate cup or quick-button guesses from legacy amounts.
         self.cup_types: list[dict[str, Any]] = []
         self.quick_buttons: list[dict[str, Any]] = []
@@ -166,6 +167,7 @@ class HydrationCoordinator:
         self.legacy_mappings: dict[str, dict[str, str]] = {}
         self.legacy_cup_defaults: dict[str,str] = {}
         self.conversion_state: dict[str, Any] = {}
+        self.data_model_version: int = 1
         self.profile_display_name: str = self.name
 
     def _now(self) -> datetime:
@@ -265,6 +267,7 @@ class HydrationCoordinator:
             self.legacy_mappings = dict(saved.get('legacy_mappings') or {})
             self.legacy_cup_defaults = dict(saved.get('legacy_cup_defaults') or {})
             self.conversion_state = dict(saved.get('conversion_state') or {})
+            self.data_model_version = int(saved.get('data_model_version', 1))
             self.profile_display_name = saved.get('profile_display_name') or self.name
             self.name = self.profile_display_name
         if self.last_reset_date != self._today():
@@ -321,6 +324,8 @@ class HydrationCoordinator:
             record = self._entry('drink',origin,before,amount_ml,float(amount),unit)
             record['timestamp'] = timestamp
             record['liquid_type'] = liquid_type
+            record['liquid_type_id'] = liquid_type
+            record['cup_default_volume_ml_at_log'] = next((float(c['default_volume_ml']) for c in self.cup_types if c['id'] == cup_type_id), None)
             if cup_type_id:
                 record['cup_type_id'] = cup_type_id
             if quick_button_id:
@@ -377,7 +382,8 @@ class HydrationCoordinator:
             next_day = timestamp[:10]
             # Replace first so archive counts reflect the new timestamp/date.
             record.update(timestamp=timestamp, volume_ml=round(amount_ml, 4),
-                          liquid_type=liquid_type, input_volume=float(amount), input_unit='mL')
+                          liquid_type=liquid_type, liquid_type_id=liquid_type, input_volume=float(amount), input_unit='mL',
+                          cup_default_volume_ml_at_log=next((float(c['default_volume_ml']) for c in self.cup_types if c['id'] == cup_type_id), None))
             # An explicit user edit may change the cup; never infer it from volume.
             if cup_type_id:
                 record['cup_type_id'] = cup_type_id
@@ -524,6 +530,7 @@ class HydrationCoordinator:
             cup_types=self.cup_types, quick_buttons=self.quick_buttons,
             legacy_mappings=self.legacy_mappings,
             legacy_cup_defaults=self.legacy_cup_defaults, conversion_state=self.conversion_state,
+            data_model_version=self.data_model_version,
             profile_display_name=self.profile_display_name))
 
     @callback
@@ -837,12 +844,16 @@ class HydrationCoordinator:
             return self.get_quick_buttons()
 
     def canonical_liquid(self, liquid_id: str) -> str:
+        if self.data_model_version >= 2:
+            return str(liquid_id)
         # No aliases are traversed recursively: only explicit direct mappings
         # to an unmapped currently defined target are permitted.
         alias = self.legacy_mappings.get(liquid_id, {})
         return str(alias.get('liquid_type_id') or liquid_id)
 
     def mapped_cup(self, liquid_id: str, direct_cup: str | None = None) -> str | None:
+        if self.data_model_version >= 2:
+            return direct_cup
         return (direct_cup or self.legacy_mappings.get(liquid_id, {}).get('cup_type_id')
                 or self.legacy_cup_defaults.get(liquid_id) or None)
 
@@ -883,6 +894,8 @@ class HydrationCoordinator:
                                        cup_type_id: str = '') -> dict:
         if old_id == new_liquid_id:
             raise ValueError('Select a different canonical liquid type')
+        if self.data_model_version >= 2:
+            raise ValueError('Native data model is final; legacy mappings are read-only')
         if not self._valid_liquid_type(new_liquid_id) or new_liquid_id in self.legacy_mappings:
             raise ValueError('Canonical target must be a defined, unmapped liquid')
         if old_id not in {str(r.get('liquid_type')) for r in self.records if r.get('kind')=='drink'}:
@@ -897,6 +910,8 @@ class HydrationCoordinator:
             return self.migration_preview()
 
     async def async_clear_legacy_mapping(self, old_id: str) -> dict:
+        if self.data_model_version >= 2:
+            raise ValueError('Native data model is final; legacy mappings are read-only')
         async with self._lock:
             self.legacy_mappings.pop(old_id, None)
             await self._save()
@@ -914,6 +929,16 @@ class HydrationCoordinator:
         cleaned = validate_payload(dict(format='jwDaily-Hydration-Log-settings',
             schema=1, settings=settings), existing_legacy_ids=history_ids,
             include_mappings=include_mappings)
+        # A settings-only import must not orphan any persisted drink references.
+        allowable = set(('water','coffee','tea','milk','soup','wine','other')) | {t['id'] for t in cleaned['custom_liquid_types']}
+        available_cups = {cup['id'] for cup in cleaned['cup_types']}
+        for record in self.records:
+            if record.get('kind') != 'drink':
+                continue
+            lid = self.canonical_liquid(record.get('liquid_type_id') or record.get('liquid_type','unknown'))
+            cup = self.mapped_cup(record.get('liquid_type','unknown'), record.get('cup_type_id'))
+            if lid not in allowable or (cup and cup not in available_cups):
+                raise ValueError('Settings import would orphan existing Liquid/Cup references; restore matching Data or use Full Backup')
         # Imported user SVGs require the same security filter as direct uploads.
         for item in cleaned['custom_liquid_types']:
             if item.get('icon_svg'): _safe_svg(item['icon_svg'])
@@ -1057,6 +1082,8 @@ class HydrationCoordinator:
 
     async def async_apply_conversion(self, plan: dict, expected_revision: str) -> dict:
         """Repeatable catalog+alias repair; no historic ledger or aggregate mutation."""
+        if self.data_model_version >= 2:
+            raise ValueError('The data model is already finalized; edit native records directly')
         if not isinstance(plan,dict):raise ValueError('Invalid conversion plan')
         cups=plan.get('cups',[]); sources=plan.get('sources',[])
         if not isinstance(cups,list) or len(cups)>40 or not isinstance(sources,list) or len(sources)>120:
@@ -1148,7 +1175,7 @@ class HydrationCoordinator:
                     raise ValueError('Conversion left unclassified historical drinks')
                 if audit['total_records']!=before_audit['total_records'] or audit['total_logged_ml']!=before_audit['total_logged_ml']:
                     raise ValueError('Conversion must preserve all drink totals')
-                self.conversion_state=dict(applied=True,version='1.1.0-beta.28',
+                self.conversion_state=dict(applied=True,version='1.1.0-beta.29',
                     source_revision=expected_revision,record_count=len(ledger),
                     run_count=int(old['conversion_state'].get('run_count',1 if old['conversion_state'].get('applied') else 0))+1,
                     classified_records=audit['classified_records'],
@@ -1168,9 +1195,10 @@ class HydrationCoordinator:
     def get_history(self, date: str | None = None) -> list[dict]:
         day = date or self._today()
         values = [dict(id=r['id'],timestamp=r['timestamp'],volume_ml=r['volume_ml'],
-                       liquid_type=self.canonical_liquid(r.get('liquid_type', 'unknown')),
-                       original_liquid_type=r.get('liquid_type', 'unknown'),
+                       liquid_type=self.canonical_liquid(r.get('liquid_type_id') or r.get('liquid_type', 'unknown')),
+                       original_liquid_type=r.get('source_legacy_liquid_id') or r.get('liquid_type', 'unknown'),
                        cup_type_id=self.mapped_cup(r.get('liquid_type','unknown'), r.get('cup_type_id')),
+                       cup_default_volume_ml_at_log=r.get('cup_default_volume_ml_at_log'),
                        quick_button_id=r.get('quick_button_id'),origin=r.get('origin', ''))
                   for r in self.records if r['kind']=='drink' and r['timestamp'][:10]==day]
         return sorted(values, key=lambda r: (r['timestamp'],r['id']))
@@ -1287,6 +1315,221 @@ class HydrationCoordinator:
                     coverage='typed_logged_drinks_only',
                     liquid_names={t['id']:t['name'] for t in self.get_liquid_definitions()},
                     liquid_colors=self.liquid_color_map())
+
+    def model_migration_preview(self) -> dict:
+        """Proof of complete canonical references before a one-time storage rewrite."""
+        before = [(r.get('id'), r.get('timestamp'), r.get('volume_ml'))
+                  for r in self.records if r.get('kind') == 'drink']
+        liquids = {t['id'] for t in self.get_liquid_definitions()}
+        cups = {c['id'] for c in self.cup_types}
+        unresolved = []
+        missing_cup = 0
+        for r in self.records:
+            if r.get('kind') != 'drink':
+                continue
+            canonical = self.canonical_liquid(r.get('liquid_type_id') or r.get('liquid_type', 'unknown'))
+            cup = self.mapped_cup(r.get('liquid_type', 'unknown'), r.get('cup_type_id'))
+            if canonical not in liquids:
+                unresolved.append(dict(record_id=r.get('id'), liquid_id=r.get('liquid_type')))
+            if cup and cup not in cups:
+                unresolved.append(dict(record_id=r.get('id'), invalid_cup=cup))
+            if not cup:
+                missing_cup += 1
+        return dict(profile=self.slug, completed=self.data_model_version >= 2,
+                    revision=self.settings_revision(), history_revision=self._ledger_revision(),
+                    drink_count=len(before), unclassified=unresolved[:200],
+                    unclassified_count=len(unresolved), cup_unknown_count=missing_cup,
+                    all_ids_preserved=True,
+                    total_logged_ml=round(sum(float(r.get('volume_ml') or 0)
+                                              for r in self.records if r.get('kind')=='drink'), 3))
+
+    async def async_finalize_model(self, settings_rev: str, history_rev: str,
+                                   allow_unknown_cups: bool) -> dict:
+        """One-time atomic ledger canonicalization. Old aliases stay until beta.30 rollback retirement."""
+        async with self._lock:
+            plan = self.model_migration_preview()
+            if plan['revision'] != settings_rev or plan['history_revision'] != history_rev:
+                raise ValueError('Data or settings changed after migration preview')
+            if plan['completed']:
+                return dict(changed=False, **plan)
+            if plan['unclassified_count']:
+                raise ValueError('Resolve all unknown Liquid/Cup references first')
+            if plan['cup_unknown_count'] and not allow_unknown_cups:
+                raise ValueError('Confirm that unresolved historical Cups will remain Unknown')
+            original = deepcopy(self.records)
+            old_version, old_state = self.data_model_version, deepcopy(self.conversion_state)
+            ids_before = [(r.get('id'),r.get('timestamp'),r.get('volume_ml'),r.get('kind')) for r in original]
+            try:
+                for r in self.records:
+                    if r.get('kind') != 'drink':
+                        continue
+                    old = r.get('liquid_type') or 'unknown'
+                    new = self.canonical_liquid(old)
+                    cup = self.mapped_cup(old, r.get('cup_type_id'))
+                    if new != old:
+                        r['source_legacy_liquid_id'] = old
+                    r['liquid_type'] = r['liquid_type_id'] = new
+                    r['cup_type_id'] = cup or None
+                    # The original Cup default is unknown for old events.
+                    r.setdefault('cup_default_volume_ml_at_log', None)
+                self.data_model_version = 2
+                self.conversion_state = {**self.conversion_state, 'applied': True,
+                                         'version': '1.1.0-beta.29', 'source_revision': settings_rev,
+                                         'model_finalized': True, 'model_version': 2}
+                if ids_before != [(r.get('id'),r.get('timestamp'),r.get('volume_ml'),r.get('kind'))
+                                  for r in self.records]:
+                    raise ValueError('Migration altered original drink data')
+                if self.model_migration_preview()['unclassified_count']:
+                    raise ValueError('Migration left unresolved references')
+                await self._save()
+            except Exception:
+                self.records, self.data_model_version, self.conversion_state = original, old_version, old_state
+                raise
+            self._dispatch()
+            return dict(changed=True, **self.model_migration_preview())
+
+    def data_revision(self) -> str:
+        return data_io.sha(data_io.extract(self))
+
+    def export_data(self) -> dict:
+        document = data_io.export_payload(self)
+        # An export never rewrites HA storage; canonicalize copy using accepted mappings.
+        for r in document['data']['records']:
+            if r.get('kind') != 'drink':
+                continue
+            old = r.get('liquid_type') or 'unknown'
+            canonical = self.canonical_liquid(r.get('liquid_type_id') or old)
+            if canonical != old:
+                r['source_legacy_liquid_id'] = old
+            r['liquid_type_id'] = r['liquid_type'] = canonical
+            r['cup_type_id'] = self.mapped_cup(old, r.get('cup_type_id'))
+            r.setdefault('cup_default_volume_ml_at_log', None)
+        return document
+
+    def _validate_import_data(self, raw: dict, *, settings: dict | None = None) -> dict:
+        from .settings_io import BUILTINS
+        catalog = settings or extract(self)
+        liquid_ids = set(BUILTINS) | {t['id'] for t in catalog['custom_liquid_types']}
+        cup_ids = {c['id'] for c in catalog['cup_types']}
+        return data_io.validate(raw, liquids=liquid_ids, cups=cup_ids)
+
+    def data_import_preview(self, raw: dict, mode: str) -> dict:
+        if mode == 'replace' and (raw.get('source_profile') or {}).get('slug') != self.slug:
+            raise ValueError('Replace all requires a Data export of this same profile')
+        clean = self._validate_import_data(raw)
+        proposed, counts = data_io.import_plan(data_io.extract(self), clean, mode, default_target_ml=self.target_ml)
+        return dict(profile=self.slug, mode=mode, counts=counts,
+                    settings_revision=self.settings_revision(), data_revision=self.data_revision(),
+                    import_sha256=data_io.sha(raw), expected_result_sha256=data_io.sha(proposed),
+                    warning='Merge/update retains existing source measurements; replace restores full data.')
+
+    async def async_import_data(self, raw: dict, mode: str, preview: dict) -> dict:
+        async with self._lock:
+            if self.settings_revision() != preview.get('settings_revision') or self.data_revision() != preview.get('data_revision'):
+                raise ValueError('Data or settings changed after preview; recheck import')
+            if data_io.sha(raw) != preview.get('import_sha256') or preview.get('mode') != mode:
+                raise ValueError('Import contents changed after preview')
+            clean = self._validate_import_data(raw)
+            result, counts = data_io.import_plan(data_io.extract(self), clean, mode, default_target_ml=self.target_ml)
+            if data_io.sha(result) != preview.get('expected_result_sha256'):
+                raise ValueError('Import result no longer matches preview')
+            old = data_io.extract(self)
+            try:
+                for k, v in result.items():
+                    setattr(self, '_source_baseline_ml' if k=='source_baseline' else
+                            '_last_source_value' if k=='last_source_value' else k, deepcopy(v))
+                self.data_model_version = 2 if all(r.get('liquid_type_id') for r in self.records
+                                                    if r.get('kind')=='drink') else 1
+                await self._save()
+            except Exception:
+                for k, v in old.items():
+                    setattr(self, '_source_baseline_ml' if k=='source_baseline' else
+                            '_last_source_value' if k=='last_source_value' else k, v)
+                raise
+            self._dispatch()
+            return dict(applied=True, **counts, data_revision=self.data_revision())
+
+    def full_backup(self) -> bytes:
+        from .settings_io import export_payload
+        return data_io.build_full(export_payload(self), self.export_data())
+
+    def _validate_restored_preferences(self, raw: dict) -> dict:
+        if not isinstance(raw, dict):
+            raise ValueError('Full backup is missing profile preferences')
+        value = {key: raw.get(key) for key in ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')}
+        if type(value['age']) is not int or not 1 <= value['age'] <= 120:
+            raise ValueError('Invalid profile age')
+        if value['gender'] not in ('male', 'female') or value['unit'] not in ('mL','L','fl_oz'):
+            raise ValueError('Invalid profile gender or unit')
+        if value['source_mode'] not in ('absolute','sum','delta'):
+            raise ValueError('Invalid profile source mode')
+        if type(value['pregnancy']) is not bool or type(value['lactation']) is not bool:
+            raise ValueError('Invalid profile options')
+        if value['source_sensor'] is not None and (not isinstance(value['source_sensor'],str) or
+            len(value['source_sensor']) > 255):
+            raise ValueError('Invalid source sensor')
+        return value
+
+    def full_restore_preview(self, raw_settings: dict, raw_data: dict, archive_digest: str) -> dict:
+        if (raw_settings.get('source_profile') or {}).get('slug') != self.slug or \
+           (raw_data.get('source_profile') or {}).get('slug') != self.slug:
+            raise ValueError('Full restore is restricted to the same profile ID')
+        history_ids = {str(r.get('source_legacy_liquid_id') or r.get('liquid_type') or 'unknown')
+                       for r in raw_data.get('data', {}).get('records', []) if r.get('kind') == 'drink'}
+        history_ids |= set((raw_settings.get('settings') or {}).get('legacy_mappings') or {})
+        settings = validate_payload(raw_settings, existing_legacy_ids=history_ids, include_mappings=True)
+        for item in settings['custom_liquid_types']:
+            if item.get('icon_svg'):_safe_svg(item['icon_svg'])
+        for item in settings['liquid_overrides'].values():
+            if item.get('icon_svg'):_safe_svg(item['icon_svg'])
+        preferences = self._validate_restored_preferences(raw_settings.get('profile_preferences'))
+        data = self._validate_import_data(raw_data, settings=settings)
+        counts = dict(records=sum(r.get('kind') == 'drink' for r in data['records']),
+                      cups=len(settings['cup_types']), quick_buttons=len(settings['quick_buttons']),
+                      current_records=sum(r.get('kind') == 'drink' for r in self.records))
+        return dict(profile=self.slug, archive_sha256=archive_digest,
+                    settings_revision=self.settings_revision(), data_revision=self.data_revision(),
+                    counts=counts, target_settings_sha256=digest(settings),
+                    target_data_sha256=data_io.sha(data), preferences_sha256=data_io.sha(preferences))
+
+    async def async_restore_full(self, settings: dict, data: dict, preview: dict, preferences: dict | None = None) -> dict:
+        async with self._lock:
+            if (self.settings_revision() != preview.get('settings_revision') or
+                self.data_revision() != preview.get('data_revision') or
+                digest(settings) != preview.get('target_settings_sha256') or
+                data_io.sha(data) != preview.get('target_data_sha256') or
+                data_io.sha(preferences) != preview.get('preferences_sha256')):
+                raise ValueError('Full backup or profile changed since preview')
+            old_settings, old_data = extract(self), data_io.extract(self)
+            old_version = self.data_model_version
+            old_pref = {k:getattr(self,k) for k in ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')}
+            old_options = dict(self.entry.options)
+            try:
+                for k,v in preferences.items():setattr(self,k,v)
+                for k, v in settings.items():
+                    setattr(self, k, deepcopy(v))
+                for k, v in data.items():
+                    setattr(self, '_source_baseline_ml' if k=='source_baseline' else
+                            '_last_source_value' if k=='last_source_value' else k, deepcopy(v))
+                self.data_model_version = 2 if all(r.get('liquid_type_id') for r in self.records
+                                                    if r.get('kind')=='drink') else 1
+                await self._save()
+                # Native Home Assistant options are the durable owner of profile preferences.
+                options={**self.entry.options,**preferences}
+                self.hass.config_entries.async_update_entry(self.entry, options=options)
+            except Exception:
+                for k,v in old_pref.items():setattr(self,k,v)
+                for k, v in old_settings.items():setattr(self,k,v)
+                for k, v in old_data.items():
+                    setattr(self, '_source_baseline_ml' if k=='source_baseline' else
+                            '_last_source_value' if k=='last_source_value' else k,v)
+                self.data_model_version = old_version
+                try:await self._save()
+                except Exception:pass  # Preserve original exception; HA Store uses atomic writes.
+                raise
+            self._dispatch()
+            return dict(restored=True, count=preview['counts']['records'],
+                        settings_revision=self.settings_revision(), data_revision=self.data_revision())
 
     def export_snapshot(self) -> dict:
         cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
