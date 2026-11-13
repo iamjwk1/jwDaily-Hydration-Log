@@ -21,10 +21,10 @@ with sync_playwright() as p:
           const breakdown=[{liquid_type:'coffee',volume_ml:180},{liquid_type:'water',volume_ml:180},{liquid_type:'tea',volume_ml:180},{liquid_type:'milk',volume_ml:360}];
           window.qaHass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_sample_consumed_today':{state:'0.9',attributes:{consumed_ml:900,unit_of_measurement:'L'}},'sensor.jwdhl_sample_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_sample_drink_count_today':{state:'4',attributes:{}},'sensor.jwdhl_sample_manual_consumed':{state:'900',attributes:{manual_consumed_ml:900}}},callWS:async function(msg){window.qaCalls.push(msg);
              if(msg.type.endsWith('/manage_quick')){if(msg.action==='delete'){const ix=quick.findIndex(q=>q.id===msg.quick_id);if(ix<0)throw Error('missing');quick.splice(ix,1);}else if(msg.action==='hide'||msg.action==='restore'){const q=quick.find(q=>q.id===msg.quick_id);q.hidden=msg.action==='hide';q.available=!q.hidden;}return {quick_buttons:quick};}
-             if(msg.type.endsWith('/migration_status'))return {status:'active',schema:3,profile_count:2,backup_verified:true,catalog_sha256:'a'.repeat(64)};
+             if(msg.type.endsWith('/migration_status'))return {status:'active',schema:3,profile_count:2,backup_verified:true,catalog_sha256:'a'.repeat(64),legacy_cleanup_v4:{status:'clean',removed_fields:0,history_unchanged:true}};
              if(msg.type.endsWith('/migration_backup_export'))return {filename:'test original migration backup.zip',base64:'UEsDBBQ=',sha256:'b'.repeat(64),bytes:5};
-             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.35',settings_transfer:true,native_model:true};
-             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.35'};
+             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.36',settings_transfer:true,native_model:true};
+             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.36'};
              if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'sample',name:'Sample',age:58,gender:'male',unit:'mL',daily_target_ml:2000},{slug:'second',name:'Second profile',age:35,gender:'female',unit:'mL',daily_target_ml:2400}]};
              return {};
           }};
@@ -65,6 +65,7 @@ with sync_playwright() as p:
         assert page.evaluate("window.qaCalls.filter(c=>c.type==='jw_daily_hydration_log/migration_status').length")==1,(width,'migration status not routed')
         assert 'Status: active' in root.locator('.settings-section').inner_text()
         assert 'Backup: Verified' in root.locator('.settings-section').inner_text()
+        assert 'Legacy cleanup: Clean · Removed: 0 · History: Unchanged' in root.locator('.settings-section').inner_text()
         assert root.locator('button[data-action="migration-rollback"]').is_disabled()
         root.locator('button[data-action="migration-backup-export"]').click()
         page.wait_for_timeout(80)
@@ -86,6 +87,15 @@ with sync_playwright() as p:
         assert abs(f1-f2)<0.11,(width,'buttons should use consistent font size',f1,f2)
         assert root.locator('.cup-settings-row').count()==2
         assert 'Used: 4' in root.locator('.cup-settings-row').first.inner_text()
+        cupbox=root.locator('.dialog-settings').bounding_box()
+        assert cupbox and cupbox['x']>=0 and cupbox['x']+cupbox['width']<=width+1,(width,cupbox)
+        if width>=720: assert cupbox['width']<=611,(width,'Cup dialog too wide',cupbox)
+        for cr in root.locator('.cup-settings-row').all():
+            assert cr.evaluate('(el)=>getComputedStyle(el).borderBottomStyle')=='none',(width,'Unexpected cup row divider')
+            if width>=720:
+                v=cr.locator('.row-title small').bounding_box()
+                u=cr.locator('.used-count').bounding_box()
+                assert abs((v['y']+v['height']/2)-(u['y']+u['height']/2))<6,(width,'Cup volume and Used not aligned',v,u)
         for cr in root.locator('.cup-settings-row').all():
             heights=[round(b.bounding_box()['y']) for b in cr.locator('.settings-row-actions button').all()]
             assert max(heights)-min(heights)<=2,(width,'cup action buttons wrapped',heights)
@@ -143,6 +153,8 @@ with sync_playwright() as p:
         assert root.locator('.settings-section > h3').count()==0
         assert 'Each profile keeps separate settings and drink history.' in root.locator('.settings-section').inner_text()
         assert root.locator('button[data-action="settings-profile-edit"]').count()==2
+        profile_box=root.locator('.dialog-settings').bounding_box()
+        if width>=720: assert profile_box['width']<=487,(width,'Manage profiles too wide',profile_box)
         assert root.locator('button[data-action="settings-profile-add"]').count()==1
         assert root.locator('button[data-action="settings-home"]').count()==1
         root.locator('button[data-action="settings-profile-edit"][data-value="sample"]').click()
@@ -162,12 +174,23 @@ with sync_playwright() as p:
         assert root.locator('.manage > h3').count()==0
         assert 'Back to drink' not in root.locator('.dialog-settings').inner_text()
         assert 'Used: 2' in root.locator('.saved-liquid').filter(has_text='Coffee').first.inner_text()
+        liquid_box=root.locator('.dialog-settings').bounding_box()
+        if width>=720: assert liquid_box['width']<=591,(width,'Liquid types too wide',liquid_box)
         for row in root.locator('.saved-liquid').all():
             ys=[round(b.bounding_box()['y']) for b in row.locator('.settings-row-actions button').all()]
             assert max(ys)-min(ys)<=2,(width,'liquid actions wrapped',ys)
         root.locator('.saved-liquid [data-action="manage-edit"]').first.click()
         assert root.locator('.editor-overlay').count()==1
         assert root.locator('.saved-liquid').count()==4
+        assert root.locator('.editor-overlay .liquid-svg-preview').count()==1
+        editor=root.locator('.editor-overlay')
+        assert editor.locator('[data-field="color_hex"]').bounding_box()['width']<=135
+        assert editor.locator('[data-field="custom_svg_file"]').bounding_box()['width']<=287
+        sample_svg=b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#0088ff"/></svg>'
+        editor.locator('[data-field="custom_svg_file"]').set_input_files({'name':'sample-icon.svg','mimeType':'image/svg+xml','buffer':sample_svg})
+        page.wait_for_timeout(100)
+        assert editor.locator('.liquid-svg-preview .svg-icon').count()==1,(width,'SVG preview not shown')
+        assert 'SVG icon preview' in editor.inner_text()
         root.locator('.editor-overlay [data-action="manage-cancel"]').first.click()
         assert root.locator('.editor-overlay').count()==0
         assert root.locator('.saved-liquid').count()==4
