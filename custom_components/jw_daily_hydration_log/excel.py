@@ -43,8 +43,10 @@ def export_filename(timezone_name: str = 'Europe/Amsterdam', when: datetime | No
     except (KeyError, ValueError):
         tz = ZoneInfo('UTC')
     local = when.astimezone(tz) if when is not None else datetime.now(tz)
-    import re
-    scope=(re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', '',profile_name).strip() if profile_name else 'All Data')
+    invalid=set('<>:"/|?*')
+    scope=(''.join(ch for ch in str(profile_name)
+                    if ch not in invalid and ch!=chr(92) and ord(ch)>=32).strip()
+           if profile_name else 'All Data')
     return f'{local:%Y%m%d-%H%M} jwDaily Hydration Log - {scope or "Profile"}.xlsx'
 
 
