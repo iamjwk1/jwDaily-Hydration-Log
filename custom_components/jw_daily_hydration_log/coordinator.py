@@ -135,10 +135,12 @@ class HydrationCoordinator:
         self.slug = slugify(self.name)
         self.age = int(cfg.get('age', 30))
         self.gender = cfg.get('gender', 'male')
-        self.pregnancy = bool(cfg.get('pregnancy', False))
-        self.lactation = bool(cfg.get('lactation', False))
-        self.source_sensor = cfg.get('source_sensor') or None
-        self.source_mode = cfg.get('source_mode', 'absolute')
+        # These legacy attributes are inert during Release 1 and are not exposed
+        # as settings. Historical source data stays available for rollback.
+        self.pregnancy = False
+        self.lactation = False
+        self.source_sensor = None
+        self.source_mode = 'delta'
         self.unit = cfg.get('unit', 'mL')
         self.target_override_ml = 0.0
         self.consumed_ml = 0.0
@@ -180,7 +182,7 @@ class HydrationCoordinator:
 
     @property
     def target_ml(self) -> int:
-        return round(self.target_override_ml) if self.target_override_ml > 0 else target_ml(self.age,self.gender,self.pregnancy,self.lactation)
+        return round(self.target_override_ml) if self.target_override_ml > 0 else 2000
 
     @property
     def remaining_ml(self) -> float:
@@ -1217,18 +1219,11 @@ class HydrationCoordinator:
     def _validate_restored_preferences(self, raw: dict) -> dict:
         if not isinstance(raw, dict):
             raise ValueError('Full backup is missing profile preferences')
-        value = {key: raw.get(key) for key in ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')}
+        value = {key: raw.get(key) for key in ('age','gender','unit')}
         if type(value['age']) is not int or not 1 <= value['age'] <= 120:
             raise ValueError('Invalid profile age')
         if value['gender'] not in ('male', 'female') or value['unit'] not in ('mL','L','fl_oz'):
             raise ValueError('Invalid profile gender or unit')
-        if value['source_mode'] not in ('absolute','sum','delta'):
-            raise ValueError('Invalid profile source mode')
-        if type(value['pregnancy']) is not bool or type(value['lactation']) is not bool:
-            raise ValueError('Invalid profile options')
-        if value['source_sensor'] is not None and (not isinstance(value['source_sensor'],str) or
-            len(value['source_sensor']) > 255):
-            raise ValueError('Invalid source sensor')
         return value
 
     def full_restore_preview(self, raw_settings: dict, raw_data: dict, archive_digest: str) -> dict:
@@ -1260,7 +1255,7 @@ class HydrationCoordinator:
                 raise ValueError('Full backup or profile changed since preview')
             old_settings, old_data = extract(self), data_io.extract(self)
             old_version = self.data_model_version
-            old_pref = {k:getattr(self,k) for k in ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')}
+            old_pref = {k:getattr(self,k) for k in ('age','gender','unit')}
             old_options = dict(self.entry.options)
             try:
                 for k,v in preferences.items():setattr(self,k,v)
@@ -1289,7 +1284,7 @@ class HydrationCoordinator:
                         settings_revision=self.settings_revision(), data_revision=self.data_revision())
 
     def export_snapshot(self) -> dict:
-        cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
+        cfg = {key: getattr(self,key) for key in ('name','age','gender','unit')}
         return dict(entry_id=self.entry_id,slug=self.slug,config=cfg,date=self.last_reset_date,
                     consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
                     target_ml=self.target_ml,source_contribution_ml=self.source_contribution_ml,
