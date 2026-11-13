@@ -620,6 +620,13 @@ class HydrationCoordinator:
             cup_types=self.cup_types, quick_buttons=self.quick_buttons,
             data_model_version=self.data_model_version,
             profile_display_name=self.profile_display_name)
+        # Preserve unknown legacy profile fields during Release 1. Only the
+        # subsequent cleanup release may retire these after successful migration.
+        original=await self._store.async_load()
+        if original is not None:
+            if not isinstance(original,dict):
+                raise ValueError('Profile storage has an unexpected format')
+            payload={**original,**payload}
         # Release 1 retains every legacy field/copy for reversible migration.
         catalog=getattr(self, '_global_catalog_v3', None)
         if catalog is None:
