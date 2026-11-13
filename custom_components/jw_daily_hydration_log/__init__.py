@@ -497,29 +497,35 @@ def ws_profiles_list(hass, connection, msg):
                                   probatio.Required('age'):int,
                                   probatio.Required('gender'):str,
                                   probatio.Required('unit'):str,
-                                  probatio.Optional('pregnancy'):bool,
-                                  probatio.Optional('lactation'):bool,
-                                  probatio.Optional('source_sensor'):str,
-                                  probatio.Optional('source_mode'):str})
+                                  probatio.Optional('daily_target_ml'):float})
 @websocket_api.async_response
 async def ws_profile_edit(hass, connection, msg):
     try:
         c=_resolve(hass,msg['profile'])
-        if not 1<=msg['age']<=120 or msg['gender'] not in ('male','female') or msg['unit'] not in UNITS:
+        if not 1 <= msg['age'] <= 120 or msg['gender'] not in ('male','female') or msg['unit'] not in UNITS:
             raise ValueError('Invalid age, gender or measurement unit')
-        mode=msg.get('source_mode',c.source_mode)
-        if mode not in ('absolute','delta','sum'):raise ValueError('Invalid source mode')
+        goal=float(msg.get('daily_target_ml',c.target_ml))
+        if not math.isfinite(goal) or not 1 <= goal <= 100000:
+            raise ValueError('Daily target must be between 1 and 100000 mL')
         name=c._catalog_name(msg['name'],'Profile name')
-        await c.async_set_display_name(name)
-        old={**c.entry.data,**c.entry.options}
-        opts={**c.entry.options,**{key:msg[key] for key in
-            ('age','gender','unit','pregnancy','lactation','source_sensor') if key in msg},
-            'source_mode':mode}
-        if any(old.get(k)!=v for k,v in opts.items()):
+        old_options=dict(c.entry.options)
+        old_name=c.name
+        old_target=c.target_override_ml
+        try:
+            # Target is profile-owned; full backups keep historical daily snapshots.
+            if round(goal) != c.target_ml:
+                await c.async_set_target(goal)
+            await c.async_set_display_name(name)
+            opts={**c.entry.options,**{k:msg[k] for k in ('age','gender','unit')}}
+            # Legacy preference keys are deliberately ignored; Release 2 can clean storage.
             hass.config_entries.async_update_entry(c.entry,options=opts,title=name)
-        else:
-            hass.config_entries.async_update_entry(c.entry,title=name)
+        except Exception:
+            # Fail safely if any part of the profile update fails.
+            c.target_override_ml=old_target
+            c.name=c.profile_display_name=old_name
+            raise
         connection.send_result(msg['id'],dict(updated=True,name=name,slug=c.slug,
+                                                daily_target_ml=c.target_ml,
                                                 stable_entry_id=c.entry_id))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'profile_edit_failed',str(exc))
@@ -532,8 +538,7 @@ async def ws_profile_edit(hass, connection, msg):
                                   probatio.Required('gender'):str,
                                   probatio.Required('unit'):str,
                                   probatio.Optional('copy_from'):str,
-                                  probatio.Optional('pregnancy'):bool,
-                                  probatio.Optional('lactation'):bool})
+                                  probatio.Optional('daily_target_ml'):float})
 @websocket_api.async_response
 async def ws_profile_create(hass, connection, msg):
     try:
@@ -543,32 +548,32 @@ async def ws_profile_create(hass, connection, msg):
             raise ValueError('Invalid or duplicate profile name')
         if not 1<=msg['age']<=120 or msg['gender'] not in ('male','female') or msg['unit'] not in UNITS:
             raise ValueError('Invalid profile age, gender or unit')
+        goal=float(msg.get('daily_target_ml',2000))
+        if not math.isfinite(goal) or not 1<=goal<=100000:
+            raise ValueError('Daily target must be between 1 and 100000 mL')
         template=_resolve(hass,msg['copy_from']) if msg.get('copy_from') else None
-        data=dict(name=name,age=msg['age'],gender=msg['gender'],unit=msg['unit'],
-                  pregnancy=bool(msg.get('pregnancy',False)),lactation=bool(msg.get('lactation',False)),
-                  source_mode='absolute')
-        # Home Assistant's native config flow owns config-entry registration.
+        data=dict(name=name,age=msg['age'],gender=msg['gender'],unit=msg['unit'])
         result=await hass.config_entries.flow.async_init(DOMAIN,
                     context={'source':'user'},data=data)
         if result.get('type')!='create_entry' or not result.get('result'):
             raise ValueError('Could not create profile through Home Assistant config flow')
         entry=result['result']
+        # Keep profile history separate, even when catalog definitions are copied.
+        store=Store(hass,1,f'{DOMAIN}.{entry.entry_id}')
+        current=await store.async_load() or {}
+        if current.get('records') or current.get('source_readings'):
+            raise ValueError('New profile unexpectedly contains historical records')
         if template:
-            settings=extract(template)
-            # A new profile copies only the native Liquid/Cup/Quick catalogs.
-            # A fresh profile has no history; each profile owns its own settings copy.
-            store=Store(hass,1,f'{DOMAIN}.{entry.entry_id}')
-            current=await store.async_load() or {}
-            if current.get('records') or current.get('source_readings'):
-                raise ValueError('New profile already contains observations; not copying settings')
-            current.update(deepcopy(settings))
-            current['target_override_ml']=0.0  # Personal target never copied.
-            await store.async_save(current)
-            # Load the copied setup if the new entry was already initialized.
-            if entry.entry_id in _profiles(hass):
-                await hass.config_entries.async_reload(entry.entry_id)
+            current.update(deepcopy(extract(template)))
+        current['target_override_ml']=float(goal) if round(goal)!=2000 else 0.0
+        await store.async_save(current)
+        verified=await store.async_load()
+        if verified!=current:raise ValueError('Profile initialization readback failed')
+        if entry.entry_id in _profiles(hass):
+            await hass.config_entries.async_reload(entry.entry_id)
         connection.send_result(msg['id'],dict(created=True,slug=slug,
-            entry_id=entry.entry_id,copied_settings=bool(template),history_copied=False))
+            entry_id=entry.entry_id,copied_settings=bool(template),history_copied=False,
+            daily_target_ml=round(goal)))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'profile_create_failed',str(exc))
 
