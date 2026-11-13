@@ -73,6 +73,7 @@ async def main():
                     quick_button_id='quick_coffee',origin='dashboard')]
     c.consumed_ml=c.manual_consumed_ml=540.0
     before=[(r['id'],r['timestamp'],r['volume_ml'],r['liquid_type_id'],r['cup_type_id']) for r in c.records]
+    original_ledger=deepcopy(c.records)
     await c._save();await c.async_initialize()
     # Failed persistence cannot leave a partial deletion in active memory.
     normal_save=c._save
@@ -89,11 +90,11 @@ async def main():
     result=await c.async_manage_quick('delete','quick_tea')
     assert len(result)==1 and result[0]['id']=='quick_coffee'
     assert [(r['id'],r['timestamp'],r['volume_ml'],r['liquid_type_id'],r['cup_type_id']) for r in c.records]==before
-    assert all('quick_button_id' not in r for r in c.records[:2])
-    assert c.records[0]['quick_button_label_at_log']=='Tea (Glazen beker)'
+    assert c.records==original_ledger
+    assert all(r.get('quick_button_id')=='quick_tea' for r in c.records[:2])
     assert c.records[1]['quick_button_label_at_log']=='Tea before rename'
     assert c.records[2]['quick_button_id']=='quick_coffee'
-    assert c.get_history('2026-11-12')[0]['quick_button_label_at_log']=='Tea (Glazen beker)'
+    assert c.get_history('2026-11-12')[0]['quick_button_id']=='quick_tea'
     print('BETA31_QUICK_DELETE_HISTORY_PRESERVED_PASS')
     try: await c.async_manage_quick('delete','quick_tea');raise AssertionError('Repeat should reject')
     except ValueError as e: assert 'not found' in str(e)
