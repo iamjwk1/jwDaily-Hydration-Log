@@ -1,3 +1,13 @@
+## v1.1.0-beta.32
+
+- Release 1 migration: global Liquid and Cup catalogs shared across profiles, while Quick buttons and daily targets remain profile-specific.
+- New profiles default to 2000 mL/day; existing calculated goals migrate without changing their effective value. Each historical drink record and archived daily snapshot is preserved.
+- Immutable original profile Store backups with SHA-256, transaction journal, fail-closed preflight, downloadable ZIP and explicit rollback. Crash recovery restores catalog metadata only and never overwrites newer drinks.
+- Used Liquids/Cups cannot be permanently deleted if referenced in the history of any profile; Hide/Restore remains possible. Quick buttons can always be deleted without changing historical event metadata.
+- Manage Profiles uses the requested layout, with target and Quick button settings inside profile editing. Deprecated sensor mode, source sensor, pregnancy and lactation controls are retired from the active integration.
+- Excel Hydration log: 44 pt rows, left-aligned export date, Cup used name + volume, no Current cup default/Quick button columns. Daily intake always ends with Other. Settings Liquid Types embeds PNG pictograms. Export scope dropdown defaults to All profiles.
+- Source, migration, multi-profile, OpenXML/CRC and Chromium regression tests, with HACS/Hassfest release gating. Legacy cleanup deferred to Release 2.
+
 ## v1.1.0-beta.31
 
 - Quick buttons can now be permanently deleted with an in-popup confirmation; deleting a button leaves all drink moments, Liquid/Cup references, timestamps and actual volumes unchanged. Previous Quick button labels remain available in history, backups and Excel.
