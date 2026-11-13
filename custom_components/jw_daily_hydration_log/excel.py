@@ -255,8 +255,23 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
         fmatch = re.search(r'<fills([^>]*)>(.*?)</fills>', original, re.S)
         original = original[:fmatch.start()] + inject(fmatch, ('fills', fill), fill_id + 1) + original[fmatch.end():]
         color_style_ids[color] = style_id
-    ET.fromstring(original)  # XML/namespace check; OOXML structure checked in QA.
-    return original.encode('utf-8'),new_style_id,color_style_ids
+    # Preserve the existing date/time number format while overriding alignment
+    # only for the first worksheet's export date (C4).
+    parsed = ET.fromstring(original)
+    current_xfs = parsed.find(ns+'cellXfs')
+    left_date_style_id = len(current_xfs)
+    left_xf = copy.deepcopy(xfs[4])
+    left_xf.set('applyAlignment','1')
+    alignment=left_xf.find(ns+'alignment')
+    if alignment is None:
+        alignment=ET.SubElement(left_xf,ns+'alignment')
+    alignment.set('horizontal','left')
+    left_style = ET.tostring(left_xf,encoding='unicode').replace('ns0:','').replace(
+        ' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','')
+    match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
+    original=original[:match.start()]+inject(match,('cellXfs',left_style),left_date_style_id+1)+original[match.end():]
+    ET.fromstring(original)
+    return original.encode('utf-8'),new_style_id,color_style_ids,left_date_style_id
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
@@ -327,7 +342,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                      __import__('re').fullmatch(r'#[0-9A-Fa-f]{6}', raw)
                      else default_liquid_color(ident, str(typ.get('name') or ident)))
             export_types.append((p, position, typ, color))
-    styles_xml,fallback_header_style,color_styles = _styles_with_colored_liquid_cells(
+    styles_xml,fallback_header_style,color_styles,left_date_style = _styles_with_colored_liquid_cells(
         [color for _, _, _, color in export_types])
     days=[]
     for p in profiles:
@@ -359,7 +374,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         rows={2:[(2,title,2,None)],11:[]}
         for row,(name,value) in enumerate(common_meta,4):
             rows[row]=[(2,name,3 if row==4 else 0,None),
-                       (3,value,(9 if second else 4) if row==4 else (8 if row==7 else 0),None)]
+                       (3,value,(9 if second else left_date_style) if row==4 else (8 if row==7 else 0),None)]
         rows[8]=[(2,count_label,0,None),(3,count_value,8,None)]
         return rows
 
