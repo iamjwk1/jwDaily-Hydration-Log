@@ -1,3 +1,10 @@
+## v1.1.0-beta.36 (2026-11-13)
+- Match approved compact Manage Profiles and Liquid Types reference widths; tighten Cup Types rows, align Used and volume, remove cup row dividers.
+- Edit Liquid Type shows a live MDI/SVG icon preview and constrained filename/color fields.
+- Persist Clean / 0 fields status for already-clean v4 storage, show result in the Migration v3 view and skip legacy cleanup code on future verified-clean startup.
+- Retire unused SOURCE_MODES constant; preserve required upgrade/back-up compatibility code, records and exports.
+- Expand Chromium responsive geometry/SVG regression and v4 idempotence coverage.
+
 ## v1.1.0-beta.35 (2026-11-13)
 - Release 2: remove only verified obsolete top-level profile-store settings after validating active v3 migration and its immutable baseline backup.
 - Preserve all drink records, source readings, archives, targets and shared Liquid/Cup catalogs unchanged; new current-state v4 backup with SHA-256 and resumable cleanup journal.
