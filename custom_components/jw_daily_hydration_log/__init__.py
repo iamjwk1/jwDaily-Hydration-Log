@@ -755,7 +755,8 @@ async def ws_migration_status(hass,connection,msg):
             'catalog_sha256':state.get('catalog_sha256'),
             'backup_sha256':backup.get('source_sha256') if source_valid else None,
             'backup_verified':source_valid,
-            'profile_count':len(manager.profile_snapshots)})
+            'profile_count':len(manager.profile_snapshots),
+            'legacy_cleanup_v4':getattr(manager,'legacy_cleanup_status',None)})
     except (ValueError,KeyError) as exc:
         connection.send_error(msg['id'],'migration_status_failed',str(exc))
 
