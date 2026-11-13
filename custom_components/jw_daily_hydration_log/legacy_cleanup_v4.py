@@ -16,21 +16,15 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN
+from .const import DOMAIN, LEGACY_V4_TOP_LEVEL_FIELDS, LEGACY_V4_STATUS_FORMAT
 from .migration_v3 import MigrationBlocked, fingerprint, _record_signature, GLOBAL_KEYS
 
 BACKUP_FORMAT = "jwDaily-Hydration-Log-v4-precleanup-backup"
 JOURNAL_FORMAT = "jwDaily-Hydration-Log-v4-cleanup-journal"
-STATUS_FORMAT = "jwDaily-Hydration-Log-v4-cleanup-status"
+STATUS_FORMAT = LEGACY_V4_STATUS_FORMAT
 
-# Verified unused by the native v2 + global v3 runtime. Values within the
-# historical ledger (and even historical source sensor readings) are NEVER
-# cleaned, because they form part of the user's drink history.
-OBSOLETE_TOP_LEVEL = frozenset({
-    "volume_buttons", "legacy_mappings", "legacy_cup_defaults",
-    "conversion_state", "pregnancy", "lactation",
-    "source_sensor", "source_mode",
-})
+# Upgrade compatibility only. Do not modify historical readings or records.
+OBSOLETE_TOP_LEVEL = LEGACY_V4_TOP_LEVEL_FIELDS
 
 
 def cleanup_plan(raw: dict) -> dict:
@@ -119,9 +113,28 @@ class LegacyCleanupV4:
                 raise MigrationBlocked("Original v4 pre-cleanup backup is corrupt")
             needs_changes = any(before[e] != after[e] for e in before)
             if not needs_changes and journal is None:
-                return {"status": "clean", "profiles_checked": len(before),
-                        "removed_fields": 0, "writes": False,
-                        "backup_status": "not_needed"}
+                # Nothing is deleted, so no new rollback archive or journal is
+                # warranted. Persist a one-time readback-verified CLEAN status
+                # instead of leaving users with NOT_RECORDED / UNKNOWN.
+                # Repeat restarts do not write again. Upgrade compatibility
+                # code remains available for older profiles that still need it.
+                previous = await self._status.async_load()
+                if previous is not None:
+                    if previous.get("format") != STATUS_FORMAT or previous.get("status") != "clean":
+                        raise MigrationBlocked("Unexpected v4 cleanup status")
+                    if (previous.get("profiles_checked") == len(before)
+                            and previous.get("removed_fields") == 0):
+                        return dict(previous, writes=False, backup_status="not_needed")
+                status = {
+                    "format": STATUS_FORMAT, "status": "clean",
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "profiles_checked": len(before), "removed_fields": 0,
+                    "profile_fields_removed": {key: [] for key in before},
+                    "v3_baseline_preserved": True,
+                    "history_unchanged": True, "backup_status": "not_needed",
+                }
+                await self._save_verified(self._status, status, "zero-change completion status")
+                return dict(status, writes=False)
             if existing_backup is None and (needs_changes or journal):
                 backup = {
                     "format": BACKUP_FORMAT,

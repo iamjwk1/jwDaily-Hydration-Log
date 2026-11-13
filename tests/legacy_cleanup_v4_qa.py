@@ -172,5 +172,39 @@ async def run():
         pass
     print("BETA35_UNKNOWN_MODEL_NO_WRITES_PASS")
 
+    # Already-clean profile: persist only a verified CLEAN status. No
+    # additional profile write, archive, or journal. Next startup is no-op.
+    Store.data.clear()
+    clean=cleanup_plan(profile("p1",True))
+    Store.data[prefix+"p1"]=deepcopy(clean)
+    one=Hass(["p1"])
+    await GlobalCatalogV3(one).async_initialize()  # Bootstrap verified v3.
+    original_v3_backup=deepcopy(Store.data[prefix+"migration_v3_backup"])
+    before_profile=deepcopy(Store.data[prefix+"p1"])
+    manager=GlobalCatalogV3(one)
+    await manager.async_initialize()
+    assert manager.legacy_cleanup_status["status"]=="clean"
+    assert manager.legacy_cleanup_status["removed_fields"]==0
+    assert manager.legacy_cleanup_status["history_unchanged"] is True
+    assert manager.legacy_cleanup_status["backup_status"]=="not_needed"
+    assert Store.data[prefix+"legacy_cleanup_v4_status"]["status"]=="clean"
+    assert prefix+"legacy_cleanup_v4_backup" not in Store.data
+    assert prefix+"legacy_cleanup_v4_journal" not in Store.data
+    assert Store.data[prefix+"p1"]==before_profile
+    assert Store.data[prefix+"migration_v3_backup"]==original_v3_backup
+    before_reboot=deepcopy(Store.data)
+    # Once clean, normal startup must not execute the old cleanup routine.
+    from jwdhl_v4_test.legacy_cleanup_v4 import LegacyCleanupV4
+    original_apply=LegacyCleanupV4.async_apply
+    async def should_not_run(self):
+        raise AssertionError("One-time legacy cleanup ran on verified clean store")
+    LegacyCleanupV4.async_apply=should_not_run
+    try:
+        await GlobalCatalogV3(one).async_initialize()
+    finally:
+        LegacyCleanupV4.async_apply=original_apply
+    assert Store.data==before_reboot
+    print("BETA36_CLEAN_START_BYPASSES_LEGACY_CLEANUP_CODE_PASS")
+
 
 asyncio.run(run())

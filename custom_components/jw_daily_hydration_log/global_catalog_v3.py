@@ -118,10 +118,32 @@ class GlobalCatalogV3:
                     raise MigrationBlocked("Original migration backup missing or damaged")
                 self.state = deepcopy(existing)
                 self.profile_snapshots = current
-                # Release 2: remove only verified obsolete top-level fields.
-                # Original v3 backup and current records are never rewritten.
-                from .legacy_cleanup_v4 import LegacyCleanupV4
-                self.legacy_cleanup_status = await LegacyCleanupV4(self).async_apply()
+                # Clean installations bypass migration/cleanup code entirely
+                # on subsequent starts. Still invoke the safe upgrade routine
+                # for older installs, newly restored legacy profiles, or any
+                # pending recovery journal. Never delete the original backups.
+                from .const import LEGACY_V4_TOP_LEVEL_FIELDS, LEGACY_V4_STATUS_FORMAT
+                completed = await Store(self.hass, 1, f"{DOMAIN}.legacy_cleanup_v4_status").async_load()
+                pending = await Store(self.hass, 1, f"{DOMAIN}.legacy_cleanup_v4_journal").async_load()
+                clean_fast_path = (
+                    isinstance(completed, dict)
+                    and completed.get("format") == LEGACY_V4_STATUS_FORMAT
+                    and completed.get("status") == "clean"
+                    and completed.get("removed_fields") == 0
+                    and completed.get("history_unchanged") is True
+                    and completed.get("profiles_checked") == len(current)
+                    and pending is None
+                    and all(
+                        isinstance(raw, dict)
+                        and not (set(raw) & LEGACY_V4_TOP_LEVEL_FIELDS)
+                        for raw in current.values()
+                    )
+                )
+                if clean_fast_path:
+                    self.legacy_cleanup_status = dict(completed, writes=False, backup_status="not_needed")
+                else:
+                    from .legacy_cleanup_v4 import LegacyCleanupV4
+                    self.legacy_cleanup_status = await LegacyCleanupV4(self).async_apply()
                 self._started = True
                 return
             if existing is not None:
