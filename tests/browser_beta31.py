@@ -89,7 +89,7 @@ with sync_playwright() as p:
         assert 'Used: 4' in root.locator('.cup-settings-row').first.inner_text()
         cupbox=root.locator('.dialog-settings').bounding_box()
         assert cupbox and cupbox['x']>=0 and cupbox['x']+cupbox['width']<=width+1,(width,cupbox)
-        if width>=720: assert cupbox['width']<=611,(width,'Cup dialog too wide',cupbox)
+        if width>=720: assert cupbox['width']<=546,(width,'Cup dialog too wide',cupbox)
         for cr in root.locator('.cup-settings-row').all():
             assert cr.evaluate('(el)=>getComputedStyle(el).borderBottomStyle')=='none',(width,'Unexpected cup row divider')
             if width>=720:
