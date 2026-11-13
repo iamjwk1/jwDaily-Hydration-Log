@@ -1023,6 +1023,38 @@ class HydrationCoordinator:
             self._dispatch()
             return settings_preview(self,cleaned)
 
+    async def async_update_profile_identity_target(self, name: str, target: float) -> dict:
+        """Commit display name and personal goal in one recoverable profile write.
+
+        Existing drink records and archived daily target snapshots are preserved.
+        """
+        name=self._catalog_name(name,'Profile display name')
+        if not isinstance(target,(int,float)) or not math.isfinite(target) or not 1<=target<=100000:
+            raise ValueError('Invalid daily target')
+        async with self._lock:
+            old_name=self.name
+            old_target=self.target_override_ml
+            old_records=deepcopy(self.records)
+            old_sha=digest(old_records)
+            try:
+                self.name=self.profile_display_name=name
+                if round(target)!=self.target_ml:
+                    self.target_override_ml=float(target)
+                    self.records.append(self._entry('set_target','profile_settings',
+                        self.consumed_ml,self.target_override_ml,
+                        details={'old_target_ml':round(old_target) if old_target>0 else 2000,
+                                 'new_target_ml':self.target_ml}))
+                await self._save()
+            except Exception:
+                self.name=self.profile_display_name=old_name
+                self.target_override_ml=old_target
+                self.records=old_records
+                raise
+            self._dispatch()
+            return {'name':name,'target_ml':self.target_ml,
+                    'old_history_sha256':old_sha,
+                    'records_before':len(old_records),'records_after':len(self.records)}
+
     async def async_set_display_name(self, name: str) -> dict:
         label=self._catalog_name(name,'Profile display name')
         async with self._lock:
