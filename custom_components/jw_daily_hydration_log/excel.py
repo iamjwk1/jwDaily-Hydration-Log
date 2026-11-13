@@ -35,13 +35,16 @@ THEME = zlib.decompress(base64.b64decode(_THEME_Z))
 _BUILTIN = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 
 
-def export_filename(timezone_name: str = 'Europe/Amsterdam', when: datetime | None = None) -> str:
+def export_filename(timezone_name: str = 'Europe/Amsterdam', when: datetime | None = None,
+                    profile_name: str | None = None) -> str:
     try:
         tz = ZoneInfo(timezone_name)
     except (KeyError, ValueError):
         tz = ZoneInfo('UTC')
     local = when.astimezone(tz) if when is not None else datetime.now(tz)
-    return f'{local:%Y%m%d-%H%M} jwDaily Hydration Log - All Data.xlsx'
+    import re
+    scope=(re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', '',profile_name).strip() if profile_name else 'All Data')
+    return f'{local:%Y%m%d-%H%M} jwDaily Hydration Log - {scope or "Profile"}.xlsx'
 
 
 def _xml(value) -> str:
@@ -392,14 +395,14 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     typesrows={1:[(i,h,1,None) for i,h in enumerate(
        ['Profile','Liquid ID','Name','MDI Icon','SVG Image','Custom','Liquid order',
         'Visible in picker','Color','Status','Drink count'],1)]}
-    for p in profiles:
-        cfg=p['config']
+    for p in profiles[:1]:
         hist=collections.Counter(str(r.get('liquid_type_id') or 'unknown')
-                                 for r in p.get('records',[]) if r.get('kind')=='drink')
+                                 for subject in profiles for r in subject.get('records',[])
+                                 if r.get('kind')=='drink')
         for _,position,typ,color in (item for item in export_types if item[0] is p):
             ident=typ.get('id','')
             row=len(typesrows)+1
-            vals=[cfg['name'],ident,typ.get('name',''),typ.get('icon_mdi',''),
+            vals=['All profiles',ident,typ.get('name',''),typ.get('icon_mdi',''),
                   typ.get('icon_svg',''),bool(typ.get('custom',False)),position,
                   not bool(typ.get('hidden',False)),color,
                   'Hidden' if typ.get('hidden') else 'Active',hist[ident]]
@@ -411,10 +414,10 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     row=2
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
        ['Profile','Cup ID','Name','Default volume mL','MDI icon','Order','Visible'],1)]
-    for p in profiles:
+    for p in profiles[:1]:
         for pos,cup in enumerate(p.get('cup_types') or [],1):
             row+=1
-            vals=[p['config']['name'],cup.get('id',''),cup.get('name',''),
+            vals=['All profiles',cup.get('id',''),cup.get('name',''),
                   cup.get('default_volume_ml'),cup.get('icon_mdi',''),pos,not cup.get('hidden',False)]
             buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
     row+=3
@@ -444,8 +447,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         row+=1
         cfg=p['config']
         values=[cfg.get('name'),cfg.get('age'),cfg.get('gender'),cfg.get('unit'),
-                cfg.get('source_mode'),cfg.get('source_sensor') or '',p.get('target_ml'),
-                p.get('target_override_ml'),cfg.get('pregnancy',False),cfg.get('lactation',False)]
+                p.get('target_ml'),p.get('target_override_ml'),len(p.get('quick_buttons') or [])]
         buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
     content=[
      _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25],f'I{max(12,11+len(records))}',max(12,11+len(records)),True),
