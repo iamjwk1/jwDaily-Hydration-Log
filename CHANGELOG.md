@@ -1,3 +1,8 @@
+## v1.1.0-beta.35 (2026-11-13)
+- Release 2: remove only verified obsolete top-level profile-store settings after validating active v3 migration and its immutable baseline backup.
+- Preserve all drink records, source readings, archives, targets and shared Liquid/Cup catalogs unchanged; new current-state v4 backup with SHA-256 and resumable cleanup journal.
+- Read-only cleanup status added to migration API; no UI, Excel schema or historical import compatibility changes.
+
 ## v1.1.0-beta.34 (2026-11-13)
 - Uniform Cup/Liquid/Quick type manager rows with per-type drink usage counters; all buttons in one aligned action group.
 - Responsive compact dialogs and consistent headers, Back/Add footer and separate Add/Edit/Delete confirmation overlays.

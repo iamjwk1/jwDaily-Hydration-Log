@@ -1,14 +1,6 @@
 name: jwDaily Hydration Log beta.34 — validate and publish
+# Previous beta34 tag is immutable and is not republished.
 on:
-  push:
-    branches:
-      - main
-      - feature/beta34-dialog-ux-consistency
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'RELEASE_NOTES_v1.1.0-beta.34.md'
-      - '.github/workflows/publish-v1.1.0-beta.34.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -56,7 +48,7 @@ jobs:
   publish:
     name: Publish verified beta34 prerelease, ZIP and SHA256
     needs: [native, hacs, hassfest]
-    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log' && github.ref == 'refs/heads/main'
+    if: false # Beta34 is immutable
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
