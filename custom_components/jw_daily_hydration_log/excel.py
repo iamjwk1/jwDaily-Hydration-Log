@@ -21,6 +21,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color
+from .excel_icons import drawing_parts
 
 VERSION = '1.1.0-beta.32-dev'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
@@ -129,7 +130,7 @@ def _cols(widths: list[float]) -> str:
 
 def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | None]]],
                widths: list[float], last_cell: str, last_row: int,
-               table: bool = False) -> bytes:
+               table: bool = False, drawing: bool = False) -> bytes:
     """Preformatted worksheet with reference workbook's B2 headings and B11 tables."""
     parts=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -152,6 +153,8 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     # ECMA-376 worksheet schema: pageMargins MUST precede tableParts.
     # beta.8 reversed these and desktop Excel removed sheets 1 and 2.
     parts.append('<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>')
+    if drawing:
+        parts.append('<drawing r:id="rId1"/>')
     if table:
         parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
     parts.append('</worksheet>')
@@ -393,8 +396,9 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
 
     # Sheet 3: native Liquid catalogue only; no legacy default volumes or alias columns.
     typesrows={1:[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Liquid ID','Name','MDI Icon','SVG Image','Custom','Liquid order',
+       ['Scope','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image','Custom','Liquid order',
         'Visible in picker','Color','Status','Drink count'],1)]}
+    icon_rows=[]
     for p in profiles[:1]:
         hist=collections.Counter(str(r.get('liquid_type_id') or 'unknown')
                                  for subject in profiles for r in subject.get('records',[])
@@ -402,11 +406,12 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         for _,position,typ,color in (item for item in export_types if item[0] is p):
             ident=typ.get('id','')
             row=len(typesrows)+1
-            vals=['All profiles',ident,typ.get('name',''),typ.get('icon_mdi',''),
+            vals=['All profiles',ident,typ.get('name',''),typ.get('icon_mdi',''),None,
                   typ.get('icon_svg',''),bool(typ.get('custom',False)),position,
                   not bool(typ.get('hidden',False)),color,
                   'Hidden' if typ.get('hidden') else 'Active',hist[ident]]
-            typesrows[row]=[(i,value,color_styles.get(color,0) if i==9 else 0,None)
+            icon_rows.append((row,typ.get('icon_mdi',''),color))
+            typesrows[row]=[(i,value,color_styles.get(color,0) if i==10 else 0,None)
                             for i,value in enumerate(vals,1)]
 
     # Sheet 4: current Cup and Quick configuration first, old buttons last.
@@ -449,10 +454,11 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         values=[cfg.get('name'),cfg.get('age'),cfg.get('gender'),cfg.get('unit'),
                 p.get('target_ml'),p.get('target_override_ml'),len(p.get('quick_buttons') or [])]
         buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
+    drawing_xml,drawing_rels,icon_images=drawing_parts(icon_rows)
     content=[
      _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25],f'I{max(12,11+len(records))}',max(12,11+len(records)),True),
      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[16,24,22,23,18,13,19,25,15,19,21],f'K{max(1,len(typesrows))}',len(typesrows)),
+     _worksheet(3,typesrows,[16,24,22,23,13,18,13,19,25,15,19,21],f'L{max(1,len(typesrows))}',len(typesrows),drawing=bool(icon_images)),
      _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24],f'L{max(1,max(buttonsrows))}',len(buttonsrows)),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.
@@ -464,6 +470,8 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
           '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="xml" ContentType="application/xml"/>'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+          +( '<Default Extension="png" ContentType="image/png"/>' if icon_images else '' )
+          +( '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' if icon_images else '' )
           '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
           '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
           '<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
@@ -475,6 +483,16 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         z.writestr('xl/_rels/workbook.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,5))+f'<Relationship Id="rId5" Type="{relbase}styles" Target="styles.xml"/><Relationship Id="rId6" Type="{relbase}theme" Target="theme/theme1.xml"/></Relationships>')
         z.writestr('xl/styles.xml',styles_xml)
         z.writestr('xl/theme/theme1.xml',THEME)
+        if icon_images:
+            z.writestr('xl/drawings/drawing1.xml',drawing_xml)
+            z.writestr('xl/drawings/_rels/drawing1.xml.rels',drawing_rels)
+            for icon_number,png in enumerate(icon_images,1):
+                z.writestr(f'xl/media/liquid{icon_number}.png',png)
+            z.writestr('xl/worksheets/_rels/sheet3.xml.rels',
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
+                '</Relationships>')
         for i,s in enumerate(content,1):
             z.writestr(f'xl/worksheets/sheet{i}.xml',s)
             if i<=2:
