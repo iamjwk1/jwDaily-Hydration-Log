@@ -629,7 +629,6 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const E=jdhlEscape,profiles=this._profilesData?.profiles||[],d=this._profileDraft;
   return `<div class="settings-section"><p class="settings-note">Each profile keeps separate settings and drink history.</p>
    ${profiles.map(p=>`<div class="settings-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E(p.slug)} · ${p.daily_target_ml} mL goal</small></div>
-    <button class="secondary small" data-action="settings-profile-quick" data-value="${E(p.slug)}">Quick buttons</button>
     <button class="secondary small" data-action="settings-profile-edit" data-value="${E(p.slug)}">Edit</button></div>`).join('')}
    ${d?`<div class="settings-edit"><h4>${this._profileEditSlug?'Edit profile':'Add profile'}</h4>
     <label>Name<input data-field="name" maxlength="48" value="${E(d.name)}"/></label>
