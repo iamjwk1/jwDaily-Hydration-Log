@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from .const import default_liquid_color
 from .excel_icons import drawing_parts
 
-VERSION = '1.1.0-beta.32-dev'
+VERSION = '1.1.0-beta.32'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
