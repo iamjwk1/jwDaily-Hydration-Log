@@ -260,6 +260,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
    this._status=visible?'Built-in liquid restored':'Built-in liquid removed from Add choices';
   }catch(err){this._alert(err);}finally{this._busy=false;this._render(true);}
  }
+ async _setLiquidVisible(id,visible){const t=this._liquidInfo(id);if(!t)return;
+  this._busy=true;this._error='';
+  try{await this._ensureBackend();
+   await this._hass.callWS({type:'jw_daily_hydration_log/'+(t.custom?'set_custom_liquid_visibility':'set_builtin_liquid_visibility'),
+    profile:this._config.profile,liquid_type:id,visible});
+   await this._fetchHistory();this._status=visible?'Liquid restored':'Liquid hidden';
+  }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
+ }
  async _deleteCustomLiquid(id){if(!this._hass?.user?.is_admin)return;
   this._busy=true;this._error='';try{await this._ensureBackend();await this._hass.callWS({type:'jw_daily_hydration_log/delete_liquid_type',
     profile:this._config.profile,liquid_type:id});
@@ -376,17 +384,18 @@ class JwDailyHydrationLogCard extends HTMLElement {
    this._error='';this._render(true);return;
   }
   if(action==='manage-save'){await this._saveCustomLiquid();return;}
-  if(action==='manage-hide'||action==='manage-remove'){
-   const t=this._liquidInfo(el.dataset.value);if(!t)return;
-   this._managePendingDelete={id:t.id,name:t.name,custom:t.custom};this._error='';this._render(true);return;}
+  if(action==='manage-hide'){await this._setLiquidVisible(el.dataset.value,false);return;}
+  if(action==='manage-remove'){
+   const t=this._liquidInfo(el.dataset.value);
+   if(!t||!t.custom||!t.can_delete)return;
+   this._managePendingDelete={id:t.id,name:t.name,custom:true};this._error='';this._render(true);return;}
   if(action==='manage-delete-cancel'){this._managePendingDelete=null;this._render(true);return;}
   if(action==='manage-delete-confirm'){
-   const item=this._managePendingDelete;if(!item)return;
-   if(item.custom)await this._deleteCustomLiquid(item.id);
-   else await this._setBuiltinVisible(item.id,false);
+   const item=this._managePendingDelete;if(!item||!item.custom)return;
+   await this._deleteCustomLiquid(item.id);
    if(!this._error)this._managePendingDelete=null;
    this._render(true);return;}
-  if(action==='manage-restore'){await this._setBuiltinVisible(el.dataset.value,true);return;}
+  if(action==='manage-restore'){await this._setLiquidVisible(el.dataset.value,true);return;}
   if(action==='manage-up'){await this._moveLiquid(el.dataset.value,-1);return;}
   if(action==='manage-down'){await this._moveLiquid(el.dataset.value,1);return;}
   if(action==='manage-volumes'){this._openVolumeManager();return;}
@@ -570,11 +579,12 @@ class JwDailyHydrationLogCard extends HTMLElement {
    <span class="muted"></span>
    <button class="secondary small" data-action="manage-up" data-value="${jdhlEscape(t.id)}" ${index===0?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} up">↑</button>
    <button class="secondary small" data-action="manage-down" data-value="${jdhlEscape(t.id)}" ${index===visible.length-1?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} down">↓</button>
+   <button class="secondary small settings-hide-button" data-action="manage-hide" data-value="${jdhlEscape(t.id)}">Hide</button>
    <button class="secondary small" data-action="manage-edit" data-value="${jdhlEscape(t.id)}">Edit</button>
-   ${t.custom?`<button class="secondary small" data-action="manage-remove" data-value="${jdhlEscape(t.id)}" title="Delete custom type only when unused">Delete</button>`:`<button class="secondary small" data-action="manage-hide" data-value="${jdhlEscape(t.id)}" title="Remove built-in from Add choices; keep drink history">Delete</button>`}
+   ${t.custom?`<button class="danger small" data-action="manage-remove" data-value="${jdhlEscape(t.id)}" ${t.can_delete?'':'disabled'} title="${t.can_delete?'Delete unused type':'Used in drink history; hide instead'}">Delete</button>`:''}
    </div>`).join('');
   return `<div class="manage">
-   <h3>Manage liquid types</h3><p class="muted manage-intro">Change names, icons, colors and order. Delete built-in buttons to hide them; prior drinks remain available. Restore hidden types below.</p>
+   <h3>Manage liquid types</h3><p class="muted manage-intro">Change names, icons, colors and order. Hide any type, or delete unused custom types. Used types can only be hidden; history remains intact.</p>
    ${this._error?`<p role="alert" class="error">${jdhlEscape(this._error)}</p>`:''}
    ${d?`<div class="manage-editor"><h4>${this._editingLiquidId?'Edit liquid':'Add liquid'}</h4>
     <div class="manage-form-grid">
@@ -591,7 +601,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <div class="dialog-actions"><button class="secondary" data-action="manage-cancel">Back</button>
      <button data-action="manage-save" ${this._busy?'disabled':''}>Save liquid</button></div></div>`:
     `<div class="saved-liquids">${list||'<p class="muted">No visible types. Restore one below or add your own.</p>'}</div>
-     ${hidden.length?`<h4>Hidden built-in liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
+     ${hidden.length?`<h4>Hidden liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
         `<div class="hidden-liquid">${this._liquidIcon(t,true)} <strong>${jdhlEscape(t.name)}</strong>
          <button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}">Restore</button></div>`).join('')}</div>`:''}
      ${this._managePendingDelete?`<div class="delete-warning" role="alert">${this._managePendingDelete.custom?
