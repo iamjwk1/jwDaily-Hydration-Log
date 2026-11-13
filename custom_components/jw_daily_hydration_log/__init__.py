@@ -585,6 +585,7 @@ async def ws_profile_create(hass, connection, msg):
             raise ValueError('New profile unexpectedly contains historical records')
         if template:
             current.update(deepcopy(extract(template)))
+        current['profile_target_model_v3']=True
         current['data_model_version']=2
         current['profile_display_name']=name
         current['target_override_ml']=float(goal) if round(goal)!=2000 else 0.0
