@@ -22,7 +22,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color
 
-VERSION = '1.1.0-beta.30'
+VERSION = '1.1.0-beta.32-dev'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -137,7 +137,7 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
     for row in sorted(rows):
-        rowheight=(' ht="44" customHeight="1"' if index==2 else ' ht="34" customHeight="1"') if row==11 and index in (1,2) else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')
+        rowheight=(' ht="44" customHeight="1"' if index==1 and row>=11 else (' ht="44" customHeight="1"' if index==2 and row==11 else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')))
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
@@ -158,9 +158,9 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
 def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None) -> bytes:
     """Structured Excel tables, including table filters and header layout."""
     if table_number==1:
-        label='tblHydrationLog'; right='K'
+        label='tblHydrationLog'; right='I'
         headers=['Date+time','Profile','Age','Gender','Target_x000a_(mL)',
-                 'Liquid name','Volume_x000a_(mL)','Cup type','Current Cup default_x000a_(mL)','Quick button']
+                 'Liquid name','Volume_x000a_(mL)','Cup used']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
     else:
         label='tblDailyIntake'
@@ -278,7 +278,7 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
             result.append((p,_serial(local),cfg['name'],cfg.get('age'),cfg.get('gender'),
                            target_day,definitions[liquid],float(record['volume_ml']),day,liquid,
                            cups.get(cup_id,'') if cup_id else '',
-                           cup_details.get(cup_id,{}).get('default_volume_ml') if cup_id else None,
+                           record.get('cup_default_volume_ml_at_log', cup_details.get(cup_id,{}).get('default_volume_ml')) if cup_id else None,
                            record.get('quick_button_label_at_log') or quick.get(quick_id,quick_id)))
     # Chronological presentation, independent of the original storage order.
     # Stable sorting preserves input order for exact ties.
@@ -302,7 +302,9 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             lid=str(typ.get('id') or '').strip()
             if lid and lid not in current:
                 current[lid]=str(typ.get('name') or lid)
-    ordered_types=[(lid,name,False) for lid,name in current.items()]
+    ordered_types=[(lid,name,False) for lid,name in current.items() if lid != 'other']
+    if 'other' in current:
+        ordered_types.append(('other',current['other'],False))
     if not current:
         ordered_types=[(lid,lid.title(),False) for lid in _BUILTIN]
     liquid_headers=[f'{name}\n(mL)' for _,name,_ in ordered_types]
@@ -356,16 +358,16 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         return rows
 
     logrows=summary('Home Assistant jwDaily Hydration log - Hydration log','Drink log rows',len(records))
-    heads=['Date+time','Profile','Age','Gender','Target\n(mL)','Liquid name','Volume\n(mL)',
-           'Cup type','Current Cup default\n(mL)','Quick button']
-    hstyles=[10,11,11,11,11,23,24,11,13,11]
+    heads=['Date+time','Profile','Age','Gender','Target\n(mL)','Liquid name','Volume\n(mL)','Cup used']
+    hstyles=[10,11,11,11,11,23,24,24]
     logrows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(heads,hstyles),2)]
     for rownum,r in enumerate(records,12):
         _,stamp,name,age,gender,target,liquid,volume,_,_,cup_name,cup_default,button_label=r
-        sty=[25,26,27,27,27,26,28,26,28,26]
+        cup_used=(f'{cup_name} ({cup_default:g} mL)' if cup_name and isinstance(cup_default,(int,float)) else cup_name)
+        sty=[25,26,27,27,27,26,28,26]
         if rownum==len(records)+11:
-            sty=[29,30,31,31,31,30,32,30,32,30]
-        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_name,cup_default,button_label],2)]
+            sty=[29,30,31,31,31,30,32,30]
+        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_used],2)]
     if not records:
         logrows[12]=[]
 
@@ -446,7 +448,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                 p.get('target_override_ml'),cfg.get('pregnancy',False),cfg.get('lactation',False)]
         buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
     content=[
-     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,19,16,26],f'K{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25],f'I{max(12,11+len(records))}',max(12,11+len(records)),True),
      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
      _worksheet(3,typesrows,[16,24,22,23,18,13,19,25,15,19,21],f'K{max(1,len(typesrows))}',len(typesrows)),
      _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24],f'L{max(1,max(buttonsrows))}',len(buttonsrows)),
