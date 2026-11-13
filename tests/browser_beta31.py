@@ -123,7 +123,7 @@ with sync_playwright() as p:
         assert all((b.bounding_box()['x'] >= db['x']-1 and b.bounding_box()['x']+b.bounding_box()['width'] <= db['x']+db['width']+1) for b in btns),(width,'overflow')
         root.locator('[data-action="settings-quick-delete"]').first.click()
         assert root.locator('[data-action="settings-quick-delete-confirm"]').count()==1
-        root.locator('[data-action="settings-quick-delete-cancel"]').click()
+        root.locator('[data-action="settings-quick-delete-cancel"]').last.click()
         assert not page.evaluate("window.qaCalls.some(c=>c.type.endsWith('/manage_quick')&&c.action==='delete')")
         root.locator('[data-action="settings-quick-delete"]').first.click()
         root.locator('[data-action="settings-quick-delete-confirm"]').click()
