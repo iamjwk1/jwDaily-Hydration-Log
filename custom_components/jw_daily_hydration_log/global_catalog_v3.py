@@ -101,8 +101,10 @@ class GlobalCatalogV3:
                 self.profile_snapshots = current
                 self._started = True
                 return
-            if existing is not None and existing.get("status") not in ("inactive", "rolled_back"):
-                raise MigrationBlocked("Unrecognized global catalog state; refusing migration")
+            if existing is not None:
+                # A user-initiated rollback is sticky across restarts. Never
+                # silently auto-reactivate a migration that was rolled back.
+                raise MigrationBlocked("Global catalog has been rolled back; restore the prior release or run an explicit repair preflight")
             preview = build_preflight(current)
             if not preview["ready_for_automatic_commit"]:
                 raise MigrationBlocked(
