@@ -1409,7 +1409,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  padding:20px 20px 16px;
 }
 .dialog.dialog-settings.dialog-page-cups{
- width:min(610px,calc(100vw - 24px));
+ width:min(545px,calc(100vw - 24px));
  padding:20px 22px 16px;
 }
 .dialog.dialog-settings.dialog-page-liquids .manage-intro{
