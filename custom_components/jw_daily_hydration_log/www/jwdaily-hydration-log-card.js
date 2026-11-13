@@ -59,6 +59,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this.shadowRoot.addEventListener('keydown',e=>{
    if(e.key==='Escape'&&this._historyCalendarOpen){this._historyCalendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._calendarOpen){this._calendarOpen=false;this._render(true);return;}
+   if(e.key==='Escape'&&(this._profileDraft||this._settingsDraft||this._customDraft)){if(this._settingsSection==='profile'){this._profileDraft=null;this._profileEditSlug='';}else if(this._settingsDraft){this._settingsDraft=null;this._settingsEditId=null;}else{this._customDraft=null;this._editingLiquidId=null;}this._render(true);return;}
    if(e.key==='Escape'&&this._settingsSection){this._settingsSection=null;this._settingsDraft=null;
     this._manageOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._modal){this._modal=null;this._confirmDelete=false;this._render(true);}
@@ -639,7 +640,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${!this._profileEditSlug?`<label>Copy settings from<select data-field="copy_from"><option value="">Start with default settings</option>${profiles.map(p=>`<option value="${E(p.slug)}" ${p.slug===d.copy_from?'selected':''}>${E(p.name)}</option>`).join('')}</select></label>`:''}
     ${!this._profileEditSlug?'<p class="settings-note">Only configuration is copied. No records, consumed volumes, sensor readings or personal targets are transferred.</p>':'<p class="settings-note">Changing the display name preserves the stable profile slug and entity IDs.</p>'}
     <div class="dialog-footer"><button class="secondary" data-action="settings-profile-cancel">Cancel</button><button data-action="settings-profile-save">${this._profileEditSlug?'Save profile':'Create profile'}</button></div></div></section></div>`:''}
-   <div class="dialog-actions" style="display:flex;justify-content:space-between;align-items:center"><button class="secondary" data-action="settings-home">← Back to settings</button><button data-action="settings-profile-add">+ Add profile</button></div></div>`;
+   </div>`;
  }
  _transferHTML(){
   const E=jdhlEscape,p=this._settingsImportPreview;
@@ -734,7 +735,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <p>Delete unused cup? All profiles retain drink history. Linked Quick buttons will be removed.</p>
       <div class="dialog-actions"><button class="secondary small" data-action="settings-cup-delete-cancel">Cancel</button>
        <button class="danger small" data-action="settings-cup-delete-confirm" data-value="${E(this._settingsDeleteCupId)}">Confirm delete</button></div></div>`:''}
-    <div class="dialog-actions"><button data-action="settings-cup-add">+ Add cup</button></div></div>`;
+    </div>`;
   }
   else if(page==='quick'){
    const quick=this._quickDefs(),liquids=this._liquidDefs().filter(t=>!t.hidden),cups=this._cupDefs().filter(c=>!c.hidden);
@@ -756,7 +757,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${this._settingsDeleteQuickId?`<div class="delete-warning" role="alert"><strong>Delete Quick button?</strong>
       <p>Permanently remove ${E(this._effectiveQuickLabel(quick.find(q=>q.id===this._settingsDeleteQuickId)||{}))}? Drink history and volumes will remain unchanged. The historical button label is preserved.</p>
       <div class="dialog-actions"><button class="secondary small" data-action="settings-quick-delete-cancel">Cancel</button><button class="danger small" data-action="settings-quick-delete-confirm" data-value="${E(this._settingsDeleteQuickId)}">Confirm delete</button></div></div>`:''}
-    <div class="dialog-actions"><button data-action="settings-quick-add" ${!liquids.length||!cups.length?'disabled':''}>+ Add Quick button</button></div></div>`;
+    </div>`;
   }
   else if(page==='profile')body=this._profileHTML();
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
@@ -767,7 +768,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <button class="secondary small" data-action="settings-close" aria-label="Close settings">✕</button></div>
     ${this._error?`<p class="error" role="alert">${E(this._error)}</p>`:''}
     ${body}
-    ${page!=='home'&&page!=='profile'?`<div class="dialog-actions"><button class="secondary" data-action="settings-home">← Back to settings</button></div>`:''}
+    ${page!=='home'?`<div class="dialog-footer main-dialog-footer"><button class="secondary" data-action="settings-home">← ${page==='quick'&&this._profileDraft?'Back to profile':page==='transfer'?'Back to advanced':'Back to settings'}</button>${page==='profile'?`<button data-action="settings-profile-add">+ Add profile</button>`:page==='cups'?`<button data-action="settings-cup-add">+ Add cup</button>`:page==='liquids'?`<button data-action="manage-add">+ Add liquid</button>`:page==='quick'?`<button data-action="settings-quick-add">+ Add Quick button</button>`:''}</div>`:''}
    </section></div>`;
  }
  async _settingsCall(command, data){
@@ -897,8 +898,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
     await this._loadProfiles();await this._fetchHistory();this._render(true);
    }catch(e){this._alert(e);}return;
   }
-  if(action==='settings-close'){this._settingsSection=null;this._settingsDraft=null;this._manageOpen=false;this._render(true);return;}
-  if(action==='settings-home'){this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(['transfer'].includes(this._settingsSection)?'advanced':'home');return;}
+  if(action==='settings-close'){this._settingsSection=null;this._settingsDraft=null;this._profileDraft=null;this._profileEditSlug='';this._customDraft=null;this._manageOpen=false;this._render(true);return;}
+  if(action==='settings-home'){if(this._settingsSection==='quick'&&this._profileDraft){this._settingsSection='profile';this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._render(true);return;}this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(['transfer'].includes(this._settingsSection)?'advanced':'home');return;}
   if(action==='settings-page'){this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(id);return;}
   if(action==='settings-discard'){this._settingsDraft=null;this._settingsEditId=null;this._render(true);return;}
   if(action==='settings-quick-delete'){
