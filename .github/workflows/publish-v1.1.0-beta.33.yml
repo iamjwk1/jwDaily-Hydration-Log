@@ -1,14 +1,6 @@
 name: jwDaily Hydration Log beta.33 — validate and publish
+# Historical beta33 release is immutable; future publishers must not reuse its tag.
 on:
-  push:
-    branches:
-      - main
-      - hotfix/beta33-migration-buttons
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'RELEASE_NOTES_v1.1.0-beta.33.md'
-      - '.github/workflows/publish-v1.1.0-beta.33.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -56,7 +48,7 @@ jobs:
   publish:
     name: Publish verified beta33 prerelease, ZIP and SHA256
     needs: [native, hacs, hassfest]
-    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log' && github.ref == 'refs/heads/main'
+    if: false # Beta33 tag is immutable.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
