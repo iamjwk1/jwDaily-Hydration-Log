@@ -21,7 +21,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount, default_liquid_color
+from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount, default_liquid_color, historical_default_target_ml
 
 
 def _local_timestamp(hass: HomeAssistant, day: str | None, clock: str | None) -> str:
@@ -143,6 +143,7 @@ class HydrationCoordinator:
         self.source_mode = 'delta'
         self.unit = cfg.get('unit', 'mL')
         self.target_override_ml = 0.0
+        self._target_v3_initialized = False
         self.consumed_ml = 0.0
         self.manual_consumed_ml = 0.0
         self.last_reset_date = self._today()
@@ -336,6 +337,22 @@ class HydrationCoordinator:
             self.manual_consumed_ml = float(saved.get('manual_consumed_ml',0.0))
             self.last_reset_date = saved.get('last_reset_date', self._today())
             self.target_override_ml = float(saved.get('target_override_ml',0.0))
+            self._target_v3_initialized = bool(saved.get('profile_target_model_v3',False))
+            if not self._target_v3_initialized and self.target_override_ml == 0:
+                cfg={**self.entry.data,**self.entry.options}
+                old_goal=historical_default_target_ml(
+                    self.age,self.gender,
+                    bool(cfg.get('pregnancy',False)),bool(cfg.get('lactation',False)))
+                # Original HA Store has already been copied into the immutable
+                # v3 migration archive before coordinator initialization.
+                self.target_override_ml=float(old_goal)
+                self._target_v3_initialized=True
+                saved['target_override_ml']=self.target_override_ml
+                saved['profile_target_model_v3']=True
+                await self._store.async_save(saved)
+                verified=await self._store.async_load()
+                if verified != saved:
+                    raise ValueError('Historical target migration readback failed')
             self._last_source_value = saved.get('last_source_value')
             self._source_baseline_ml = float(saved.get('source_baseline',0.0))
             self.records = list(saved.get('records',[]))
@@ -619,7 +636,8 @@ class HydrationCoordinator:
             hidden_builtin_liquids=self.hidden_builtin_liquids,
             cup_types=self.cup_types, quick_buttons=self.quick_buttons,
             data_model_version=self.data_model_version,
-            profile_display_name=self.profile_display_name)
+            profile_display_name=self.profile_display_name,
+            profile_target_model_v3=True)
         # Preserve unknown legacy profile fields during Release 1. Only the
         # subsequent cleanup release may retire these after successful migration.
         original=await self._store.async_load()
