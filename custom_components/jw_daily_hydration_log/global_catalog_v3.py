@@ -118,6 +118,10 @@ class GlobalCatalogV3:
                     raise MigrationBlocked("Original migration backup missing or damaged")
                 self.state = deepcopy(existing)
                 self.profile_snapshots = current
+                # Release 2: remove only verified obsolete top-level fields.
+                # Original v3 backup and current records are never rewritten.
+                from .legacy_cleanup_v4 import LegacyCleanupV4
+                self.legacy_cleanup_status = await LegacyCleanupV4(self).async_apply()
                 self._started = True
                 return
             if existing is not None:
