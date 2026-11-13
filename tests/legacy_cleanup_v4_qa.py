@@ -193,9 +193,18 @@ async def run():
     assert Store.data[prefix+"p1"]==before_profile
     assert Store.data[prefix+"migration_v3_backup"]==original_v3_backup
     before_reboot=deepcopy(Store.data)
-    await GlobalCatalogV3(one).async_initialize()
+    # Once clean, normal startup must not execute the old cleanup routine.
+    from jwdhl_v4_test.legacy_cleanup_v4 import LegacyCleanupV4
+    original_apply=LegacyCleanupV4.async_apply
+    async def should_not_run(self):
+        raise AssertionError("One-time legacy cleanup ran on verified clean store")
+    LegacyCleanupV4.async_apply=should_not_run
+    try:
+        await GlobalCatalogV3(one).async_initialize()
+    finally:
+        LegacyCleanupV4.async_apply=original_apply
     assert Store.data==before_reboot
-    print("BETA36_ALREADY_CLEAN_STATUS_RECORDED_ZERO_PROFILE_WRITES_PASS")
+    print("BETA36_CLEAN_START_BYPASSES_LEGACY_CLEANUP_CODE_PASS")
 
 
 asyncio.run(run())
