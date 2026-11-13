@@ -186,6 +186,14 @@ class GlobalCatalogV3:
             return self.live[entry_id].records
         return self.profile_snapshots.get(entry_id, {}).get("records", [])
 
+    def liquid_use_count(self, liquid_id):
+        return sum(1 for entry_id in self.profile_snapshots for row in self._current_history(entry_id)
+                   if row.get("kind")=="drink" and row.get("liquid_type_id")==liquid_id)
+
+    def cup_use_count(self, cup_id):
+        return sum(1 for entry_id in self.profile_snapshots for row in self._current_history(entry_id)
+                   if row.get("kind")=="drink" and row.get("cup_type_id")==cup_id)
+
     def _check_deleted_references(self, before, after):
         old_liquids = {t["id"] for t in before["custom_liquid_types"]}
         new_liquids = {t["id"] for t in after["custom_liquid_types"]}
@@ -212,6 +220,7 @@ class GlobalCatalogV3:
             changed = candidate != previous
             if coordinator._global_catalog_sha256 != current_revision:
                 if changed:
+                    self._bind_catalog(coordinator)
                     raise MigrationBlocked("Stale global catalog; reload settings before editing")
                 self._bind_catalog(coordinator)
                 candidate = self._catalog_from(coordinator)
@@ -222,7 +231,11 @@ class GlobalCatalogV3:
                 await coordinator._store.async_save(local_payload)
                 self.profile_snapshots[coordinator.entry_id] = deepcopy(local_payload)
                 return
-            removed_liquids, removed_cups = self._check_deleted_references(previous, candidate)
+            try:
+                removed_liquids, removed_cups = self._check_deleted_references(previous, candidate)
+            except Exception:
+                self._bind_catalog(coordinator)
+                raise
             # All impacted profile Quick buttons must be removed. They are profile
             # preferences only; deleting them never modifies historical drink entries.
             before_profiles = {}
@@ -253,7 +266,11 @@ class GlobalCatalogV3:
                 "after_profiles_sha256": fingerprint(after_profiles),
                 "after_global_sha256": fingerprint(new_global),
             }
-            await self._verified_save(self._journal, journal, "catalog transaction journal")
+            try:
+                await self._verified_save(self._journal, journal, "catalog transaction journal")
+            except Exception:
+                self._bind_catalog(coordinator)
+                raise
             try:
                 await self._verified_save(self._store, new_global, "global catalog transaction")
                 for entry_id, raw in after_profiles.items():
