@@ -1,14 +1,6 @@
 name: jwDaily Hydration Log beta.32 — validate and publish
+# Historical beta32 publisher retired after beta33 hotfix.
 on:
-  push:
-    branches:
-      - main
-      - feature/beta32-safe-global-catalog-migration
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'RELEASE_NOTES_v1.1.0-beta.32.md'
-      - '.github/workflows/publish-v1.1.0-beta.32.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -56,7 +48,7 @@ jobs:
   publish:
     name: Publish verified beta32 prerelease, ZIP and SHA256
     needs: [native, hacs, hassfest]
-    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log' && github.ref == 'refs/heads/main'
+    if: false # Existing beta32 tag is immutable; never publish it again.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
