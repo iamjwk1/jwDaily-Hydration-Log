@@ -122,7 +122,7 @@ async def main():
     assert added['quick_button_id']=='quick_coffee'
     await again.async_manage_quick('delete','quick_coffee')
     stored=next(r for r in again.records if r['id']==added['id'])
-    assert stored['quick_button_label_at_log']=='Coffee fast' and 'quick_button_id' not in stored
+    assert stored['quick_button_label_at_log']=='Coffee fast' and stored['quick_button_id']=='quick_coffee'
     assert again.quick_buttons==[]
     print('BETA31_ADD_HIDE_RESTORE_DELETE_RESTART_PASS')
     # JSON Data parser must accept legitimate historical label snapshots and reject controls.
