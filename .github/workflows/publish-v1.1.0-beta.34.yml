@@ -109,3 +109,10 @@ jobs:
             '20261113 jwDaily Hydration Log v1.1.0-beta.34.zip' \
             '20261113 jwDaily Hydration Log v1.1.0-beta.34.zip.sha256'
           gh release view 'v1.1.0-beta.34' --json url,tagName,isPrerelease
+      - name: Hand off exact validated ZIP to File Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta34-verified-file-library
+          path: '20261113 jwDaily Hydration Log v1.1.0-beta.34.zip'
+          if-no-files-found: error
+          retention-days: 30
