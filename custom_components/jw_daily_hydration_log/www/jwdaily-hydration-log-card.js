@@ -591,14 +591,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
    ${`<div class="saved-liquids">${list||'<p class="muted">No visible types. Restore one below or add your own.</p>'}</div>
      ${hidden.length?`<h4>Hidden liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
         `<div class="hidden-liquid">${this._liquidIcon(t,true)} <strong>${jdhlEscape(t.name)}</strong>
-         <button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}">Restore</button></div>`).join('')}</div>`:''}
+         <span class="used-count" title="Recorded drinks across all profiles">Used: ${Number(t.drink_count_all_profiles)||0}</span><button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}">Restore</button></div>`).join('')}</div>`:''}
      ${this._managePendingDelete?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm liquid deletion"><div class="settings-head"><h3>Delete liquid type?</h3><button class="secondary small" data-action="manage-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">${this._managePendingDelete.custom?
         `Permanently delete ${jdhlEscape(this._managePendingDelete.name)}? Only unused custom types can be deleted.`:
         `Remove ${jdhlEscape(this._managePendingDelete.name)} from Add choices? History and Excel remain intact; you can restore it later.`}
         <div class="dialog-actions"><button class="secondary" data-action="manage-delete-cancel">Cancel</button>
          <button class="danger" data-action="manage-delete-confirm">Confirm delete</button></div></div></section></div>`:'' }
      ${this._settingsSection?'':`<div class="dialog-actions"><button class="secondary" data-action="manage-cancel">← Back to drink</button><button data-action="manage-add">+ Add liquid</button></div>`}`}
-    ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Liquid editor"><div class="settings-head"><h3>${this._editingLiquidId?'Edit liquid type':'Add liquid type'}</h3><button class="secondary small" data-action="manage-cancel" aria-label="Close">✕</button></div><div class="manage-editor">
+    ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Liquid editor"><div class="settings-head"><h3>${this._editingLiquidId?'Edit liquid type':'Add liquid type'}</h3><button class="secondary small" data-action="manage-cancel" aria-label="Close">✕</button></div><div class="manage-editor">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
     <div class="manage-form-grid">
      <label>Liquid name<input data-field="custom_name" maxlength="48" value="${jdhlEscape(d.custom_name||'')}" placeholder="e.g. Orange juice"/></label>
      <label>Material Design Icon<input data-field="icon_mdi" value="${jdhlEscape(d.icon_mdi||'')}" placeholder="mdi:glass-mug-variant"/></label>
@@ -630,7 +630,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return `<div class="settings-section"><p class="settings-note">Each profile keeps separate settings and drink history.</p>
    ${profiles.map(p=>`<div class="settings-row profile-settings-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E(p.slug)} · ${p.daily_target_ml} mL goal</small></div>
     <button class="secondary small" data-action="settings-profile-edit" data-value="${E(p.slug)}">Edit</button></div>`).join('')}
-   ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Profile editor"><div class="settings-head"><h3>${this._profileEditSlug?'Edit profile':'Add profile'}</h3><button class="secondary small" data-action="settings-profile-cancel" aria-label="Close">✕</button></div><div class="settings-edit editor-body">
+   ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Profile editor"><div class="settings-head"><h3>${this._profileEditSlug?'Edit profile':'Add profile'}</h3><button class="secondary small" data-action="settings-profile-cancel" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
     <label class="span-2">Profile name<input data-field="name" maxlength="48" value="${E(d.name)}"/></label>
     <label>Age<input type="number" min="1" max="120" data-field="age" value="${E(d.age)}"/></label>
     <label>Gender<select data-field="gender"><option value="male" ${d.gender==='male'?'selected':''}>Male</option><option value="female" ${d.gender==='female'?'selected':''}>Female</option></select></label>
@@ -720,7 +720,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   else if(page==='transfer')body=this._transferHTML();
   else if(page==='cups'){
    const cups=this._cupDefs();body=`<div class="settings-section"><p class="settings-note">A cup defines a default volume. Existing drink volumes never change.</p>
-    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body"><label>Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
+    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<label>Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
       <label>Default volume (mL)<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label>
       <label>MDI icon<input data-field="icon_mdi" value="${E(draft.icon_mdi)}" placeholder="mdi:cup"/></label></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-cup-save">Save cup</button></div></section></div>`:''}
@@ -740,7 +740,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   else if(page==='quick'){
    const quick=this._quickDefs(),liquids=this._liquidDefs().filter(t=>!t.hidden),cups=this._cupDefs().filter(c=>!c.hidden);
    body=`<div class="settings-section"><p class="settings-note">Profile: ${E(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}. Automatic label: Liquid (Cup). Custom labels never change chart grouping.</p>
-    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Quick button editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit Quick button':'Add Quick button'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body"><label>Liquid<select data-field="liquid_type_id">${choice(liquids,'id','name',draft.liquid_type_id,'Choose liquid')}</select></label>
+    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Quick button editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit Quick button':'Add Quick button'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<label>Liquid<select data-field="liquid_type_id">${choice(liquids,'id','name',draft.liquid_type_id,'Choose liquid')}</select></label>
       <label>Cup<select data-field="cup_type_id">${choice(cups,'id','name',draft.cup_type_id,'Choose cup')}</select></label>
       <label>Button label<select data-field="label_mode"><option value="automatic" ${draft.label_mode==='automatic'?'selected':''}>Automatic: Liquid (Cup)</option><option value="custom" ${draft.label_mode==='custom'?'selected':''}>Custom</option></select></label>
       ${draft.label_mode==='custom'?`<label>Custom button text<input data-field="custom_label" maxlength="60" value="${E(draft.custom_label)}"/></label>`:''}</div>
@@ -880,7 +880,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    }catch(e){this._alert(e);}return;
   }
   if(action==='settings-profile-add'||action==='settings-profile-edit'){
-   const current=this._profilesData?.profiles?.find(p=>p.slug===id);this._profileEditSlug=current?.slug||'';
+   this._error='';const current=this._profilesData?.profiles?.find(p=>p.slug===id);this._profileEditSlug=current?.slug||'';
    this._profileDraft={name:current?.name||'',age:String(current?.age||30),gender:current?.gender||'male',
       unit:current?.unit||'mL',daily_target_ml:String(current?.daily_target_ml||2000),copy_from:''};
    this._render(true);return;
@@ -927,7 +927,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    return;
   }
   if(action==='settings-cup-add'||action==='settings-cup-edit'){
-   const c=this._cupInfo(id);this._settingsEditId=c?.id||null;
+   this._error='';const c=this._cupInfo(id);this._settingsEditId=c?.id||null;
    this._settingsDraft={name:c?.name||'',volume_ml:String(c?.default_volume_ml||''),icon_mdi:c?.icon_mdi||'mdi:cup'};this._render(true);return;
   }
   if(action==='settings-cup-save'){
@@ -946,7 +946,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    await this._settingsCall(cup?'manage_cup':'manage_quick',{action:'reorder',order});return;
   }
   if(action==='settings-quick-add'||action==='settings-quick-edit'){
-   const q=this._quickDefs().find(x=>x.id===id);this._settingsEditId=q?.id||null;
+   this._error='';const q=this._quickDefs().find(x=>x.id===id);this._settingsEditId=q?.id||null;
    this._settingsDraft={liquid_type_id:q?.liquid_type_id||'',cup_type_id:q?.cup_type_id||'',
     label_mode:q?.label_mode||'automatic',custom_label:q?.custom_label||''};this._render(true);return;
   }
