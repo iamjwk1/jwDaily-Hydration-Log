@@ -172,5 +172,30 @@ async def run():
         pass
     print("BETA35_UNKNOWN_MODEL_NO_WRITES_PASS")
 
+    # Already-clean profile: persist only a verified CLEAN status. No
+    # additional profile write, archive, or journal. Next startup is no-op.
+    Store.data.clear()
+    clean=cleanup_plan(profile("p1",True))
+    Store.data[prefix+"p1"]=deepcopy(clean)
+    one=Hass(["p1"])
+    await GlobalCatalogV3(one).async_initialize()  # Bootstrap verified v3.
+    original_v3_backup=deepcopy(Store.data[prefix+"migration_v3_backup"])
+    before_profile=deepcopy(Store.data[prefix+"p1"])
+    manager=GlobalCatalogV3(one)
+    await manager.async_initialize()
+    assert manager.legacy_cleanup_status["status"]=="clean"
+    assert manager.legacy_cleanup_status["removed_fields"]==0
+    assert manager.legacy_cleanup_status["history_unchanged"] is True
+    assert manager.legacy_cleanup_status["backup_status"]=="not_needed"
+    assert Store.data[prefix+"legacy_cleanup_v4_status"]["status"]=="clean"
+    assert prefix+"legacy_cleanup_v4_backup" not in Store.data
+    assert prefix+"legacy_cleanup_v4_journal" not in Store.data
+    assert Store.data[prefix+"p1"]==before_profile
+    assert Store.data[prefix+"migration_v3_backup"]==original_v3_backup
+    before_reboot=deepcopy(Store.data)
+    await GlobalCatalogV3(one).async_initialize()
+    assert Store.data==before_reboot
+    print("BETA36_ALREADY_CLEAN_STATUS_RECORDED_ZERO_PROFILE_WRITES_PASS")
+
 
 asyncio.run(run())
