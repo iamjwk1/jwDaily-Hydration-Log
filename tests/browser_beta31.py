@@ -93,7 +93,9 @@ with sync_playwright() as p:
         assert root.locator('.editor-overlay .dialog-editor').count()==1
         assert root.locator('.cup-settings-row').count()==2
         assert root.locator('.editor-overlay [data-field="name"]').input_value()=='Glazen beker'
-        root.locator('.editor-overlay [data-action="settings-discard"]').first.click()
+        assert root.locator('.dialog-settings').get_attribute('aria-modal')=='false'
+        root.locator('.editor-overlay [data-field="name"]').press('Escape')
+        assert root.locator('.dialog-settings').get_attribute('aria-modal')=='true'
         assert root.locator('.editor-overlay').count()==0
         assert root.locator('.cup-settings-row').count()==2
         print('BETA34_CUP_POPUP_USAGE_PASS',width)
