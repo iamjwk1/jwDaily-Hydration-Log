@@ -714,6 +714,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <div class="dialog-actions"><button data-action="migration-status">Check migration status</button>
      <button data-action="migration-backup-export">Download pre-migration ZIP</button></div>
     ${this._migrationStatus?`<p>Status: ${E(this._migrationStatus.status)} · Profiles: ${this._migrationStatus.profile_count} · Backup: ${this._migrationStatus.backup_verified?'Verified':'UNAVAILABLE'}</p>`:''}
+    ${this._migrationStatus?.legacy_cleanup_v4?`<p class="settings-note" data-testid="legacy-cleanup-v4-status">Legacy cleanup: ${this._migrationStatus.legacy_cleanup_v4.status==='clean'?'Clean':E(this._migrationStatus.legacy_cleanup_v4.status||'Unknown')} · Removed: ${Number(this._migrationStatus.legacy_cleanup_v4.removed_fields)||0} · History: ${this._migrationStatus.legacy_cleanup_v4.history_unchanged?'Unchanged':'Not confirmed'}</p>`:''}
     <label class="check-label"><input type="checkbox" data-field="migration_backup_verified" ${this._migrationBackupVerified?'checked':''}/> I downloaded, opened and verified the migration backup ZIP.</label>
     <button class="danger" data-action="migration-rollback" ${!this._migrationBackupVerified||!this._migrationStatus?.backup_verified?'disabled':''}>Rollback migration (requires prior release)</button>
    </div>
