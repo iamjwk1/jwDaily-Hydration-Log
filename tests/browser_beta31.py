@@ -16,12 +16,15 @@ with sync_playwright() as p:
           const cups=[{id:'cup1',name:'Glazen beker',default_volume_ml:180,icon_mdi:'mdi:cup',hidden:false},{id:'cup2',name:'Fles',default_volume_ml:500,icon_mdi:'mdi:bottle-soda',hidden:false}];
           const entries=[{id:'rec1',timestamp:iso+'T21:11:40+01:00',liquid_type:'water',cup_type_id:'cup1',volume_ml:180},{id:'rec2',timestamp:iso+'T20:30:00+01:00',liquid_type:'tea',cup_type_id:'cup1',volume_ml:180},{id:'rec3',timestamp:iso+'T19:11:00+01:00',liquid_type:'coffee',cup_type_id:'cup1',volume_ml:180},{id:'rec4',timestamp:iso+'T18:39:00+01:00',liquid_type:'milk',cup_type_id:null,volume_ml:360}];
           const quick=[{id:'quick_tea',liquid_type_id:'tea',cup_type_id:'cup1',label_mode:'automatic',custom_label:'',hidden:false,available:true,label:'Tea (Glazen beker)',default_volume_ml:180},{id:'quick_coffee',liquid_type_id:'coffee',cup_type_id:'cup1',label_mode:'automatic',custom_label:'',hidden:false,available:true,label:'Coffee (Glazen beker)',default_volume_ml:180}];
-          window.qaCalls=[];
+          window.qaCalls=[];window.qaDownloads=[];
+          HTMLAnchorElement.prototype.click=function(){window.qaDownloads.push({filename:this.download,href:this.href.slice(0,36)});};
           const breakdown=[{liquid_type:'coffee',volume_ml:180},{liquid_type:'water',volume_ml:180},{liquid_type:'tea',volume_ml:180},{liquid_type:'milk',volume_ml:360}];
           window.qaHass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_sample_consumed_today':{state:'0.9',attributes:{consumed_ml:900,unit_of_measurement:'L'}},'sensor.jwdhl_sample_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_sample_drink_count_today':{state:'4',attributes:{}},'sensor.jwdhl_sample_manual_consumed':{state:'900',attributes:{manual_consumed_ml:900}}},callWS:async function(msg){window.qaCalls.push(msg);
              if(msg.type.endsWith('/manage_quick')){if(msg.action==='delete'){const ix=quick.findIndex(q=>q.id===msg.quick_id);if(ix<0)throw Error('missing');quick.splice(ix,1);}else if(msg.action==='hide'||msg.action==='restore'){const q=quick.find(q=>q.id===msg.quick_id);q.hidden=msg.action==='hide';q.available=!q.hidden;}return {quick_buttons:quick};}
-             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.32',settings_transfer:true,native_model:true};
-             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.32'};
+             if(msg.type.endsWith('/migration_status'))return {status:'active',schema:3,profile_count:2,backup_verified:true,catalog_sha256:'a'.repeat(64)};
+             if(msg.type.endsWith('/migration_backup_export'))return {filename:'test original migration backup.zip',base64:'UEsDBBQ=',sha256:'b'.repeat(64),bytes:5};
+             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.33',settings_transfer:true,native_model:true};
+             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.33'};
              if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'sample',name:'Sample',age:58,gender:'male',unit:'mL',daily_target_ml:2000},{slug:'second',name:'Second profile',age:35,gender:'female',unit:'mL',daily_target_ml:2400}]};
              return {};
           }};
@@ -54,6 +57,22 @@ with sync_playwright() as p:
         root.locator('button[data-action="settings-page"][data-value="advanced"]').click()
         shadow=root.locator('.settings-section').inner_text()
         assert 'Import & Export' in shadow and 'Convert existing data' not in shadow and 'Finalize data model' not in shadow and 'Original volume buttons' not in shadow
+        # Regression: beta.32 did not dispatch migration-* clicks to _settingsClick.
+        # Verify actual mouse clicks invoke the authenticated status and ZIP APIs.
+        root.locator('button[data-action="settings-page"][data-value="transfer"]').click()
+        root.locator('button[data-action="migration-status"]').click()
+        page.wait_for_timeout(80)
+        assert page.evaluate("window.qaCalls.filter(c=>c.type==='jw_daily_hydration_log/migration_status').length")==1,(width,'migration status not routed')
+        assert 'Status: active' in root.locator('.settings-section').inner_text()
+        assert 'Backup: Verified' in root.locator('.settings-section').inner_text()
+        assert root.locator('button[data-action="migration-rollback"]').is_disabled()
+        root.locator('button[data-action="migration-backup-export"]').click()
+        page.wait_for_timeout(80)
+        assert page.evaluate("window.qaCalls.filter(c=>c.type==='jw_daily_hydration_log/migration_backup_export').length")==1,(width,'migration backup not routed')
+        assert page.evaluate("window.qaDownloads.filter(d=>d.filename==='test original migration backup.zip'&&d.href.startsWith('data:application/zip;base64,')).length")==1,(width,'migration download not triggered')
+        assert not page.evaluate("window.qaCalls.some(c=>c.type==='jw_daily_hydration_log/migration_rollback')"),'migration rollback was unexpectedly invoked'
+        root.locator('button[data-action="settings-home"]').click()
+        print('BETA33_CHROMIUM_MIGRATION_BUTTONS_PASS',width,'px')
         # Both headings appear only once (the modal header is authoritative).
         root.locator('button[data-action="settings-home"]').click()
         root.locator('button[data-action="settings-page"][data-value="cups"]').click()
