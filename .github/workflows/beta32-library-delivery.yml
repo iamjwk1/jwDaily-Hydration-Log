@@ -1,0 +1,43 @@
+name: beta.32 — verified Library delivery handoff
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/beta32-library-delivery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-release-handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve published prerelease and verify exact bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download 'v1.1.0-beta.32' --pattern '*.zip' --dir .
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,zipfile
+          expected='9d3e2f91821b253a10fd73a785a5fb4aff364049f56d6c4b29988803ea68f9a1'
+          files=[p for p in Path('.').glob('*.zip') if p.is_file()]
+          assert len(files)==1,files
+          data=files[0].read_bytes()
+          assert hashlib.sha256(data).hexdigest()==expected
+          exact=Path('20261113 jwDaily Hydration Log v1.1.0-beta.32.zip')
+          exact.write_bytes(data)
+          assert exact.stat().st_size==132153
+          with zipfile.ZipFile(exact) as z:
+              assert z.testzip() is None
+              assert 'custom_components/jw_daily_hydration_log/manifest.json' in z.namelist()
+          print('FILE_QA_PASS',exact.name,exact.stat().st_size,expected,'CRC_OK')
+          PY
+      - name: Hand off exact release ZIP for Library upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta32-verified-library-handoff
+          path: '20261113 jwDaily Hydration Log v1.1.0-beta.32.zip'
+          if-no-files-found: error
+          retention-days: 30
