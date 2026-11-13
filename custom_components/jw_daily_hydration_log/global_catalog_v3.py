@@ -66,23 +66,39 @@ class GlobalCatalogV3:
             }
         return result
 
+    def _restore_catalog_only(self, current, original):
+        """Never overwrite drink observations captured after a failed transaction."""
+        recovered=deepcopy(current)
+        for key in (*GLOBAL_KEYS, "quick_buttons"):
+            if key in original:
+                recovered[key]=deepcopy(original[key])
+        return recovered
+
     async def _recover_pending(self):
-        journal = await self._journal.async_load()
-        if not journal or journal.get("status") != "pending":
+        journal=await self._journal.async_load()
+        if not journal or journal.get("status")!="pending":
             return
-        if journal.get("format") != JOURNAL_FORMAT or not isinstance(journal.get("before_profiles"), dict):
+        if journal.get("format")!=JOURNAL_FORMAT or not isinstance(journal.get("before_profiles"),dict):
             raise MigrationBlocked("Invalid or incomplete global catalog rollback journal")
-        originals = journal["before_profiles"]
-        if fingerprint(originals) != journal.get("before_profiles_sha256"):
+        originals=journal["before_profiles"]
+        if fingerprint(originals)!=journal.get("before_profiles_sha256"):
             raise MigrationBlocked("Rollback journal checksum mismatch")
-        global_before = journal.get("before_global")
-        if global_before is not None:
-            await self._verified_save(self._store, global_before, "rollback global catalog")
-        for entry_id, snapshot in originals.items():
-            await self._verified_save(self._profile_store(entry_id), snapshot,
-                                      f"rollback profile {entry_id}")
-        journal = {**journal, "status": "rolled_back"}
-        await self._verified_save(self._journal, journal, "rollback journal")
+        global_before=journal.get("before_global")
+        if (global_before is None or
+                fingerprint(global_before)!=journal.get("before_global_sha256")):
+            raise MigrationBlocked("Rollback global catalog checksum mismatch")
+        # Any current post-crash drink records, day archives, consumption or
+        # target changes must survive a catalog-only recovery.
+        await self._verified_save(self._store,global_before,"rollback global catalog")
+        for entry_id,original in originals.items():
+            store=self._profile_store(entry_id)
+            current=await store.async_load()
+            if not isinstance(current,dict):
+                raise MigrationBlocked(f"Profile {entry_id} missing after interrupted transaction")
+            restored=self._restore_catalog_only(current,original)
+            await self._verified_save(store,restored,f"rollback catalog profile {entry_id}")
+        await self._verified_save(self._journal,{**journal,"status":"rolled_back"},
+                                  "rollback journal")
 
     async def async_initialize(self):
         async with self._init_lock:
@@ -284,12 +300,16 @@ class GlobalCatalogV3:
                 await self._verified_save(self._journal, {**journal, "status": "committed"},
                                           "catalog commit journal")
             except Exception:
-                # A failed transaction restores original storage, including every drink.
-                await self._verified_save(self._store, old_global, "catalog rollback")
-                for entry_id, raw in before_profiles.items():
-                    await self._verified_save(self._profile_store(entry_id), raw,
+                await self._verified_save(self._store,old_global,"catalog rollback")
+                for entry_id,original in before_profiles.items():
+                    store=self._profile_store(entry_id)
+                    current=await store.async_load()
+                    if not isinstance(current,dict):
+                        raise MigrationBlocked("Rollback profile storage unavailable")
+                    restored=self._restore_catalog_only(current,original)
+                    await self._verified_save(store,restored,
                                               f"catalog rollback profile {entry_id}")
-                await self._verified_save(self._journal, {**journal, "status": "rolled_back"},
+                await self._verified_save(self._journal,{**journal,"status":"rolled_back"},
                                           "catalog rollback journal")
                 self._bind_catalog(coordinator)
                 raise
