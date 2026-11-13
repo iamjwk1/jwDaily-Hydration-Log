@@ -9,10 +9,17 @@ ENTITY_PREFIX = 'jwdhl'
 EVENT_DRINK = 'jw_daily_hydration_log_drink'
 SIGNAL = 'jw_daily_hydration_log_updated_{}'
 UNITS = ('mL', 'L', 'fl_oz')
-SOURCE_MODES = ('absolute', 'delta', 'sum')
 LIQUID_TYPES = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 
 DEFAULT_DAILY_TARGET_ML = 2000
+
+# Only for one-time release-upgrade compatibility, never used by normal drink entry.
+LEGACY_V4_TOP_LEVEL_FIELDS = frozenset((
+    'volume_buttons', 'legacy_mappings', 'legacy_cup_defaults',
+    'conversion_state', 'pregnancy', 'lactation',
+    'source_sensor', 'source_mode',
+))
+LEGACY_V4_STATUS_FORMAT = 'jwDaily-Hydration-Log-v4-cleanup-status'
 
 
 def historical_default_target_ml(age: int, gender: str,
