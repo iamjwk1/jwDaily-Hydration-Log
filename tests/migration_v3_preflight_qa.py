@@ -39,6 +39,8 @@ assert m.build_preflight(before)==res
 
 b["custom_liquid_types"][0]["id"]="custom_a"
 b["custom_liquid_types"][0]["name"]="Different recipe"
+b["records"][0]["liquid_type_id"]="custom_a"
+b["quick_buttons"][0]["liquid_type_id"]="custom_a"
 try:
     m.build_preflight({"p1":a,"p2":b})
 except m.MigrationBlocked as e:
