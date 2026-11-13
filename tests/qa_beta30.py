@@ -95,7 +95,9 @@ async def main():
         assert b'Original volume buttons' not in z.read('xl/worksheets/sheet4.xml')
         assert b'Legacy default' not in z.read('xl/worksheets/sheet3.xml')
         assert b'Glass mug' in z.read('xl/worksheets/sheet1.xml')
-        assert b'Cup default' in z.read('xl/worksheets/sheet1.xml') or b'Current Cup default' in z.read('xl/worksheets/sheet1.xml')
+        assert b'Cup used' in z.read('xl/worksheets/sheet1.xml')
+        assert b'Current Cup default' not in z.read('xl/worksheets/sheet1.xml')
+        assert b'Quick button' not in z.read('xl/worksheets/sheet1.xml')
         assert b'tblDailyIntake' in z.read('xl/tables/table2.xml')
         for name in z.namelist():
             if name.endswith(('.xml','.rels')): ET.fromstring(z.read(name))
