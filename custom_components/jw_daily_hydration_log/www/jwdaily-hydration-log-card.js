@@ -48,7 +48,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._settingsSection=null;this._settingsDraft=null;this._settingsEditId=null;this._settingsDeleteQuickId=null;this._settingsDeleteCupId=null;
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
-  this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
+  this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;this._migrationStatus=null;this._migrationBackupVerified=false;
   this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';this._settingsScopeProfile=null;this._settingsQuickHistory=null;
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
@@ -80,7 +80,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._settingsSection=null;this._settingsDraft=null;this._settingsEditId=null;this._settingsDeleteQuickId=null;
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
-  this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
+  this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;this._migrationStatus=null;this._migrationBackupVerified=false;
   this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._history=null;this._lastState='';this._lastRender='';this._render(true);this._fetchHistory();
@@ -132,6 +132,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    this._dataImportMode=e.target.value;this._dataImportPreview=null;this._render(true);return;
   }
   if(field==='full_backup_verified'){this._fullBackupSaved=!!e.target.checked;this._render(true);return;}
+  if(field==='migration_backup_verified'){this._migrationBackupVerified=!!e.target.checked;this._render(true);return;}
   if(field==='model_unknown_confirmed'){
    this._modelUnknownConfirmed=!!e.target.checked;return;
   }
@@ -687,6 +688,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <p class="delete-warning">This overwrites the entire current profile. Review your backup and explicitly confirm.</p>
       <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm and restore Full Backup</button></div>`:''}
    </div>
+   <div class="settings-edit"><h4>Migration v3 — all profiles</h4>
+    <p class="settings-note">The original pre-migration data and settings remain available. Download and verify the immutable full backup ZIP before rollback.</p>
+    <div class="dialog-actions"><button data-action="migration-status">Check migration status</button>
+     <button data-action="migration-backup-export">Download pre-migration ZIP</button></div>
+    ${this._migrationStatus?`<p>Status: ${E(this._migrationStatus.status)} · Profiles: ${this._migrationStatus.profile_count} · Backup: ${this._migrationStatus.backup_verified?'Verified':'UNAVAILABLE'}</p>`:''}
+    <label class="check-label"><input type="checkbox" data-field="migration_backup_verified" ${this._migrationBackupVerified?'checked':''}/> I downloaded, opened and verified the migration backup ZIP.</label>
+    <button class="danger" data-action="migration-rollback" ${!this._migrationBackupVerified||!this._migrationStatus?.backup_verified?'disabled':''}>Rollback migration (requires prior release)</button>
+   </div>
    </div>`;
  }
  _settingsHTML(){const page=this._settingsSection;const draft=this._settingsDraft;
@@ -782,6 +791,28 @@ class JwDailyHydrationLogCard extends HTMLElement {
    this._settingsScopeProfile=p.slug;this._settingsQuickHistory=null;this._settingsOpen('quick');
    try{await this._loadSettingsQuickProfile(p.slug);}catch(e){this._alert(e);}
    return;
+  }
+  if(action==='migration-status'){
+   try{this._migrationStatus=await this._hass.callWS({type:'jw_daily_hydration_log/migration_status'});this._render(true);}
+   catch(e){this._alert(e);}return;
+  }
+  if(action==='migration-backup-export'){
+   try{const resp=await this._hass.callWS({type:'jw_daily_hydration_log/migration_backup_export'});
+    if(!/^UEs/.test(resp.base64||'')||!/^([a-f0-9]{64})$/.test(resp.sha256||''))throw Error('Invalid migration backup');
+    const link=document.createElement('a');link.href='data:application/zip;base64,'+resp.base64;
+    link.download=resp.filename;this.shadowRoot.appendChild(link);link.click();link.remove();
+    this._migrationBackupVerified=false;this._status='Migration backup download initiated; verify the saved ZIP';this._render(true);
+   }catch(e){this._alert(e);}return;
+  }
+  if(action==='migration-rollback'){
+   if(!this._migrationBackupVerified||!this._migrationStatus?.backup_verified)return;
+   if(!window.confirm('Disable global catalog v3? Restore the previous integration version before restarting Home Assistant.'))return;
+   if(!window.confirm('Confirm migration rollback after verifying the original ZIP backup?'))return;
+   try{const result=await this._hass.callWS({type:'jw_daily_hydration_log/migration_rollback',
+    catalog_sha256:this._migrationStatus.catalog_sha256,confirm:true});
+    this._status=result.message||'Migration rolled back. Restore previous release and restart HA.';
+    this._migrationStatus=null;this._render(true);
+   }catch(e){this._alert(e);}return;
   }
   if(action==='settings-open'){this._settingsOpen();return;}
   if(action==='data-export-json'||action==='full-backup-export'){
