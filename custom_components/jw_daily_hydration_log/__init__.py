@@ -206,7 +206,7 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'today_breakdown':c.today_breakdown(),
         'cup_types':c.get_cup_types(), 'quick_buttons':c.get_quick_buttons(),
         'profile_settings':dict(name=c.name,age=c.age,gender=c.gender,unit=c.unit,
-                                source_mode=c.source_mode),
+                                daily_target_ml=c.target_ml),
         'data_model_version':c.data_model_version, 
         'backend_version':VERSION,
     })
@@ -512,8 +512,6 @@ async def ws_settings_apply(hass, connection, msg):
 def ws_profiles_list(hass, connection, msg):
     connection.send_result(msg['id'],{'profiles':[dict(entry_id=c.entry_id,slug=c.slug,
             name=c.name,age=c.age,gender=c.gender,unit=c.unit,
-            pregnancy=c.pregnancy,lactation=c.lactation,
-            source_sensor=c.source_sensor or '',source_mode=c.source_mode,
             daily_target_ml=c.target_ml) for c in _profiles(hass).values()]})
 
 
