@@ -7,6 +7,7 @@ import hashlib
 import logging
 import math
 from copy import deepcopy
+from datetime import datetime, timezone
 from homeassistant.helpers.storage import Store
 from . import data_io
 from .settings_io import (FORMAT as SETTINGS_FORMAT, export_payload, parse_settings_json,
@@ -128,6 +129,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_full_preview)
     websocket_api.async_register_command(hass,ws_full_apply)
     websocket_api.async_register_command(hass,ws_export)
+    websocket_api.async_register_command(hass,ws_migration_status)
+    websocket_api.async_register_command(hass,ws_migration_backup_export)
+    websocket_api.async_register_command(hass,ws_migration_rollback)
     return True
 
 
@@ -742,3 +746,58 @@ async def ws_export(hass:HomeAssistant,connection:websocket_api.ActiveConnection
                                       'mime_type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                       'base64':base64.b64encode(workbook).decode('ascii'),
                                       'bytes':len(workbook), 'version':VERSION})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_status'})
+@websocket_api.async_response
+async def ws_migration_status(hass,connection,msg):
+    try:
+        manager=hass.data[DOMAIN]['global_catalog_v3']
+        state=manager.state
+        backup=await manager._backup.async_load()
+        source_valid=(bool(backup) and backup.get('format')=='jwDaily-Hydration-Log-v3-source-backup'
+                      and hashlib.sha256(canonical(backup.get('profiles'))).hexdigest()==backup.get('source_sha256'))
+        connection.send_result(msg['id'],{
+            'status':state.get('status'),'schema':state.get('schema'),
+            'catalog_sha256':state.get('catalog_sha256'),
+            'backup_sha256':backup.get('source_sha256') if source_valid else None,
+            'backup_verified':source_valid,
+            'profile_count':len(manager.profile_snapshots)})
+    except (ValueError,KeyError) as exc:
+        connection.send_error(msg['id'],'migration_status_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_backup_export'})
+@websocket_api.async_response
+async def ws_migration_backup_export(hass,connection,msg):
+    try:
+        manager=hass.data[DOMAIN]['global_catalog_v3']
+        raw,manifest=await manager.async_export_baseline_backup()
+        filename=f'{datetime.now(timezone.utc):%Y%m%d-%H%M} jwDaily Hydration Log - Pre Migration Backup v3.zip'
+        connection.send_result(msg['id'],{
+            'filename':filename,'mime_type':'application/zip',
+            'base64':base64.b64encode(raw).decode('ascii'),
+            'sha256':hashlib.sha256(raw).hexdigest(),
+            'bytes':len(raw),'source_sha256':manifest['source_sha256']})
+    except (ValueError,KeyError) as exc:
+        connection.send_error(msg['id'],'migration_backup_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_rollback',
+                                  probatio.Required('catalog_sha256'):str,
+                                  probatio.Required('confirm'):bool})
+@websocket_api.async_response
+async def ws_migration_rollback(hass,connection,msg):
+    try:
+        if msg['confirm'] is not True:
+            raise ValueError('Explicit rollback confirmation required')
+        manager=hass.data[DOMAIN]['global_catalog_v3']
+        result=await manager.async_rollback_to_local(msg['catalog_sha256'])
+        connection.send_result(msg['id'],{**result,
+            'restart_required':True,
+            'message':'Shared catalog disabled. Restore the prior release before restarting Home Assistant.'})
+    except (ValueError,KeyError) as exc:
+        connection.send_error(msg['id'],'migration_rollback_failed',str(exc))
