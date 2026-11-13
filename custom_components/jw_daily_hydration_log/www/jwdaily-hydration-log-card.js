@@ -45,7 +45,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._manageOpen=false;this._customDraft=null;this._editingLiquidId=null;
   this._glassPrevY=179;
   this._managePendingDelete=null;
-  this._settingsSection=null;this._settingsDraft=null;this._settingsEditId=null;this._settingsDeleteQuickId=null;
+  this._settingsSection=null;this._settingsDraft=null;this._settingsEditId=null;this._settingsDeleteQuickId=null;this._settingsDeleteCupId=null;
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
   this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
@@ -718,7 +718,12 @@ class JwDailyHydrationLogCard extends HTMLElement {
      <button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
      <button class="secondary small" data-action="settings-cup-down" data-value="${E(c.id)}" ${i===cups.length-1?'disabled':''} aria-label="Move down">↓</button>
      <button class="secondary small settings-hide-button" data-action="settings-cup-toggle" data-value="${E(c.id)}">${c.hidden?'Restore':'Hide'}</button>
-     <button class="secondary small" data-action="settings-cup-edit" data-value="${E(c.id)}">Edit</button></div>`).join('')}
+     <button class="secondary small" data-action="settings-cup-edit" data-value="${E(c.id)}">Edit</button>
+     <button class="danger small" data-action="settings-cup-delete" data-value="${E(c.id)}" ${c.can_delete?'':'disabled'} title="${c.can_delete?'Delete unused cup':'Used in drink history; hide instead'}">Delete</button></div>`).join('')}
+    ${this._settingsDeleteCupId?`<div class="delete-warning" role="alert"><strong>Delete Cup?</strong>
+      <p>Delete unused cup? All profiles retain drink history. Linked Quick buttons will be removed.</p>
+      <div class="dialog-actions"><button class="secondary small" data-action="settings-cup-delete-cancel">Cancel</button>
+       <button class="danger small" data-action="settings-cup-delete-confirm" data-value="${E(this._settingsDeleteCupId)}">Confirm delete</button></div></div>`:''}
     <div class="dialog-actions"><button data-action="settings-cup-add">+ Add cup</button></div></div>`;
   }
   else if(page==='quick'){
@@ -862,6 +867,17 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(!this._settingsDeleteQuickId||id!==this._settingsDeleteQuickId)return;
    await this._settingsCall('manage_quick',{action:'delete',quick_id:id});
    if(!this._error)this._settingsDeleteQuickId=null;
+   return;
+  }
+  if(action==='settings-cup-delete'){
+   const c=this._cupInfo(id);if(!c?.can_delete)return;
+   this._settingsDeleteCupId=id;this._render(true);return;
+  }
+  if(action==='settings-cup-delete-cancel'){this._settingsDeleteCupId=null;this._render(true);return;}
+  if(action==='settings-cup-delete-confirm'){
+   if(this._settingsDeleteCupId!==id)return;
+   await this._settingsCall('manage_cup',{action:'delete',cup_id:id});
+   if(!this._error)this._settingsDeleteCupId=null;
    return;
   }
   if(action==='settings-cup-add'||action==='settings-cup-edit'){
