@@ -59,7 +59,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this.shadowRoot.addEventListener('keydown',e=>{
    if(e.key==='Escape'&&this._historyCalendarOpen){this._historyCalendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._calendarOpen){this._calendarOpen=false;this._render(true);return;}
-   if(e.key==='Escape'&&(this._profileDraft||this._settingsDraft||this._customDraft)){if(this._settingsSection==='profile'){this._profileDraft=null;this._profileEditSlug='';}else if(this._settingsDraft){this._settingsDraft=null;this._settingsEditId=null;}else{this._customDraft=null;this._editingLiquidId=null;}this._render(true);return;}
+   if(e.key==='Escape'&&(this._profileDraft||this._settingsDraft||this._customDraft||this._settingsDeleteCupId||this._settingsDeleteQuickId||this._managePendingDelete)){if(this._settingsSection==='profile'){this._profileDraft=null;this._profileEditSlug='';}else if(this._settingsDraft){this._settingsDraft=null;this._settingsEditId=null;}else{this._customDraft=null;this._editingLiquidId=null;this._settingsDeleteCupId=null;this._settingsDeleteQuickId=null;this._managePendingDelete=null;}this._render(true);return;}
    if(e.key==='Escape'&&this._settingsSection){this._settingsSection=null;this._settingsDraft=null;
     this._manageOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._modal){this._modal=null;this._confirmDelete=false;this._render(true);}
@@ -592,11 +592,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
      ${hidden.length?`<h4>Hidden liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
         `<div class="hidden-liquid">${this._liquidIcon(t,true)} <strong>${jdhlEscape(t.name)}</strong>
          <button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}">Restore</button></div>`).join('')}</div>`:''}
-     ${this._managePendingDelete?`<div class="delete-warning" role="alert">${this._managePendingDelete.custom?
+     ${this._managePendingDelete?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm liquid deletion"><div class="settings-head"><h3>Delete liquid type?</h3><button class="secondary small" data-action="manage-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">${this._managePendingDelete.custom?
         `Permanently delete ${jdhlEscape(this._managePendingDelete.name)}? Only unused custom types can be deleted.`:
         `Remove ${jdhlEscape(this._managePendingDelete.name)} from Add choices? History and Excel remain intact; you can restore it later.`}
         <div class="dialog-actions"><button class="secondary" data-action="manage-delete-cancel">Cancel</button>
-         <button class="danger" data-action="manage-delete-confirm">Confirm delete</button></div></div>`:''}
+         <button class="danger" data-action="manage-delete-confirm">Confirm delete</button></div></div></section></div>`:'' }
      ${this._settingsSection?'':`<div class="dialog-actions"><button class="secondary" data-action="manage-cancel">← Back to drink</button><button data-action="manage-add">+ Add liquid</button></div>`}`}
     ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Liquid editor"><div class="settings-head"><h3>${this._editingLiquidId?'Edit liquid type':'Add liquid type'}</h3><button class="secondary small" data-action="manage-cancel" aria-label="Close">✕</button></div><div class="manage-editor">
     <div class="manage-form-grid">
@@ -731,10 +731,10 @@ class JwDailyHydrationLogCard extends HTMLElement {
      <button class="secondary small settings-hide-button" data-action="settings-cup-toggle" data-value="${E(c.id)}">${c.hidden?'Restore':'Hide'}</button>
      <button class="secondary small" data-action="settings-cup-edit" data-value="${E(c.id)}">Edit</button>
      <button class="danger small" data-action="settings-cup-delete" data-value="${E(c.id)}" ${c.can_delete?'':'disabled'} title="${c.can_delete?'Delete unused cup':'Used in drink history; hide instead'}">Delete</button></div></div>`).join('')}
-    ${this._settingsDeleteCupId?`<div class="delete-warning" role="alert"><strong>Delete Cup?</strong>
+    ${this._settingsDeleteCupId?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm cup deletion"><div class="settings-head"><h3>Delete cup type?</h3><button class="secondary small" data-action="settings-cup-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">
       <p>Delete unused cup? All profiles retain drink history. Linked Quick buttons will be removed.</p>
       <div class="dialog-actions"><button class="secondary small" data-action="settings-cup-delete-cancel">Cancel</button>
-       <button class="danger small" data-action="settings-cup-delete-confirm" data-value="${E(this._settingsDeleteCupId)}">Confirm delete</button></div></div>`:''}
+       <button class="danger small" data-action="settings-cup-delete-confirm" data-value="${E(this._settingsDeleteCupId)}">Confirm delete</button></div></div></section></div>`:''}
     </div>`;
   }
   else if(page==='quick'){
@@ -754,9 +754,9 @@ class JwDailyHydrationLogCard extends HTMLElement {
      <button class="secondary small" data-action="settings-quick-edit" data-value="${E(q.id)}">Edit</button>
      <button class="danger small" data-action="settings-quick-delete" data-value="${E(q.id)}">Delete</button>
      </div></div>`).join('')}
-    ${this._settingsDeleteQuickId?`<div class="delete-warning" role="alert"><strong>Delete Quick button?</strong>
+    ${this._settingsDeleteQuickId?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm Quick button deletion"><div class="settings-head"><h3>Delete Quick button?</h3><button class="secondary small" data-action="settings-quick-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">
       <p>Permanently remove ${E(this._effectiveQuickLabel(quick.find(q=>q.id===this._settingsDeleteQuickId)||{}))}? Drink history and volumes will remain unchanged. The historical button label is preserved.</p>
-      <div class="dialog-actions"><button class="secondary small" data-action="settings-quick-delete-cancel">Cancel</button><button class="danger small" data-action="settings-quick-delete-confirm" data-value="${E(this._settingsDeleteQuickId)}">Confirm delete</button></div></div>`:''}
+      <div class="dialog-actions"><button class="secondary small" data-action="settings-quick-delete-cancel">Cancel</button><button class="danger small" data-action="settings-quick-delete-confirm" data-value="${E(this._settingsDeleteQuickId)}">Confirm delete</button></div></div></section></div>`:''}
     </div>`;
   }
   else if(page==='profile')body=this._profileHTML();
