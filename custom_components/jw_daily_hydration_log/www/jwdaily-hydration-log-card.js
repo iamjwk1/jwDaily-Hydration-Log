@@ -701,7 +701,6 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const nav=[['profile','Manage profiles','Edit, add or copy settings','mdi:account-multiple'],
     ['liquids','Liquid types','Names, icons and colors','mdi:water'],
     ['cups','Cup types','Reusable containers and volumes','mdi:glass-mug-variant'],
-    ['quick','Quick buttons','Liquid + cup combinations and labels','mdi:gesture-tap-button'],
     ['advanced','Advanced','Settings, Data and backup transfer','mdi:wrench']];
   const E=jdhlEscape;
   const choice=(items,valueField,labelField,selected,empty='Select')=>`<option value="">${E(empty)}</option>`+
@@ -711,7 +710,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <div><strong>${E(this._history?.profile_settings?.name||this._config.profile)}</strong><small>Active card profile</small></div></div>
     <div class="settings-category">PROFILE & GOALS</div>
     <div class="settings-nav">${nav.map(([key,name,desc,icon],i)=>`${i===1?'<div class="settings-category">DRINK CONFIGURATION</div>':''}
-     ${i===4?'<div class="settings-category">MAINTENANCE</div>':''}
+     ${i===3?'<div class="settings-category">MAINTENANCE</div>':''}
      <button data-action="settings-page" data-value="${key}" class="settings-nav-item secondary">
        <ha-icon icon="${icon}"></ha-icon><span><strong>${E(name)}</strong><small>${E(desc)}</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>`).join('')}</div>`;
   else if(page==='liquids')body=this._manageHTML();
