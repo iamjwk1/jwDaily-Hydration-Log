@@ -99,7 +99,9 @@ with sync_playwright() as p:
         print('BETA34_CUP_POPUP_USAGE_PASS',width)
 
         root.locator('button[data-action="settings-home"]').click()
-        root.locator('button[data-action="settings-page"][data-value="quick"]').click()
+        root.locator('button[data-action="settings-page"][data-value="profile"]').click()
+        root.locator('button[data-action="settings-profile-edit"][data-value="sample"]').click()
+        root.locator('button[data-action="settings-profile-quick"]').click()
         assert root.locator('.settings-head h3').inner_text()=='Quick buttons'
         assert root.locator('.settings-section > h3').count()==0
         qrow=root.locator('.settings-row.quick-settings-row').first
@@ -132,7 +134,9 @@ with sync_playwright() as p:
         assert root.locator('.settings-row.quick-settings-row').count()==1
         assert root.locator('.history-table tbody tr').count()==4
         root.locator('button[data-action="settings-home"]').click()
-        root.locator('button[data-action="settings-page"][data-value="profile"]').click()
+        assert root.locator('.editor-overlay').count()==1
+        root.locator('.editor-overlay [data-action="settings-profile-cancel"]').first.click()
+        assert root.locator('.editor-overlay').count()==0
         assert root.locator('.settings-head h3').inner_text()=='Manage profiles'
         assert root.locator('.settings-section > h3').count()==0
         assert 'Each profile keeps separate settings and drink history.' in root.locator('.settings-section').inner_text()
