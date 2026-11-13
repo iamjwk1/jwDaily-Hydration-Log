@@ -110,6 +110,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_delete_liquid_type)
     websocket_api.async_register_command(hass,ws_update_liquid_type)
     websocket_api.async_register_command(hass,ws_set_builtin_liquid_visibility)
+    websocket_api.async_register_command(hass,ws_set_custom_liquid_visibility)
     websocket_api.async_register_command(hass,ws_set_liquid_order)
     websocket_api.async_register_command(hass,ws_manage_cup)
     websocket_api.async_register_command(hass,ws_manage_quick)
@@ -338,6 +339,21 @@ async def ws_set_builtin_liquid_visibility(hass:HomeAssistant,connection:websock
         connection.send_error(msg['id'],'invalid_builtin_visibility',str(exc))
         return
     connection.send_result(msg['id'],item)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_custom_liquid_visibility',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('liquid_type'):str,
+                                  probatio.Required('visible'):bool})
+@websocket_api.async_response
+async def ws_set_custom_liquid_visibility(hass,connection,msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        item=await c.async_set_custom_liquid_visibility(msg['liquid_type'],msg['visible'])
+        connection.send_result(msg['id'],item)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_custom_visibility',str(exc))
 
 
 @websocket_api.require_admin
