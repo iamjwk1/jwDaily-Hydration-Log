@@ -920,23 +920,19 @@ class HydrationCoordinator:
                 item = next((q for q in self.quick_buttons if q['id'] == quick_id), None)
                 if item is None:
                     raise ValueError('Quick button not found')
-                # This removes ONLY the shortcut. Preserve historical Liquid, Cup,
-                # timestamps, volumes and a human-readable button label.
-                label = next(q['label'] for q in self.get_quick_buttons()
-                             if q['id'] == quick_id)
+                # Historical ledger is immutable. A retired shortcut ID may
+                # remain referenced by an older drink; that is provenance,
+                # not an active profile preference.
                 previous_buttons = deepcopy(self.quick_buttons)
-                previous_records = deepcopy(self.records)
+                previous_records_digest = digest(self.records)
                 try:
-                    for record in self.records:
-                        if record.get('kind') == 'drink' and record.get('quick_button_id') == quick_id:
-                            record.setdefault('quick_button_label_at_log', label)
-                            record.pop('quick_button_id', None)
                     self.quick_buttons = [q for q in self.quick_buttons if q['id'] != quick_id]
                     await self._save()
                 except Exception:
                     self.quick_buttons = previous_buttons
-                    self.records = previous_records
                     raise
+                if digest(self.records) != previous_records_digest:
+                    raise ValueError('Quick deletion unexpectedly modified drink history')
                 self._dispatch()
                 return self.get_quick_buttons()
             if action == 'reorder':
