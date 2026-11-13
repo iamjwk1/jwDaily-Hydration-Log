@@ -1,14 +1,6 @@
 name: jwDaily Hydration Log beta.35 — validate and publish
+# Historic beta35 release must not be rebuilt or overwritten.
 on:
-  push:
-    branches:
-      - main
-      - feature/beta35-dialog-ux-consistency
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'RELEASE_NOTES_v1.1.0-beta.35.md'
-      - '.github/workflows/publish-v1.1.0-beta.35.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -57,7 +49,7 @@ jobs:
   publish:
     name: Publish verified beta35 prerelease, ZIP and SHA256
     needs: [native, hacs, hassfest]
-    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log' && github.ref == 'refs/heads/main'
+    if: false # Immutable beta35 release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
