@@ -738,7 +738,7 @@ async def ws_export(hass:HomeAssistant,connection:websocket_api.ActiveConnection
         _LOGGER.exception('Failed to create hydration Excel workbook')
         connection.send_error(msg['id'],'export_failed','Excel export failed; see Home Assistant logs')
         return
-    connection.send_result(msg['id'],{'filename':export_filename(hass.config.time_zone),
+    connection.send_result(msg['id'],{'filename':export_filename(hass.config.time_zone,profile_name=selected[0].name if msg.get('profile') else None),
                                       'mime_type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                       'base64':base64.b64encode(workbook).decode('ascii'),
                                       'bytes':len(workbook), 'version':VERSION})
