@@ -148,6 +148,46 @@ async def main():
         assert "rolled back" in str(e)
     print("BETA32_ROLLBACK_STICKY_NO_DRINK_LOSS_PASS")
 
+    # Simulate a crash after the first profile catalog mirror but before
+    # writing the second. A subsequent newly logged drink must SURVIVE
+    # automatic journal recovery on the next HA startup.
+    Store.data.clear()
+    p1=profile()
+    p2=profile(used=True)
+    Store.data[prefix+"p1"]=deepcopy(p1)
+    Store.data[prefix+"p2"]=deepcopy(p2)
+    pending_manager=GlobalCatalogV3(hass)
+    await pending_manager.async_initialize()
+    cc1=Coordinator(hass,"p1")
+    cc2=Coordinator(hass,"p2")
+    await pending_manager.async_attach(cc1)
+    await pending_manager.async_attach(cc2)
+    cc1.cup_types.append({"id":"cup_transient","name":"Travel cup",
+                          "default_volume_ml":300,"hidden":False})
+    Store.fail_key=prefix+"p2"
+    try:
+        await pending_manager.async_save(cc1,deepcopy(Store.data[prefix+"p1"]))
+        raise AssertionError("injected second-store write should fail")
+    except RuntimeError:
+        pass
+    finally:
+        Store.fail_key=None
+    assert Store.data[prefix+"migration_v3_journal"]["status"]=="pending"
+    later={"kind":"drink","id":"later_after_failed_catalog",
+           "timestamp":"2026-11-13T12:10:00+01:00",
+           "volume_ml":180.0,"liquid_type_id":"water","cup_type_id":"cup_glass"}
+    Store.data[prefix+"p1"]["records"].append(later)
+    Store.data[prefix+"p1"]["consumed_ml"]=180
+    Store.data[prefix+"p1"]["manual_consumed_ml"]=180
+    restarted=GlobalCatalogV3(hass)
+    await restarted.async_initialize()
+    assert Store.data[prefix+"migration_v3_journal"]["status"]=="rolled_back"
+    assert later in Store.data[prefix+"p1"]["records"]
+    assert Store.data[prefix+"p1"]["consumed_ml"]==180
+    assert Store.data[prefix+"p1"]["cup_types"]==p1["cup_types"]
+    assert Store.data[prefix+"p2"]["records"]==p2["records"]
+    print("BETA32_CRASH_RECOVERY_NEVER_OVERWRITES_NEW_DRINK_PASS")
+
     # A conflicted source must fail before creating any migration archive.
     Store.data.clear()
     p1=profile();p2=profile()
