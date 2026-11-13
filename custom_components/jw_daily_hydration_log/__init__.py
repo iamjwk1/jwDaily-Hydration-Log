@@ -22,6 +22,7 @@ from homeassistant.util import slugify
 
 from .const import DOMAIN, EVENT_DRINK, PLATFORMS, UNITS, LIQUID_TYPES, VERSION
 from .coordinator import HydrationCoordinator
+from .global_catalog_v3 import GlobalCatalogV3
 from .excel import export_xlsx, export_filename
 from .frontend import async_register_frontend
 
@@ -131,8 +132,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     await async_register_frontend(hass)
+    # Singleton initialization serializes all profiles and creates a full,
+    # immutable migration backup before the first v3 catalog write.
+    data=hass.data.setdefault(DOMAIN,{'profiles':{}})
+    manager=data.get('global_catalog_v3')
+    if manager is None:
+        manager=data['global_catalog_v3']=GlobalCatalogV3(hass)
+    await manager.async_initialize()
     c=HydrationCoordinator(hass,entry)
     await c.async_initialize()
+    await manager.async_attach(c)
     _profiles(hass)[entry.entry_id]=c
     # Retire only the old v1.0.2 pace entity for this exact config entry.
     from homeassistant.helpers import entity_registry as er
@@ -154,6 +163,8 @@ async def async_unload_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     if ok:
         coordinator=_profiles(hass).pop(entry.entry_id,None)
         if coordinator:
+            manager=hass.data.get(DOMAIN,{}).get('global_catalog_v3')
+            if manager:manager.detach(coordinator)
             await coordinator.async_shutdown()
     return ok
 
