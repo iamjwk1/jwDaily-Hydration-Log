@@ -1,3 +1,8 @@
+## v1.1.0-beta.33 (2026-11-13)
+- Fix Migration v3 buttons: Check migration status and Download pre-migration ZIP now reach their WebSocket handlers.
+- Keep guarded rollback disabled until the original backup is independently verified; never trigger rollback during checks.
+- Add Chromium click/download regression coverage. No drink history, global catalogue, profile setting or storage migration changes.
+
 ## v1.1.0-beta.32
 
 - Release 1 migration: global Liquid and Cup catalogs shared across profiles, while Quick buttons and daily targets remain profile-specific.
