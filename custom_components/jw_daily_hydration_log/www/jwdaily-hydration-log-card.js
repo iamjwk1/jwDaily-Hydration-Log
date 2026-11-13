@@ -912,7 +912,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(!this._settingsDeleteQuickId||id!==this._settingsDeleteQuickId)return;
    await this._settingsCall('manage_quick',{action:'delete',quick_id:id});
    if(!this._error)this._settingsDeleteQuickId=null;
-   return;
+   this._render(true);return;
   }
   if(action==='settings-cup-delete'){
    const c=this._cupInfo(id);if(!c?.can_delete)return;
@@ -923,7 +923,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(this._settingsDeleteCupId!==id)return;
    await this._settingsCall('manage_cup',{action:'delete',cup_id:id});
    if(!this._error)this._settingsDeleteCupId=null;
-   return;
+   this._render(true);return;
   }
   if(action==='settings-cup-add'||action==='settings-cup-edit'){
    this._error='';const c=this._cupInfo(id);this._settingsEditId=c?.id||null;
