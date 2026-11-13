@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-      - feature/beta36-dialog-ux-consistency
+      - feature/beta36-compact-ui-and-safe-cleanup
     paths:
       - 'custom_components/jw_daily_hydration_log/**'
       - 'tests/**'
