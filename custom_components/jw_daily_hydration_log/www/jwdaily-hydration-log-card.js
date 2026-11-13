@@ -49,7 +49,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
   this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
-  this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';
+  this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';this._settingsScopeProfile=null;this._settingsQuickHistory=null;
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
   this._fetching=false;this._fetchAgain=false;this._tickTimer=null;
@@ -210,7 +210,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  _liquidInfo(id){return this._liquidDefs().find(t=>t.id===id);}
  _cupDefs(){return this._history?.cup_types||[];}
  _cupInfo(id){return this._cupDefs().find(c=>c.id===id);}
- _quickDefs(){return this._history?.quick_buttons||[];}
+ _quickDefs(){return this._settingsSection==='quick'&&this._settingsScopeProfile?this._settingsQuickHistory?.quick_buttons||[]:this._history?.quick_buttons||[];}
  _liquidName(id){return this._liquidInfo(id)?.name||id||'Unknown';}
  _effectiveQuickLabel(q){return q.label_mode==='custom'?q.custom_label:
   `${this._liquidName(q.liquid_type_id)} (${this._cupInfo(q.cup_type_id)?.name||'Unknown cup'})`;}
@@ -628,6 +628,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const E=jdhlEscape,profiles=this._profilesData?.profiles||[],d=this._profileDraft;
   return `<div class="settings-section"><h3>Profiles</h3><p class="settings-note">Each profile keeps separate settings and drink history. The dashboard card remains linked to its configured profile.</p>
    ${profiles.map(p=>`<div class="settings-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E(p.slug)} · ${p.daily_target_ml} mL goal</small></div>
+    <button class="secondary small" data-action="settings-profile-quick" data-value="${E(p.slug)}">Quick buttons</button>
     <button class="secondary small" data-action="settings-profile-edit" data-value="${E(p.slug)}">Edit</button></div>`).join('')}
    ${d?`<div class="settings-edit"><h4>${this._profileEditSlug?'Edit profile':'Add profile'}</h4>
     <label>Name<input data-field="name" maxlength="48" value="${E(d.name)}"/></label>
@@ -635,6 +636,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <label>Gender<select data-field="gender"><option value="male" ${d.gender==='male'?'selected':''}>Male</option><option value="female" ${d.gender==='female'?'selected':''}>Female</option></select></label>
     <label>Units<select data-field="unit">${['mL','L','fl_oz'].map(v=>`<option value="${v}" ${d.unit===v?'selected':''}>${v}</option>`).join('')}</select></label>
     <label>Daily target (mL)<input type="number" min="1" max="100000" step="1" data-field="daily_target_ml" value="${E(d.daily_target_ml)}"/></label>
+    ${this._profileEditSlug?`<button class="secondary" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}">Manage Quick buttons</button>`:''}
     ${!this._profileEditSlug?`<label>Copy settings from<select data-field="copy_from"><option value="">Start with default settings</option>${profiles.map(p=>`<option value="${E(p.slug)}" ${p.slug===d.copy_from?'selected':''}>${E(p.name)}</option>`).join('')}</select></label>`:''}
     ${!this._profileEditSlug?'<p class="settings-note">Only configuration is copied. No records, consumed volumes, sensor readings or personal targets are transferred.</p>':'<p class="settings-note">Changing the display name preserves the stable profile slug and entity IDs.</p>'}
     <div class="dialog-actions"><button class="secondary" data-action="settings-profile-cancel">Cancel</button><button data-action="settings-profile-save">${this._profileEditSlug?'Save profile':'Create profile'}</button></div></div>`:''}
@@ -728,7 +730,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   else if(page==='quick'){
    const quick=this._quickDefs(),liquids=this._liquidDefs().filter(t=>!t.hidden),cups=this._cupDefs().filter(c=>!c.hidden);
-   body=`<div class="settings-section"><p class="settings-note">Automatic label: Liquid (Cup). Custom labels never change chart grouping.</p>
+   body=`<div class="settings-section"><p class="settings-note">Profile: ${E(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}. Automatic label: Liquid (Cup). Custom labels never change chart grouping.</p>
     ${draft?`<div class="settings-edit"><label>Liquid<select data-field="liquid_type_id">${choice(liquids,'id','name',draft.liquid_type_id,'Choose liquid')}</select></label>
       <label>Cup<select data-field="cup_type_id">${choice(cups,'id','name',draft.cup_type_id,'Choose cup')}</select></label>
       <label>Button label<select data-field="label_mode"><option value="automatic" ${draft.label_mode==='automatic'?'selected':''}>Automatic: Liquid (Cup)</option><option value="custom" ${draft.label_mode==='custom'?'selected':''}>Custom</option></select></label>
@@ -762,12 +764,25 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  async _settingsCall(command, data){
   this._busy=true;this._error='';try{
-   await this._ensureBackend();await this._hass.callWS({type:'jw_daily_hydration_log/'+command,profile:this._config.profile,...data});
+   await this._ensureBackend();const scoped=command==='manage_quick'?this._settingsScopeProfile:null;
+   await this._hass.callWS({type:'jw_daily_hydration_log/'+command,profile:scoped||this._config.profile,...data});
+   if(scoped)await this._loadSettingsQuickProfile(scoped);
    await this._fetchHistory();this._settingsDraft=null;this._settingsEditId=null;this._status='Settings saved';
   }catch(e){this._error=String(e?.message||e);}
   finally{this._busy=false;this._render(true);}
  }
+ async _loadSettingsQuickProfile(profile){
+  this._settingsQuickHistory=await this._hass.callWS({type:'jw_daily_hydration_log/history',
+   profile,date:this._todayISO()});
+  this._render(true);
+ }
  async _settingsClick(action,el){const id=el.dataset.value||'';
+  if(action==='settings-profile-quick'){
+   const p=this._profilesData?.profiles?.find(x=>x.slug===id);if(!p)return;
+   this._settingsScopeProfile=p.slug;this._settingsQuickHistory=null;this._settingsOpen('quick');
+   try{await this._loadSettingsQuickProfile(p.slug);}catch(e){this._alert(e);}
+   return;
+  }
   if(action==='settings-open'){this._settingsOpen();return;}
   if(action==='data-export-json'||action==='full-backup-export'){
    try{
@@ -853,8 +868,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
    }catch(e){this._alert(e);}return;
   }
   if(action==='settings-close'){this._settingsSection=null;this._settingsDraft=null;this._manageOpen=false;this._render(true);return;}
-  if(action==='settings-home'){this._settingsOpen(['transfer'].includes(this._settingsSection)?'advanced':'home');return;}
-  if(action==='settings-page'){this._settingsOpen(id);return;}
+  if(action==='settings-home'){this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(['transfer'].includes(this._settingsSection)?'advanced':'home');return;}
+  if(action==='settings-page'){this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(id);return;}
   if(action==='settings-discard'){this._settingsDraft=null;this._settingsEditId=null;this._render(true);return;}
   if(action==='settings-quick-delete'){
    if(!this._quickDefs().some(q=>q.id===id))return;
