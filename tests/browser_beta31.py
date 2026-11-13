@@ -12,8 +12,8 @@ with sync_playwright() as p:
         page.add_script_tag(path=str(JS))
         page.evaluate('''() => {
           const today=new Date();const iso=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
-          const defs=[{id:'coffee',name:'Coffee',icon_mdi:'mdi:coffee',color:'#A87B00',hidden:false},{id:'tea',name:'Tea',icon_mdi:'mdi:tea',color:'#EDB92C',hidden:false},{id:'water',name:'Water',icon_mdi:'mdi:water',color:'#86CAFE',hidden:false},{id:'milk',name:'Milk',icon_mdi:'mdi:cow',color:'#F2F2F2',hidden:false}];
-          const cups=[{id:'cup1',name:'Glazen beker',default_volume_ml:180,icon_mdi:'mdi:cup',hidden:false},{id:'cup2',name:'Fles',default_volume_ml:500,icon_mdi:'mdi:bottle-soda',hidden:false}];
+          const defs=[{drink_count_all_profiles:2,id:'coffee',name:'Coffee',icon_mdi:'mdi:coffee',color:'#A87B00',hidden:false},{id:'tea',name:'Tea',icon_mdi:'mdi:tea',color:'#EDB92C',hidden:false},{id:'water',name:'Water',icon_mdi:'mdi:water',color:'#86CAFE',hidden:false},{id:'milk',name:'Milk',icon_mdi:'mdi:cow',color:'#F2F2F2',hidden:false}];
+          const cups=[{drink_count_all_profiles:4,id:'cup1',name:'Glazen beker',default_volume_ml:180,icon_mdi:'mdi:cup',hidden:false},{id:'cup2',name:'Fles',default_volume_ml:500,icon_mdi:'mdi:bottle-soda',hidden:false}];
           const entries=[{id:'rec1',timestamp:iso+'T21:11:40+01:00',liquid_type:'water',cup_type_id:'cup1',volume_ml:180},{id:'rec2',timestamp:iso+'T20:30:00+01:00',liquid_type:'tea',cup_type_id:'cup1',volume_ml:180},{id:'rec3',timestamp:iso+'T19:11:00+01:00',liquid_type:'coffee',cup_type_id:'cup1',volume_ml:180},{id:'rec4',timestamp:iso+'T18:39:00+01:00',liquid_type:'milk',cup_type_id:null,volume_ml:360}];
           const quick=[{id:'quick_tea',liquid_type_id:'tea',cup_type_id:'cup1',label_mode:'automatic',custom_label:'',hidden:false,available:true,label:'Tea (Glazen beker)',default_volume_ml:180},{id:'quick_coffee',liquid_type_id:'coffee',cup_type_id:'cup1',label_mode:'automatic',custom_label:'',hidden:false,available:true,label:'Coffee (Glazen beker)',default_volume_ml:180}];
           window.qaCalls=[];window.qaDownloads=[];
@@ -23,8 +23,8 @@ with sync_playwright() as p:
              if(msg.type.endsWith('/manage_quick')){if(msg.action==='delete'){const ix=quick.findIndex(q=>q.id===msg.quick_id);if(ix<0)throw Error('missing');quick.splice(ix,1);}else if(msg.action==='hide'||msg.action==='restore'){const q=quick.find(q=>q.id===msg.quick_id);q.hidden=msg.action==='hide';q.available=!q.hidden;}return {quick_buttons:quick};}
              if(msg.type.endsWith('/migration_status'))return {status:'active',schema:3,profile_count:2,backup_verified:true,catalog_sha256:'a'.repeat(64)};
              if(msg.type.endsWith('/migration_backup_export'))return {filename:'test original migration backup.zip',base64:'UEsDBBQ=',sha256:'b'.repeat(64),bytes:5};
-             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.33',settings_transfer:true,native_model:true};
-             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.33'};
+             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.34',settings_transfer:true,native_model:true};
+             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.34'};
              if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'sample',name:'Sample',age:58,gender:'male',unit:'mL',daily_target_ml:2000},{slug:'second',name:'Second profile',age:35,gender:'female',unit:'mL',daily_target_ml:2400}]};
              return {};
           }};
@@ -83,9 +83,27 @@ with sync_playwright() as p:
         assert actions.index('settings-cup-toggle')<actions.index('settings-cup-edit'),(width,actions)
         f1=float(cuprow.locator('[data-action="settings-cup-toggle"]').evaluate('(n)=>getComputedStyle(n).fontSize.replace("px","")'))
         f2=float(cuprow.locator('[data-action="settings-cup-edit"]').evaluate('(n)=>getComputedStyle(n).fontSize.replace("px","")'))
-        assert f1 < f2,(width,f1,f2)
+        assert abs(f1-f2)<0.11,(width,'buttons should use consistent font size',f1,f2)
+        assert root.locator('.cup-settings-row').count()==2
+        assert 'Used: 4' in root.locator('.cup-settings-row').first.inner_text()
+        for cr in root.locator('.cup-settings-row').all():
+            heights=[round(b.bounding_box()['y']) for b in cr.locator('.settings-row-actions button').all()]
+            assert max(heights)-min(heights)<=2,(width,'cup action buttons wrapped',heights)
+        root.locator('.cup-settings-row [data-action="settings-cup-edit"]').first.click()
+        assert root.locator('.editor-overlay .dialog-editor').count()==1
+        assert root.locator('.cup-settings-row').count()==2
+        assert root.locator('.editor-overlay [data-field="name"]').input_value()=='Glazen beker'
+        assert root.locator('.dialog-settings').get_attribute('aria-modal')=='false'
+        root.locator('.editor-overlay [data-field="name"]').press('Escape')
+        assert root.locator('.dialog-settings').get_attribute('aria-modal')=='true'
+        assert root.locator('.editor-overlay').count()==0
+        assert root.locator('.cup-settings-row').count()==2
+        print('BETA34_CUP_POPUP_USAGE_PASS',width)
+
         root.locator('button[data-action="settings-home"]').click()
-        root.locator('button[data-action="settings-page"][data-value="quick"]').click()
+        root.locator('button[data-action="settings-page"][data-value="profile"]').click()
+        root.locator('button[data-action="settings-profile-edit"][data-value="sample"]').click()
+        root.locator('button[data-action="settings-profile-quick"]').click()
         assert root.locator('.settings-head h3').inner_text()=='Quick buttons'
         assert root.locator('.settings-section > h3').count()==0
         qrow=root.locator('.settings-row.quick-settings-row').first
@@ -93,14 +111,23 @@ with sync_playwright() as p:
         assert actions == ['settings-quick-up','settings-quick-down','settings-quick-toggle','settings-quick-edit','settings-quick-delete'],(width,actions)
         f1=float(qrow.locator('[data-action="settings-quick-toggle"]').evaluate('(n)=>getComputedStyle(n).fontSize.replace("px","")'))
         f2=float(qrow.locator('[data-action="settings-quick-edit"]').evaluate('(n)=>getComputedStyle(n).fontSize.replace("px","")'))
-        assert f1 < f2,(width,f1,f2)
+        assert abs(f1-f2)<0.11,(width,'buttons should use consistent font size',f1,f2)
+        qys=[round(b.bounding_box()['y']) for b in root.locator('.quick-settings-row').first.locator('.settings-row-actions button').all()]
+        assert max(qys)-min(qys)<=2,(width,'quick buttons wrapped',qys)
+        root.locator('.quick-settings-row [data-action="settings-quick-edit"]').first.click()
+        assert root.locator('.editor-overlay .dialog-editor').count()==1
+        assert root.locator('.quick-settings-row').count()==2
+        root.locator('.editor-overlay [data-action="settings-discard"]').first.click()
+        assert root.locator('.editor-overlay').count()==0
+        print('BETA34_QUICK_POPUP_PASS',width)
+
         dialog=root.locator('.dialog-settings'); db=dialog.bounding_box()
         assert db and db['x'] >= -1 and db['x']+db['width']<=width+1,(width,db)
         btns=root.locator('.quick-settings-row button').all()
         assert all((b.bounding_box()['x'] >= db['x']-1 and b.bounding_box()['x']+b.bounding_box()['width'] <= db['x']+db['width']+1) for b in btns),(width,'overflow')
         root.locator('[data-action="settings-quick-delete"]').first.click()
         assert root.locator('[data-action="settings-quick-delete-confirm"]').count()==1
-        root.locator('[data-action="settings-quick-delete-cancel"]').click()
+        root.locator('[data-action="settings-quick-delete-cancel"]').last.click()
         assert not page.evaluate("window.qaCalls.some(c=>c.type.endsWith('/manage_quick')&&c.action==='delete')")
         root.locator('[data-action="settings-quick-delete"]').first.click()
         root.locator('[data-action="settings-quick-delete-confirm"]').click()
@@ -109,7 +136,9 @@ with sync_playwright() as p:
         assert root.locator('.settings-row.quick-settings-row').count()==1
         assert root.locator('.history-table tbody tr').count()==4
         root.locator('button[data-action="settings-home"]').click()
-        root.locator('button[data-action="settings-page"][data-value="profile"]').click()
+        assert root.locator('.editor-overlay').count()==1
+        root.locator('.editor-overlay [data-action="settings-profile-cancel"]').first.click()
+        assert root.locator('.editor-overlay').count()==0
         assert root.locator('.settings-head h3').inner_text()=='Manage profiles'
         assert root.locator('.settings-section > h3').count()==0
         assert 'Each profile keeps separate settings and drink history.' in root.locator('.settings-section').inner_text()
@@ -118,12 +147,31 @@ with sync_playwright() as p:
         assert root.locator('button[data-action="settings-home"]').count()==1
         root.locator('button[data-action="settings-profile-edit"][data-value="sample"]').click()
         assert root.locator('[data-field="daily_target_ml"]').input_value()=='2000'
+        assert root.locator('.editor-overlay').count()==1
+        assert root.locator('.profile-settings-row').count()==2
         for obsolete in ('source_sensor','source_mode','pregnancy','lactation'):
             assert root.locator('[data-field="'+obsolete+'"]').count()==0,(width,obsolete)
         assert root.locator('button[data-action="settings-profile-quick"]').count()>=1
         root.locator('button[data-action="settings-profile-save"]').click()
         page.wait_for_timeout(80)
         assert page.evaluate("window.qaCalls.some(c=>c.type.endsWith('/profile_edit')&&c.daily_target_ml===2000)")
+        # Liquid editing is a separate dialog; parent list and per-type counts remain.
+        root.locator('button[data-action="settings-home"]').click()
+        root.locator('button[data-action="settings-page"][data-value="liquids"]').click()
+        assert root.locator('.settings-head h3').inner_text()=='Liquid types'
+        assert root.locator('.manage > h3').count()==0
+        assert 'Back to drink' not in root.locator('.dialog-settings').inner_text()
+        assert 'Used: 2' in root.locator('.saved-liquid').filter(has_text='Coffee').first.inner_text()
+        for row in root.locator('.saved-liquid').all():
+            ys=[round(b.bounding_box()['y']) for b in row.locator('.settings-row-actions button').all()]
+            assert max(ys)-min(ys)<=2,(width,'liquid actions wrapped',ys)
+        root.locator('.saved-liquid [data-action="manage-edit"]').first.click()
+        assert root.locator('.editor-overlay').count()==1
+        assert root.locator('.saved-liquid').count()==4
+        root.locator('.editor-overlay [data-action="manage-cancel"]').first.click()
+        assert root.locator('.editor-overlay').count()==0
+        assert root.locator('.saved-liquid').count()==4
+        print('BETA34_LIQUID_POPUP_USAGE_PASS',width)
         assert not errors,(width,errors)
         print('BETA32_CHROMIUM_PROFILE_TARGET_EXPORT_SCOPE_PASS',width,'px')
         print('BETA31_CHROMIUM_LAYOUT_AND_DELETE_PASS',width,'px',headers)

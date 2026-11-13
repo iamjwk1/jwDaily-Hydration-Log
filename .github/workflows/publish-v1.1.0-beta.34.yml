@@ -1,0 +1,118 @@
+name: jwDaily Hydration Log beta.34 — validate and publish
+on:
+  push:
+    branches:
+      - main
+      - feature/beta34-dialog-ux-consistency
+    paths:
+      - 'custom_components/jw_daily_hydration_log/**'
+      - 'tests/**'
+      - 'RELEASE_NOTES_v1.1.0-beta.34.md'
+      - '.github/workflows/publish-v1.1.0-beta.34.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: jwdhl-beta34-release
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Full historical storage, migration, workbook and source QA
+        run: |
+          python -m compileall -q custom_components/jw_daily_hydration_log
+          python tests/qa_beta30.py
+          python tests/qa_beta31.py
+          python tests/migration_v3_preflight_qa.py
+          python tests/migration_v3_storage_qa.py
+          python tests/beta32_excel_contract_qa.py
+          node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
+      - name: Chromium settings and deletion regression
+        run: |
+          python -m pip install --disable-pip-version-check playwright
+          python -m playwright install --with-deps chromium
+          python tests/browser_beta31.py
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+  hassfest:
+    name: Hassfest integration validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+  publish:
+    name: Publish verified beta34 prerelease, ZIP and SHA256
+    needs: [native, hacs, hassfest]
+    if: github.repository == 'iamjwk1/jwDaily-Hydration-Log' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify full HACS ZIP and checksum
+        run: |
+          python - <<'PY_ZIP'
+          from pathlib import Path
+          import hashlib,json,zipfile
+          version='1.1.0-beta.34'
+          assert json.loads(Path('custom_components/jw_daily_hydration_log/manifest.json').read_text())['version']==version
+          root=Path('custom_components/jw_daily_hydration_log')
+          assert version in (root/'const.py').read_text()
+          assert version in (root/'www/jwdaily-hydration-log-card.js').read_text()
+          name='20261113 jwDaily Hydration Log v1.1.0-beta.34.zip'
+          required=['CHANGELOG.md','LICENSE','LICENSE-UPSTREAM-MIT','README.md',
+                    'RELEASE_NOTES_v1.1.0-beta.34.md','hacs.json']
+          members=required + [p.as_posix() for p in root.rglob('*')
+                    if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc']
+          members=sorted(set(members))
+          assert len(members)>=20,(len(members),members)
+          with zipfile.ZipFile(name,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as out:
+              for member in members:
+                  item=zipfile.ZipInfo(member,date_time=(2026,11,13,14,0,0))
+                  item.compress_type=zipfile.ZIP_DEFLATED
+                  item.external_attr=0o644<<16
+                  out.writestr(item,Path(member).read_bytes())
+          with zipfile.ZipFile(name) as verify:
+              assert verify.testzip() is None
+              assert verify.namelist()==members
+              assert all(verify.read(p)==Path(p).read_bytes() for p in members)
+          path=Path(name)
+          assert path.stat().st_size>50000
+          digest=hashlib.sha256(path.read_bytes()).hexdigest()
+          Path(name+'.sha256').write_text(f'{digest}  {name}\n')
+          print('RELEASE_ZIP_QA_PASS',name,path.stat().st_size,digest,'CRC_OK')
+          PY_ZIP
+      - name: Publish GitHub prerelease without overwriting existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view 'v1.1.0-beta.34' >/dev/null 2>&1; then
+            echo 'Existing beta32 release detected; refuse to overwrite.'
+            exit 1
+          fi
+          gh release create 'v1.1.0-beta.34' \
+            --target "$GITHUB_SHA" \
+            --title 'jwDaily Hydration Log v1.1.0-beta.34' \
+            --notes-file 'RELEASE_NOTES_v1.1.0-beta.34.md' \
+            --prerelease \
+            '20261113 jwDaily Hydration Log v1.1.0-beta.34.zip' \
+            '20261113 jwDaily Hydration Log v1.1.0-beta.34.zip.sha256'
+          gh release view 'v1.1.0-beta.34' --json url,tagName,isPrerelease
+      - name: Hand off exact validated ZIP to File Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta34-verified-file-library
+          path: '20261113 jwDaily Hydration Log v1.1.0-beta.34.zip'
+          if-no-files-found: error
+          retention-days: 30

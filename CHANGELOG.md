@@ -1,3 +1,9 @@
+## v1.1.0-beta.34 (2026-11-13)
+- Uniform Cup/Liquid/Quick type manager rows with per-type drink usage counters; all buttons in one aligned action group.
+- Responsive compact dialogs and consistent headers, Back/Add footer and separate Add/Edit/Delete confirmation overlays.
+- Profile-scoped Quick-button manager reachable from Edit Profile; profile row alignment corrected to reference.
+- No ledger, catalog schema, Excel structure, baseline migration backup or legacy-data cleanup changes.
+
 ## v1.1.0-beta.33 (2026-11-13)
 - Fix Migration v3 buttons: Check migration status and Download pre-migration ZIP now reach their WebSocket handlers.
 - Keep guarded rollback disabled until the original backup is independently verified; never trigger rollback during checks.
