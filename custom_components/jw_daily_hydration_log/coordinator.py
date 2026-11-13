@@ -21,7 +21,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util, slugify
 
-from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount, default_liquid_color
+from .const import DOMAIN, SIGNAL, LIQUID_TYPES, to_ml, target_ml, safe_amount, default_liquid_color, historical_default_target_ml
 
 
 def _local_timestamp(hass: HomeAssistant, day: str | None, clock: str | None) -> str:
@@ -135,12 +135,15 @@ class HydrationCoordinator:
         self.slug = slugify(self.name)
         self.age = int(cfg.get('age', 30))
         self.gender = cfg.get('gender', 'male')
-        self.pregnancy = bool(cfg.get('pregnancy', False))
-        self.lactation = bool(cfg.get('lactation', False))
-        self.source_sensor = cfg.get('source_sensor') or None
-        self.source_mode = cfg.get('source_mode', 'absolute')
+        # These legacy attributes are inert during Release 1 and are not exposed
+        # as settings. Historical source data stays available for rollback.
+        self.pregnancy = False
+        self.lactation = False
+        self.source_sensor = None
+        self.source_mode = 'delta'
         self.unit = cfg.get('unit', 'mL')
         self.target_override_ml = 0.0
+        self._target_v3_initialized = False
         self.consumed_ml = 0.0
         self.manual_consumed_ml = 0.0
         self.last_reset_date = self._today()
@@ -160,6 +163,8 @@ class HydrationCoordinator:
         # Native v2 profile-scoped Cup and Quick catalogs.
         self.cup_types: list[dict[str, Any]] = []
         self.quick_buttons: list[dict[str, Any]] = []
+        self._global_catalog_v3 = None
+        self._global_catalog_sha256 = None
         self.data_model_version: int = 2
         self.profile_display_name: str = self.name
 
@@ -178,7 +183,7 @@ class HydrationCoordinator:
 
     @property
     def target_ml(self) -> int:
-        return round(self.target_override_ml) if self.target_override_ml > 0 else target_ml(self.age,self.gender,self.pregnancy,self.lactation)
+        return round(self.target_override_ml) if self.target_override_ml > 0 else 2000
 
     @property
     def remaining_ml(self) -> float:
@@ -332,6 +337,22 @@ class HydrationCoordinator:
             self.manual_consumed_ml = float(saved.get('manual_consumed_ml',0.0))
             self.last_reset_date = saved.get('last_reset_date', self._today())
             self.target_override_ml = float(saved.get('target_override_ml',0.0))
+            self._target_v3_initialized = bool(saved.get('profile_target_model_v3',False))
+            if not self._target_v3_initialized and self.target_override_ml == 0:
+                cfg={**self.entry.data,**self.entry.options}
+                old_goal=historical_default_target_ml(
+                    self.age,self.gender,
+                    bool(cfg.get('pregnancy',False)),bool(cfg.get('lactation',False)))
+                # Original HA Store has already been copied into the immutable
+                # v3 migration archive before coordinator initialization.
+                self.target_override_ml=float(old_goal)
+                self._target_v3_initialized=True
+                saved['target_override_ml']=self.target_override_ml
+                saved['profile_target_model_v3']=True
+                await self._store.async_save(saved)
+                verified=await self._store.async_load()
+                if verified != saved:
+                    raise ValueError('Historical target migration readback failed')
             self._last_source_value = saved.get('last_source_value')
             self._source_baseline_ml = float(saved.get('source_baseline',0.0))
             self.records = list(saved.get('records',[]))
@@ -604,7 +625,7 @@ class HydrationCoordinator:
             self._dispatch()
 
     async def _save(self) -> None:
-        await self._store.async_save(dict(consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
+        payload=dict(consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
             last_reset_date=self.last_reset_date,target_override_ml=self.target_override_ml,
             last_source_value=self._last_source_value,source_baseline=self._source_baseline_ml,
             records=self.records,source_readings=self.source_readings,daily_archive=self.daily_archive,
@@ -615,7 +636,21 @@ class HydrationCoordinator:
             hidden_builtin_liquids=self.hidden_builtin_liquids,
             cup_types=self.cup_types, quick_buttons=self.quick_buttons,
             data_model_version=self.data_model_version,
-            profile_display_name=self.profile_display_name))
+            profile_display_name=self.profile_display_name,
+            profile_target_model_v3=True)
+        # Preserve unknown legacy profile fields during Release 1. Only the
+        # subsequent cleanup release may retire these after successful migration.
+        original=await self._store.async_load()
+        if original is not None:
+            if not isinstance(original,dict):
+                raise ValueError('Profile storage has an unexpected format')
+            payload={**original,**payload}
+        # Release 1 retains every legacy field/copy for reversible migration.
+        catalog=getattr(self, '_global_catalog_v3', None)
+        if catalog is None:
+            await self._store.async_save(payload)
+        else:
+            await catalog.async_save(self,payload)
 
     @callback
     def _dispatch(self) -> None:
@@ -639,8 +674,12 @@ class HydrationCoordinator:
                 for key, name, icon in _BUILTIN_LIQUIDS]
         for item in base:
             item.update(self.liquid_overrides.get(item['id'], {}))
-        items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
+        items = base + [dict(item, hidden=bool(item.get('hidden',False))) for item in self.custom_liquid_types]
         for item in items:
+            mgr=self._global_catalog_v3
+            if mgr:
+                item['drink_count_all_profiles']=mgr.liquid_use_count(item['id'])
+                item['can_delete']=bool(item.get('custom')) and item['drink_count_all_profiles']==0
             ident = item['id']
             item['color_override'] = self.liquid_colors.get(ident)
             item['color'] = self.liquid_color(ident, item['name'])
@@ -674,7 +713,7 @@ class HydrationCoordinator:
                 raise ValueError('Liquid name already exists')
             item = dict(id='custom_' + uuid4().hex[:12], name=name,
                         icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
-                        icon_svg=icon_svg, custom=True)
+                        icon_svg=icon_svg, custom=True, hidden=False)
             self.custom_liquid_types.append(item)
             if selected_color:
                 self.liquid_colors[item['id']] = selected_color
@@ -684,6 +723,19 @@ class HydrationCoordinator:
             self._dispatch()
             return dict(item)
 
+    async def async_set_custom_liquid_visibility(self, liquid_type: str,
+                                                visible: bool) -> dict:
+        if type(visible) is not bool:
+            raise ValueError('Expected boolean visibility')
+        async with self._lock:
+            item=next((t for t in self.custom_liquid_types if t['id']==liquid_type),None)
+            if item is None:
+                raise ValueError('Custom liquid type not found')
+            item['hidden']=not visible
+            await self._save()
+            self._dispatch()
+            return next(t for t in self.get_liquid_definitions() if t['id']==liquid_type)
+
     async def async_delete_liquid_type(self, liquid_type: str) -> None:
         async with self._lock:
             item = next((x for x in self.custom_liquid_types if x['id'] == liquid_type), None)
@@ -691,7 +743,7 @@ class HydrationCoordinator:
                 raise ValueError('Custom liquid not found')
             if any(x.get('kind') == 'drink' and x.get('liquid_type_id') == liquid_type for x in self.records):
                 raise ValueError('This liquid is used in drink history and cannot be deleted')
-            if any(q.get('liquid_type_id') == liquid_type for q in self.quick_buttons):
+            if self._global_catalog_v3 is None and any(q.get('liquid_type_id') == liquid_type for q in self.quick_buttons):
                 raise ValueError('This liquid is used by Quick buttons; hide it instead')
             self.custom_liquid_types.remove(item)
             self.liquid_order = [key for key in self.liquid_order if key != liquid_type]
@@ -796,7 +848,16 @@ class HydrationCoordinator:
                                       for q in self.quick_buttons)
 
     def get_cup_types(self) -> list[dict]:
-        return [dict(c) for c in self.cup_types]
+        mgr=self._global_catalog_v3
+        result=[]
+        for cup in self.cup_types:
+            item=dict(cup)
+            item['drink_count_all_profiles']=(mgr.cup_use_count(cup['id']) if mgr
+                else sum(r.get('kind')=='drink' and r.get('cup_type_id')==cup['id']
+                         for r in self.records))
+            item['can_delete']=item['drink_count_all_profiles']==0
+            result.append(item)
+        return result
 
     def get_quick_buttons(self) -> list[dict]:
         liquid_names = {x['id']: x['name'] for x in self.get_liquid_definitions()}
@@ -819,10 +880,20 @@ class HydrationCoordinator:
     async def async_manage_cup(self, action: str, cup_id: str = '', name: str = '',
                                volume_ml: float | None = None, icon_mdi: str = '',
                                order: list[str] | None = None) -> list[dict]:
-        if action not in ('add', 'update', 'hide', 'restore', 'reorder'):
+        if action not in ('add', 'update', 'hide', 'restore', 'reorder', 'delete'):
             raise ValueError('Invalid cup action')
         async with self._lock:
-            if action == 'reorder':
+            if action == 'delete':
+                cup = next((c for c in self.cup_types if c['id'] == cup_id), None)
+                if cup is None:
+                    raise ValueError('Cup type not found')
+                if any(r.get('kind')=='drink' and r.get('cup_type_id')==cup_id
+                       for r in self.records):
+                    raise ValueError('Cup is used in drink history; hide it')
+                if self._global_catalog_v3 is None and any(q.get('cup_type_id')==cup_id for q in self.quick_buttons):
+                    raise ValueError('Cup is used by Quick buttons; hide it')
+                self.cup_types = [c for c in self.cup_types if c['id'] != cup_id]
+            elif action == 'reorder':
                 if not isinstance(order, list) or set(order) != {c['id'] for c in self.cup_types} or len(order) != len(self.cup_types):
                     raise ValueError('Cup order must include every cup exactly once')
                 lookup = {c['id']: c for c in self.cup_types}
@@ -867,23 +938,19 @@ class HydrationCoordinator:
                 item = next((q for q in self.quick_buttons if q['id'] == quick_id), None)
                 if item is None:
                     raise ValueError('Quick button not found')
-                # This removes ONLY the shortcut. Preserve historical Liquid, Cup,
-                # timestamps, volumes and a human-readable button label.
-                label = next(q['label'] for q in self.get_quick_buttons()
-                             if q['id'] == quick_id)
+                # Historical ledger is immutable. A retired shortcut ID may
+                # remain referenced by an older drink; that is provenance,
+                # not an active profile preference.
                 previous_buttons = deepcopy(self.quick_buttons)
-                previous_records = deepcopy(self.records)
+                previous_records_digest = digest(self.records)
                 try:
-                    for record in self.records:
-                        if record.get('kind') == 'drink' and record.get('quick_button_id') == quick_id:
-                            record.setdefault('quick_button_label_at_log', label)
-                            record.pop('quick_button_id', None)
                     self.quick_buttons = [q for q in self.quick_buttons if q['id'] != quick_id]
                     await self._save()
                 except Exception:
                     self.quick_buttons = previous_buttons
-                    self.records = previous_records
                     raise
+                if digest(self.records) != previous_records_digest:
+                    raise ValueError('Quick deletion unexpectedly modified drink history')
                 self._dispatch()
                 return self.get_quick_buttons()
             if action == 'reorder':
@@ -973,6 +1040,38 @@ class HydrationCoordinator:
                                          for r in self.records]
             self._dispatch()
             return settings_preview(self,cleaned)
+
+    async def async_update_profile_identity_target(self, name: str, target: float) -> dict:
+        """Commit display name and personal goal in one recoverable profile write.
+
+        Existing drink records and archived daily target snapshots are preserved.
+        """
+        name=self._catalog_name(name,'Profile display name')
+        if not isinstance(target,(int,float)) or not math.isfinite(target) or not 1<=target<=100000:
+            raise ValueError('Invalid daily target')
+        async with self._lock:
+            old_name=self.name
+            old_target=self.target_override_ml
+            old_records=deepcopy(self.records)
+            old_sha=digest(old_records)
+            try:
+                self.name=self.profile_display_name=name
+                if round(target)!=self.target_ml:
+                    self.target_override_ml=float(target)
+                    self.records.append(self._entry('set_target','profile_settings',
+                        self.consumed_ml,self.target_override_ml,
+                        details={'old_target_ml':round(old_target) if old_target>0 else 2000,
+                                 'new_target_ml':self.target_ml}))
+                await self._save()
+            except Exception:
+                self.name=self.profile_display_name=old_name
+                self.target_override_ml=old_target
+                self.records=old_records
+                raise
+            self._dispatch()
+            return {'name':name,'target_ml':self.target_ml,
+                    'old_history_sha256':old_sha,
+                    'records_before':len(old_records),'records_after':len(self.records)}
 
     async def async_set_display_name(self, name: str) -> dict:
         label=self._catalog_name(name,'Profile display name')
@@ -1173,18 +1272,11 @@ class HydrationCoordinator:
     def _validate_restored_preferences(self, raw: dict) -> dict:
         if not isinstance(raw, dict):
             raise ValueError('Full backup is missing profile preferences')
-        value = {key: raw.get(key) for key in ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')}
+        value = {key: raw.get(key) for key in ('age','gender','unit')}
         if type(value['age']) is not int or not 1 <= value['age'] <= 120:
             raise ValueError('Invalid profile age')
         if value['gender'] not in ('male', 'female') or value['unit'] not in ('mL','L','fl_oz'):
             raise ValueError('Invalid profile gender or unit')
-        if value['source_mode'] not in ('absolute','sum','delta'):
-            raise ValueError('Invalid profile source mode')
-        if type(value['pregnancy']) is not bool or type(value['lactation']) is not bool:
-            raise ValueError('Invalid profile options')
-        if value['source_sensor'] is not None and (not isinstance(value['source_sensor'],str) or
-            len(value['source_sensor']) > 255):
-            raise ValueError('Invalid source sensor')
         return value
 
     def full_restore_preview(self, raw_settings: dict, raw_data: dict, archive_digest: str) -> dict:
@@ -1216,7 +1308,7 @@ class HydrationCoordinator:
                 raise ValueError('Full backup or profile changed since preview')
             old_settings, old_data = extract(self), data_io.extract(self)
             old_version = self.data_model_version
-            old_pref = {k:getattr(self,k) for k in ('age','gender','pregnancy','lactation','unit','source_mode','source_sensor')}
+            old_pref = {k:getattr(self,k) for k in ('age','gender','unit')}
             old_options = dict(self.entry.options)
             try:
                 for k,v in preferences.items():setattr(self,k,v)
@@ -1245,7 +1337,7 @@ class HydrationCoordinator:
                         settings_revision=self.settings_revision(), data_revision=self.data_revision())
 
     def export_snapshot(self) -> dict:
-        cfg = {key: getattr(self,key) for key in ('name','age','gender','pregnancy','lactation','source_sensor','source_mode','unit')}
+        cfg = {key: getattr(self,key) for key in ('name','age','gender','unit')}
         return dict(entry_id=self.entry_id,slug=self.slug,config=cfg,date=self.last_reset_date,
                     consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
                     target_ml=self.target_ml,source_contribution_ml=self.source_contribution_ml,

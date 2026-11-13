@@ -18,6 +18,9 @@ jobs:
           python -m compileall -q custom_components/jw_daily_hydration_log
           python tests/qa_beta30.py
           python tests/qa_beta31.py
+          python tests/migration_v3_preflight_qa.py
+          python tests/migration_v3_storage_qa.py
+          python tests/beta32_excel_contract_qa.py
           node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
       - name: Actual Chromium settings and Delete/Cancel regression
         run: |

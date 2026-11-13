@@ -7,6 +7,7 @@ import hashlib
 import logging
 import math
 from copy import deepcopy
+from datetime import datetime, timezone
 from homeassistant.helpers.storage import Store
 from . import data_io
 from .settings_io import (FORMAT as SETTINGS_FORMAT, export_payload, parse_settings_json,
@@ -22,6 +23,7 @@ from homeassistant.util import slugify
 
 from .const import DOMAIN, EVENT_DRINK, PLATFORMS, UNITS, LIQUID_TYPES, VERSION
 from .coordinator import HydrationCoordinator
+from .global_catalog_v3 import GlobalCatalogV3
 from .excel import export_xlsx, export_filename
 from .frontend import async_register_frontend
 
@@ -109,6 +111,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_delete_liquid_type)
     websocket_api.async_register_command(hass,ws_update_liquid_type)
     websocket_api.async_register_command(hass,ws_set_builtin_liquid_visibility)
+    websocket_api.async_register_command(hass,ws_set_custom_liquid_visibility)
     websocket_api.async_register_command(hass,ws_set_liquid_order)
     websocket_api.async_register_command(hass,ws_manage_cup)
     websocket_api.async_register_command(hass,ws_manage_quick)
@@ -126,13 +129,24 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass,ws_full_preview)
     websocket_api.async_register_command(hass,ws_full_apply)
     websocket_api.async_register_command(hass,ws_export)
+    websocket_api.async_register_command(hass,ws_migration_status)
+    websocket_api.async_register_command(hass,ws_migration_backup_export)
+    websocket_api.async_register_command(hass,ws_migration_rollback)
     return True
 
 
 async def async_setup_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     await async_register_frontend(hass)
+    # Singleton initialization serializes all profiles and creates a full,
+    # immutable migration backup before the first v3 catalog write.
+    data=hass.data.setdefault(DOMAIN,{'profiles':{}})
+    manager=data.get('global_catalog_v3')
+    if manager is None:
+        manager=data['global_catalog_v3']=GlobalCatalogV3(hass)
+    await manager.async_initialize()
     c=HydrationCoordinator(hass,entry)
     await c.async_initialize()
+    await manager.async_attach(c)
     _profiles(hass)[entry.entry_id]=c
     # Retire only the old v1.0.2 pace entity for this exact config entry.
     from homeassistant.helpers import entity_registry as er
@@ -154,6 +168,8 @@ async def async_unload_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     if ok:
         coordinator=_profiles(hass).pop(entry.entry_id,None)
         if coordinator:
+            manager=hass.data.get(DOMAIN,{}).get('global_catalog_v3')
+            if manager:manager.detach(coordinator)
             await coordinator.async_shutdown()
     return ok
 
@@ -194,7 +210,7 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'today_breakdown':c.today_breakdown(),
         'cup_types':c.get_cup_types(), 'quick_buttons':c.get_quick_buttons(),
         'profile_settings':dict(name=c.name,age=c.age,gender=c.gender,unit=c.unit,
-                                source_mode=c.source_mode),
+                                daily_target_ml=c.target_ml),
         'data_model_version':c.data_model_version, 
         'backend_version':VERSION,
     })
@@ -327,6 +343,21 @@ async def ws_set_builtin_liquid_visibility(hass:HomeAssistant,connection:websock
         connection.send_error(msg['id'],'invalid_builtin_visibility',str(exc))
         return
     connection.send_result(msg['id'],item)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/set_custom_liquid_visibility',
+                                  probatio.Required('profile'):str,
+                                  probatio.Required('liquid_type'):str,
+                                  probatio.Required('visible'):bool})
+@websocket_api.async_response
+async def ws_set_custom_liquid_visibility(hass,connection,msg):
+    try:
+        c=_resolve(hass,msg['profile'])
+        item=await c.async_set_custom_liquid_visibility(msg['liquid_type'],msg['visible'])
+        connection.send_result(msg['id'],item)
+    except (ValueError,ServiceValidationError) as exc:
+        connection.send_error(msg['id'],'invalid_custom_visibility',str(exc))
 
 
 @websocket_api.require_admin
@@ -485,8 +516,6 @@ async def ws_settings_apply(hass, connection, msg):
 def ws_profiles_list(hass, connection, msg):
     connection.send_result(msg['id'],{'profiles':[dict(entry_id=c.entry_id,slug=c.slug,
             name=c.name,age=c.age,gender=c.gender,unit=c.unit,
-            pregnancy=c.pregnancy,lactation=c.lactation,
-            source_sensor=c.source_sensor or '',source_mode=c.source_mode,
             daily_target_ml=c.target_ml) for c in _profiles(hass).values()]})
 
 
@@ -497,29 +526,26 @@ def ws_profiles_list(hass, connection, msg):
                                   probatio.Required('age'):int,
                                   probatio.Required('gender'):str,
                                   probatio.Required('unit'):str,
-                                  probatio.Optional('pregnancy'):bool,
-                                  probatio.Optional('lactation'):bool,
-                                  probatio.Optional('source_sensor'):str,
-                                  probatio.Optional('source_mode'):str})
+                                  probatio.Optional('daily_target_ml'):float})
 @websocket_api.async_response
 async def ws_profile_edit(hass, connection, msg):
     try:
         c=_resolve(hass,msg['profile'])
-        if not 1<=msg['age']<=120 or msg['gender'] not in ('male','female') or msg['unit'] not in UNITS:
+        if not 1 <= msg['age'] <= 120 or msg['gender'] not in ('male','female') or msg['unit'] not in UNITS:
             raise ValueError('Invalid age, gender or measurement unit')
-        mode=msg.get('source_mode',c.source_mode)
-        if mode not in ('absolute','delta','sum'):raise ValueError('Invalid source mode')
+        goal=float(msg.get('daily_target_ml',c.target_ml))
+        if not math.isfinite(goal) or not 1 <= goal <= 100000:
+            raise ValueError('Daily target must be between 1 and 100000 mL')
         name=c._catalog_name(msg['name'],'Profile name')
-        await c.async_set_display_name(name)
-        old={**c.entry.data,**c.entry.options}
-        opts={**c.entry.options,**{key:msg[key] for key in
-            ('age','gender','unit','pregnancy','lactation','source_sensor') if key in msg},
-            'source_mode':mode}
-        if any(old.get(k)!=v for k,v in opts.items()):
+        # Home Assistant options are updated only after one successful
+        # transactional target/name save; no partially persisted goal event.
+        old_options=dict(c.entry.options)
+        opts={**c.entry.options,**{k:msg[k] for k in ('age','gender','unit')}}
+        await c.async_update_profile_identity_target(name,goal)
+        if opts!=old_options or c.entry.title!=name:
             hass.config_entries.async_update_entry(c.entry,options=opts,title=name)
-        else:
-            hass.config_entries.async_update_entry(c.entry,title=name)
         connection.send_result(msg['id'],dict(updated=True,name=name,slug=c.slug,
+                                                daily_target_ml=c.target_ml,
                                                 stable_entry_id=c.entry_id))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'profile_edit_failed',str(exc))
@@ -532,8 +558,7 @@ async def ws_profile_edit(hass, connection, msg):
                                   probatio.Required('gender'):str,
                                   probatio.Required('unit'):str,
                                   probatio.Optional('copy_from'):str,
-                                  probatio.Optional('pregnancy'):bool,
-                                  probatio.Optional('lactation'):bool})
+                                  probatio.Optional('daily_target_ml'):float})
 @websocket_api.async_response
 async def ws_profile_create(hass, connection, msg):
     try:
@@ -543,32 +568,35 @@ async def ws_profile_create(hass, connection, msg):
             raise ValueError('Invalid or duplicate profile name')
         if not 1<=msg['age']<=120 or msg['gender'] not in ('male','female') or msg['unit'] not in UNITS:
             raise ValueError('Invalid profile age, gender or unit')
+        goal=float(msg.get('daily_target_ml',2000))
+        if not math.isfinite(goal) or not 1<=goal<=100000:
+            raise ValueError('Daily target must be between 1 and 100000 mL')
         template=_resolve(hass,msg['copy_from']) if msg.get('copy_from') else None
-        data=dict(name=name,age=msg['age'],gender=msg['gender'],unit=msg['unit'],
-                  pregnancy=bool(msg.get('pregnancy',False)),lactation=bool(msg.get('lactation',False)),
-                  source_mode='absolute')
-        # Home Assistant's native config flow owns config-entry registration.
+        data=dict(name=name,age=msg['age'],gender=msg['gender'],unit=msg['unit'])
         result=await hass.config_entries.flow.async_init(DOMAIN,
                     context={'source':'user'},data=data)
         if result.get('type')!='create_entry' or not result.get('result'):
             raise ValueError('Could not create profile through Home Assistant config flow')
         entry=result['result']
+        # Keep profile history separate, even when catalog definitions are copied.
+        store=Store(hass,1,f'{DOMAIN}.{entry.entry_id}')
+        current=await store.async_load() or {}
+        if current.get('records') or current.get('source_readings'):
+            raise ValueError('New profile unexpectedly contains historical records')
         if template:
-            settings=extract(template)
-            # A new profile copies only the native Liquid/Cup/Quick catalogs.
-            # A fresh profile has no history; each profile owns its own settings copy.
-            store=Store(hass,1,f'{DOMAIN}.{entry.entry_id}')
-            current=await store.async_load() or {}
-            if current.get('records') or current.get('source_readings'):
-                raise ValueError('New profile already contains observations; not copying settings')
-            current.update(deepcopy(settings))
-            current['target_override_ml']=0.0  # Personal target never copied.
-            await store.async_save(current)
-            # Load the copied setup if the new entry was already initialized.
-            if entry.entry_id in _profiles(hass):
-                await hass.config_entries.async_reload(entry.entry_id)
+            current.update(deepcopy(extract(template)))
+        current['profile_target_model_v3']=True
+        current['data_model_version']=2
+        current['profile_display_name']=name
+        current['target_override_ml']=float(goal) if round(goal)!=2000 else 0.0
+        await store.async_save(current)
+        verified=await store.async_load()
+        if verified!=current:raise ValueError('Profile initialization readback failed')
+        if entry.entry_id in _profiles(hass):
+            await hass.config_entries.async_reload(entry.entry_id)
         connection.send_result(msg['id'],dict(created=True,slug=slug,
-            entry_id=entry.entry_id,copied_settings=bool(template),history_copied=False))
+            entry_id=entry.entry_id,copied_settings=bool(template),history_copied=False,
+            daily_target_ml=round(goal)))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'profile_create_failed',str(exc))
 
@@ -706,7 +734,62 @@ async def ws_export(hass:HomeAssistant,connection:websocket_api.ActiveConnection
         _LOGGER.exception('Failed to create hydration Excel workbook')
         connection.send_error(msg['id'],'export_failed','Excel export failed; see Home Assistant logs')
         return
-    connection.send_result(msg['id'],{'filename':export_filename(hass.config.time_zone),
+    connection.send_result(msg['id'],{'filename':export_filename(hass.config.time_zone,profile_name=selected[0].name if msg.get('profile') else None),
                                       'mime_type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                       'base64':base64.b64encode(workbook).decode('ascii'),
                                       'bytes':len(workbook), 'version':VERSION})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_status'})
+@websocket_api.async_response
+async def ws_migration_status(hass,connection,msg):
+    try:
+        manager=hass.data[DOMAIN]['global_catalog_v3']
+        state=manager.state
+        backup=await manager._backup.async_load()
+        source_valid=(bool(backup) and backup.get('format')=='jwDaily-Hydration-Log-v3-source-backup'
+                      and hashlib.sha256(canonical(backup.get('profiles'))).hexdigest()==backup.get('source_sha256'))
+        connection.send_result(msg['id'],{
+            'status':state.get('status'),'schema':state.get('schema'),
+            'catalog_sha256':state.get('catalog_sha256'),
+            'backup_sha256':backup.get('source_sha256') if source_valid else None,
+            'backup_verified':source_valid,
+            'profile_count':len(manager.profile_snapshots)})
+    except (ValueError,KeyError) as exc:
+        connection.send_error(msg['id'],'migration_status_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_backup_export'})
+@websocket_api.async_response
+async def ws_migration_backup_export(hass,connection,msg):
+    try:
+        manager=hass.data[DOMAIN]['global_catalog_v3']
+        raw,manifest=await manager.async_export_baseline_backup()
+        filename=f'{datetime.now(timezone.utc):%Y%m%d-%H%M} jwDaily Hydration Log - Pre Migration Backup v3.zip'
+        connection.send_result(msg['id'],{
+            'filename':filename,'mime_type':'application/zip',
+            'base64':base64.b64encode(raw).decode('ascii'),
+            'sha256':hashlib.sha256(raw).hexdigest(),
+            'bytes':len(raw),'source_sha256':manifest['source_sha256']})
+    except (ValueError,KeyError) as exc:
+        connection.send_error(msg['id'],'migration_backup_failed',str(exc))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/migration_rollback',
+                                  probatio.Required('catalog_sha256'):str,
+                                  probatio.Required('confirm'):bool})
+@websocket_api.async_response
+async def ws_migration_rollback(hass,connection,msg):
+    try:
+        if msg['confirm'] is not True:
+            raise ValueError('Explicit rollback confirmation required')
+        manager=hass.data[DOMAIN]['global_catalog_v3']
+        result=await manager.async_rollback_to_local(msg['catalog_sha256'])
+        connection.send_result(msg['id'],{**result,
+            'restart_required':True,
+            'message':'Shared catalog disabled. Restore the prior release before restarting Home Assistant.'})
+    except (ValueError,KeyError) as exc:
+        connection.send_error(msg['id'],'migration_rollback_failed',str(exc))

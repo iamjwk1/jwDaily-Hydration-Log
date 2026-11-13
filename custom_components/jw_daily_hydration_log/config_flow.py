@@ -6,7 +6,7 @@ from homeassistant import config_entries
 from homeassistant.helpers import selector
 from homeassistant.util import slugify
 from homeassistant.core import callback
-from .const import DOMAIN, SOURCE_MODES,UNITS
+from .const import DOMAIN, UNITS
 
 
 def _schema(existing: dict | None = None, with_name: bool = True):
@@ -16,13 +16,6 @@ def _schema(existing: dict | None = None, with_name: bool = True):
         fields[vol.Required('name',default=d.get('name',''))]=str
     fields[vol.Required('age',default=d.get('age',30))]=selector.NumberSelector(selector.NumberSelectorConfig(min=1,max=120,step=1,mode='box'))
     fields[vol.Required('gender',default=d.get('gender','male'))]=selector.SelectSelector(selector.SelectSelectorConfig(options=['male','female'],mode='dropdown'))
-    fields[vol.Optional('pregnancy',default=d.get('pregnancy',False))]=bool
-    fields[vol.Optional('lactation',default=d.get('lactation',False))]=bool
-    if d.get('source_sensor'):
-        fields[vol.Optional('source_sensor',default=d['source_sensor'])]=selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
-    else:
-        fields[vol.Optional('source_sensor')]=selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
-    fields[vol.Required('source_mode',default=d.get('source_mode','absolute'))]=selector.SelectSelector(selector.SelectSelectorConfig(options=list(SOURCE_MODES),mode='dropdown'))
     fields[vol.Required('unit',default=d.get('unit','mL'))]=selector.SelectSelector(selector.SelectSelectorConfig(options=[selector.SelectOptionDict(value='mL',label='Millilitres (mL)'),selector.SelectOptionDict(value='L',label='Litres (L)'),selector.SelectOptionDict(value='fl_oz',label='Fluid ounces (fl oz)')],mode='dropdown'))
     return vol.Schema(fields)
 

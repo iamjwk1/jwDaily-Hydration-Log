@@ -21,8 +21,9 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color
+from .excel_icons import drawing_parts
 
-VERSION = '1.1.0-beta.30'
+VERSION = '1.1.0-beta.32'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -35,13 +36,18 @@ THEME = zlib.decompress(base64.b64decode(_THEME_Z))
 _BUILTIN = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 
 
-def export_filename(timezone_name: str = 'Europe/Amsterdam', when: datetime | None = None) -> str:
+def export_filename(timezone_name: str = 'Europe/Amsterdam', when: datetime | None = None,
+                    profile_name: str | None = None) -> str:
     try:
         tz = ZoneInfo(timezone_name)
     except (KeyError, ValueError):
         tz = ZoneInfo('UTC')
     local = when.astimezone(tz) if when is not None else datetime.now(tz)
-    return f'{local:%Y%m%d-%H%M} jwDaily Hydration Log - All Data.xlsx'
+    invalid=set('<>:"/|?*')
+    scope=(''.join(ch for ch in str(profile_name)
+                    if ch not in invalid and ch!=chr(92) and ord(ch)>=32).strip()
+           if profile_name else 'All Data')
+    return f'{local:%Y%m%d-%H%M} jwDaily Hydration Log - {scope or "Profile"}.xlsx'
 
 
 def _xml(value) -> str:
@@ -126,7 +132,7 @@ def _cols(widths: list[float]) -> str:
 
 def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | None]]],
                widths: list[float], last_cell: str, last_row: int,
-               table: bool = False) -> bytes:
+               table: bool = False, drawing: bool = False) -> bytes:
     """Preformatted worksheet with reference workbook's B2 headings and B11 tables."""
     parts=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -137,7 +143,7 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
     for row in sorted(rows):
-        rowheight=(' ht="44" customHeight="1"' if index==2 else ' ht="34" customHeight="1"') if row==11 and index in (1,2) else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')
+        rowheight=(' ht="44" customHeight="1"' if index==3 and row>=2 else (' ht="44" customHeight="1"' if index==1 and row>=11 else (' ht="44" customHeight="1"' if index==2 and row==11 else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else ''))))
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
@@ -149,6 +155,8 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     # ECMA-376 worksheet schema: pageMargins MUST precede tableParts.
     # beta.8 reversed these and desktop Excel removed sheets 1 and 2.
     parts.append('<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>')
+    if drawing:
+        parts.append('<drawing r:id="rId1"/>')
     if table:
         parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
     parts.append('</worksheet>')
@@ -158,9 +166,9 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
 def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None) -> bytes:
     """Structured Excel tables, including table filters and header layout."""
     if table_number==1:
-        label='tblHydrationLog'; right='K'
+        label='tblHydrationLog'; right='I'
         headers=['Date+time','Profile','Age','Gender','Target_x000a_(mL)',
-                 'Liquid name','Volume_x000a_(mL)','Cup type','Current Cup default_x000a_(mL)','Quick button']
+                 'Liquid name','Volume_x000a_(mL)','Cup used']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
     else:
         label='tblDailyIntake'
@@ -249,8 +257,23 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
         fmatch = re.search(r'<fills([^>]*)>(.*?)</fills>', original, re.S)
         original = original[:fmatch.start()] + inject(fmatch, ('fills', fill), fill_id + 1) + original[fmatch.end():]
         color_style_ids[color] = style_id
-    ET.fromstring(original)  # XML/namespace check; OOXML structure checked in QA.
-    return original.encode('utf-8'),new_style_id,color_style_ids
+    # Preserve the existing date/time number format while overriding alignment
+    # only for the first worksheet's export date (C4).
+    parsed = ET.fromstring(original)
+    current_xfs = parsed.find(ns+'cellXfs')
+    left_date_style_id = len(current_xfs)
+    left_xf = copy.deepcopy(xfs[4])
+    left_xf.set('applyAlignment','1')
+    alignment=left_xf.find(ns+'alignment')
+    if alignment is None:
+        alignment=ET.SubElement(left_xf,ns+'alignment')
+    alignment.set('horizontal','left')
+    left_style = ET.tostring(left_xf,encoding='unicode').replace('ns0:','').replace(
+        ' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','')
+    match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
+    original=original[:match.start()]+inject(match,('cellXfs',left_style),left_date_style_id+1)+original[match.end():]
+    ET.fromstring(original)
+    return original.encode('utf-8'),new_style_id,color_style_ids,left_date_style_id
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
@@ -278,7 +301,7 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
             result.append((p,_serial(local),cfg['name'],cfg.get('age'),cfg.get('gender'),
                            target_day,definitions[liquid],float(record['volume_ml']),day,liquid,
                            cups.get(cup_id,'') if cup_id else '',
-                           cup_details.get(cup_id,{}).get('default_volume_ml') if cup_id else None,
+                           record.get('cup_default_volume_ml_at_log', cup_details.get(cup_id,{}).get('default_volume_ml')) if cup_id else None,
                            record.get('quick_button_label_at_log') or quick.get(quick_id,quick_id)))
     # Chronological presentation, independent of the original storage order.
     # Stable sorting preserves input order for exact ties.
@@ -302,7 +325,9 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             lid=str(typ.get('id') or '').strip()
             if lid and lid not in current:
                 current[lid]=str(typ.get('name') or lid)
-    ordered_types=[(lid,name,False) for lid,name in current.items()]
+    ordered_types=[(lid,name,False) for lid,name in current.items() if lid != 'other']
+    if 'other' in current:
+        ordered_types.append(('other',current['other'],False))
     if not current:
         ordered_types=[(lid,lid.title(),False) for lid in _BUILTIN]
     liquid_headers=[f'{name}\n(mL)' for _,name,_ in ordered_types]
@@ -319,7 +344,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                      __import__('re').fullmatch(r'#[0-9A-Fa-f]{6}', raw)
                      else default_liquid_color(ident, str(typ.get('name') or ident)))
             export_types.append((p, position, typ, color))
-    styles_xml,fallback_header_style,color_styles = _styles_with_colored_liquid_cells(
+    styles_xml,fallback_header_style,color_styles,left_date_style = _styles_with_colored_liquid_cells(
         [color for _, _, _, color in export_types])
     days=[]
     for p in profiles:
@@ -351,21 +376,21 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         rows={2:[(2,title,2,None)],11:[]}
         for row,(name,value) in enumerate(common_meta,4):
             rows[row]=[(2,name,3 if row==4 else 0,None),
-                       (3,value,(9 if second else 4) if row==4 else (8 if row==7 else 0),None)]
+                       (3,value,(9 if second else left_date_style) if row==4 else (8 if row==7 else 0),None)]
         rows[8]=[(2,count_label,0,None),(3,count_value,8,None)]
         return rows
 
     logrows=summary('Home Assistant jwDaily Hydration log - Hydration log','Drink log rows',len(records))
-    heads=['Date+time','Profile','Age','Gender','Target\n(mL)','Liquid name','Volume\n(mL)',
-           'Cup type','Current Cup default\n(mL)','Quick button']
-    hstyles=[10,11,11,11,11,23,24,11,13,11]
+    heads=['Date+time','Profile','Age','Gender','Target\n(mL)','Liquid name','Volume\n(mL)','Cup used']
+    hstyles=[10,11,11,11,11,23,24,24]
     logrows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(heads,hstyles),2)]
     for rownum,r in enumerate(records,12):
         _,stamp,name,age,gender,target,liquid,volume,_,_,cup_name,cup_default,button_label=r
-        sty=[25,26,27,27,27,26,28,26,28,26]
+        cup_used=(f'{cup_name} ({cup_default:g} mL)' if cup_name and isinstance(cup_default,(int,float)) else cup_name)
+        sty=[25,26,27,27,27,26,28,26]
         if rownum==len(records)+11:
-            sty=[29,30,31,31,31,30,32,30,32,30]
-        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_name,cup_default,button_label],2)]
+            sty=[29,30,31,31,31,30,32,30]
+        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_used],2)]
     if not records:
         logrows[12]=[]
 
@@ -388,20 +413,22 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
 
     # Sheet 3: native Liquid catalogue only; no legacy default volumes or alias columns.
     typesrows={1:[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Liquid ID','Name','MDI Icon','SVG Image','Custom','Liquid order',
+       ['Scope','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image','Custom','Liquid order',
         'Visible in picker','Color','Status','Drink count'],1)]}
-    for p in profiles:
-        cfg=p['config']
+    icon_rows=[]
+    for p in profiles[:1]:
         hist=collections.Counter(str(r.get('liquid_type_id') or 'unknown')
-                                 for r in p.get('records',[]) if r.get('kind')=='drink')
+                                 for subject in profiles for r in subject.get('records',[])
+                                 if r.get('kind')=='drink')
         for _,position,typ,color in (item for item in export_types if item[0] is p):
             ident=typ.get('id','')
             row=len(typesrows)+1
-            vals=[cfg['name'],ident,typ.get('name',''),typ.get('icon_mdi',''),
+            vals=['All profiles',ident,typ.get('name',''),typ.get('icon_mdi',''),None,
                   typ.get('icon_svg',''),bool(typ.get('custom',False)),position,
                   not bool(typ.get('hidden',False)),color,
                   'Hidden' if typ.get('hidden') else 'Active',hist[ident]]
-            typesrows[row]=[(i,value,color_styles.get(color,0) if i==9 else 0,None)
+            icon_rows.append((row,typ.get('icon_mdi',''),color))
+            typesrows[row]=[(i,value,color_styles.get(color,0) if i==10 else 0,None)
                             for i,value in enumerate(vals,1)]
 
     # Sheet 4: current Cup and Quick configuration first, old buttons last.
@@ -409,10 +436,10 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     row=2
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
        ['Profile','Cup ID','Name','Default volume mL','MDI icon','Order','Visible'],1)]
-    for p in profiles:
+    for p in profiles[:1]:
         for pos,cup in enumerate(p.get('cup_types') or [],1):
             row+=1
-            vals=[p['config']['name'],cup.get('id',''),cup.get('name',''),
+            vals=['All profiles',cup.get('id',''),cup.get('name',''),
                   cup.get('default_volume_ml'),cup.get('icon_mdi',''),pos,not cup.get('hidden',False)]
             buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
     row+=3
@@ -436,19 +463,18 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     buttonsrows[row]=[(1,'Profile settings — exported values',2,None)]
     row+=1
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Age','Gender','Unit','Source mode','Source sensor','Daily target mL',
-        'Target override mL','Pregnancy','Lactation'],1)]
+       ['Profile','Age','Gender','Unit','Daily target mL','Target override mL','Quick button count'],1)]
     for p in profiles:
         row+=1
         cfg=p['config']
         values=[cfg.get('name'),cfg.get('age'),cfg.get('gender'),cfg.get('unit'),
-                cfg.get('source_mode'),cfg.get('source_sensor') or '',p.get('target_ml'),
-                p.get('target_override_ml'),cfg.get('pregnancy',False),cfg.get('lactation',False)]
+                p.get('target_ml'),p.get('target_override_ml'),len(p.get('quick_buttons') or [])]
         buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
+    drawing_xml,drawing_rels,icon_images=drawing_parts(icon_rows)
     content=[
-     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,19,16,26],f'K{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25],f'I{max(12,11+len(records))}',max(12,11+len(records)),True),
      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[16,24,22,23,18,13,19,25,15,19,21],f'K{max(1,len(typesrows))}',len(typesrows)),
+     _worksheet(3,typesrows,[16,24,22,23,13,18,13,19,25,15,19,21],f'L{max(1,len(typesrows))}',len(typesrows),drawing=bool(icon_images)),
      _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24],f'L{max(1,max(buttonsrows))}',len(buttonsrows)),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.
@@ -460,7 +486,9 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
           '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="xml" ContentType="application/xml"/>'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+          +( '<Default Extension="png" ContentType="image/png"/>' if icon_images else '' )
+          +( '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' if icon_images else '' )
+          +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
           '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
           '<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
           +''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1,5))
@@ -471,6 +499,16 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         z.writestr('xl/_rels/workbook.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,5))+f'<Relationship Id="rId5" Type="{relbase}styles" Target="styles.xml"/><Relationship Id="rId6" Type="{relbase}theme" Target="theme/theme1.xml"/></Relationships>')
         z.writestr('xl/styles.xml',styles_xml)
         z.writestr('xl/theme/theme1.xml',THEME)
+        if icon_images:
+            z.writestr('xl/drawings/drawing1.xml',drawing_xml)
+            z.writestr('xl/drawings/_rels/drawing1.xml.rels',drawing_rels)
+            for icon_number,png in enumerate(icon_images,1):
+                z.writestr(f'xl/media/liquid{icon_number}.png',png)
+            z.writestr('xl/worksheets/_rels/sheet3.xml.rels',
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
+                '</Relationships>')
         for i,s in enumerate(content,1):
             z.writestr(f'xl/worksheets/sheet{i}.xml',s)
             if i<=2:

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 DOMAIN = 'jw_daily_hydration_log'
 NAME = 'jwDaily Hydration Log'
-VERSION = '1.1.0-beta.31'
+VERSION = '1.1.0-beta.32'
 PLATFORMS = ['sensor', 'number']
 ENTITY_PREFIX = 'jwdhl'
 EVENT_DRINK = 'jw_daily_hydration_log_drink'
@@ -12,20 +12,30 @@ UNITS = ('mL', 'L', 'fl_oz')
 SOURCE_MODES = ('absolute', 'delta', 'sum')
 LIQUID_TYPES = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 
-NASEM_TABLE = ((1,3,None,900),(4,8,None,1200),(9,13,'male',1900),
-               (9,13,'female',1600),(14,18,'male',2600),(14,18,'female',1800),
-               (19,200,'male',3000),(19,200,'female',2200))
+DEFAULT_DAILY_TARGET_ML = 2000
 
 
-def target_ml(age: int, gender: str, pregnancy: bool = False, lactation: bool = False) -> int:
-    if lactation:
-        return 3000
-    if pregnancy:
-        return 2400
-    for min_age, max_age, sex, target in NASEM_TABLE:
-        if min_age <= age <= max_age and (sex is None or sex == gender):
-            return target
-    return 2200
+def historical_default_target_ml(age: int, gender: str,
+                                 pregnancy: bool = False,
+                                 lactation: bool = False) -> int:
+    """Only for one-time migration; never used for new daily targets."""
+    if lactation:return 3000
+    if pregnancy:return 2400
+    if age <= 3:return 900
+    if age <= 8:return 1200
+    if age <= 13:return 1900 if gender=='male' else 1600
+    if age <= 18:return 2600 if gender=='male' else 1800
+    return 3000 if gender=='male' else 2200
+
+
+def target_ml(age: int, gender: str, pregnancy: bool = False,
+              lactation: bool = False) -> int:
+    """New profiles default to 2000 mL/day; legacy signature is retained in beta32.
+
+    No demographic or pregnancy/lactation calculation remains in use.
+    Historical daily archives retain the target recorded on their original date.
+    """
+    return DEFAULT_DAILY_TARGET_ML
 
 
 def to_ml(value: float, unit: str) -> float:

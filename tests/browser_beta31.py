@@ -20,9 +20,9 @@ with sync_playwright() as p:
           const breakdown=[{liquid_type:'coffee',volume_ml:180},{liquid_type:'water',volume_ml:180},{liquid_type:'tea',volume_ml:180},{liquid_type:'milk',volume_ml:360}];
           window.qaHass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_sample_consumed_today':{state:'0.9',attributes:{consumed_ml:900,unit_of_measurement:'L'}},'sensor.jwdhl_sample_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_sample_drink_count_today':{state:'4',attributes:{}},'sensor.jwdhl_sample_manual_consumed':{state:'900',attributes:{manual_consumed_ml:900}}},callWS:async function(msg){window.qaCalls.push(msg);
              if(msg.type.endsWith('/manage_quick')){if(msg.action==='delete'){const ix=quick.findIndex(q=>q.id===msg.quick_id);if(ix<0)throw Error('missing');quick.splice(ix,1);}else if(msg.action==='hide'||msg.action==='restore'){const q=quick.find(q=>q.id===msg.quick_id);q.hidden=msg.action==='hide';q.available=!q.hidden;}return {quick_buttons:quick};}
-             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.31',settings_transfer:true,native_model:true};
-             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.31'};
-             if(msg.type.endsWith('/profiles_list'))return {profiles:[]};
+             if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.32',settings_transfer:true,native_model:true};
+             if(msg.type.endsWith('/history'))return {profile:'sample',date:iso,entries,total_ml:900,count:4,consumed_ml:900,target_ml:2000,day_summary:{date:iso,drink_count:4,consumed_ml:900,target_ml:2000,liquid_breakdown:breakdown},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Sample',age:58,gender:'male',unit:'mL'},data_model_version:2,today_breakdown:breakdown,backend_version:'1.1.0-beta.32'};
+             if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'sample',name:'Sample',age:58,gender:'male',unit:'mL',daily_target_ml:2000},{slug:'second',name:'Second profile',age:35,gender:'female',unit:'mL',daily_target_ml:2400}]};
              return {};
           }};
           window.qaCard=document.createElement('jwdaily-hydration-log-card');window.qaCard.setConfig({profile:'sample',title:'Vocht intake Sample'});window.qaCard.hass=window.qaHass;document.querySelector('#mount').appendChild(window.qaCard);
@@ -38,6 +38,15 @@ with sync_playwright() as p:
         assert rowcup.locator('td').nth(2).inner_text()=='Glazen beker'
         table=root.locator('.history-table table').bounding_box();
         assert table and table['width']>180,(width,table)
+        # Export scope defaults to All profiles; all registered profiles are options.
+        scope=root.locator('select[data-field="export_profile"]')
+        assert scope.count()==1,(width,'export dropdown missing')
+        assert scope.input_value()=='all'
+        assert scope.locator('option').all_text_contents()==['All profiles','Sample','Second profile']
+        assert root.locator('label[for="jwdhl-export-profile"]').inner_text()=='Export hydration data:'
+        scope.select_option('second')
+        assert page.evaluate("window.qaCard._exportProfile")=='second'
+        scope.select_option('all')
         # Four columns occupy stable widths; right volume aligns with right edge.
         xs=[x.bounding_box()['x'] for x in root.locator('.history-table thead th').all()]
         assert xs==sorted(xs),(width,xs)
@@ -80,7 +89,24 @@ with sync_playwright() as p:
         assert page.evaluate("window.qaCalls.filter(c=>c.type.endsWith('/manage_quick')&&c.action==='delete').length")==1
         assert root.locator('.settings-row.quick-settings-row').count()==1
         assert root.locator('.history-table tbody tr').count()==4
+        root.locator('button[data-action="settings-home"]').click()
+        root.locator('button[data-action="settings-page"][data-value="profile"]').click()
+        assert root.locator('.settings-head h3').inner_text()=='Manage profiles'
+        assert root.locator('.settings-section > h3').count()==0
+        assert 'Each profile keeps separate settings and drink history.' in root.locator('.settings-section').inner_text()
+        assert root.locator('button[data-action="settings-profile-edit"]').count()==2
+        assert root.locator('button[data-action="settings-profile-add"]').count()==1
+        assert root.locator('button[data-action="settings-home"]').count()==1
+        root.locator('button[data-action="settings-profile-edit"][data-value="sample"]').click()
+        assert root.locator('[data-field="daily_target_ml"]').input_value()=='2000'
+        for obsolete in ('source_sensor','source_mode','pregnancy','lactation'):
+            assert root.locator('[data-field="'+obsolete+'"]').count()==0,(width,obsolete)
+        assert root.locator('button[data-action="settings-profile-quick"]').count()>=1
+        root.locator('button[data-action="settings-profile-save"]').click()
+        page.wait_for_timeout(80)
+        assert page.evaluate("window.qaCalls.some(c=>c.type.endsWith('/profile_edit')&&c.daily_target_ml===2000)")
         assert not errors,(width,errors)
+        print('BETA32_CHROMIUM_PROFILE_TARGET_EXPORT_SCOPE_PASS',width,'px')
         print('BETA31_CHROMIUM_LAYOUT_AND_DELETE_PASS',width,'px',headers)
         page.close()
     browser.close()
