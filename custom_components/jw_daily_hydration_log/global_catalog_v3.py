@@ -8,6 +8,9 @@ No automatic rollback may replace new drink records with an older backup.
 from __future__ import annotations
 
 import asyncio
+import json
+from io import BytesIO
+from zipfile import ZipFile, ZIP_DEFLATED
 from copy import deepcopy
 from datetime import datetime, timezone
 from homeassistant.helpers.storage import Store
@@ -214,6 +217,8 @@ class GlobalCatalogV3:
     async def async_save(self, coordinator, local_payload):
         """Persist a profile and, when required, the shared catalog transactionally."""
         async with self._write_lock:
+            if self.state.get("status") != "active":
+                raise MigrationBlocked("Migration rollback pending; reload prior version before writing")
             candidate = self._catalog_from(coordinator)
             previous = self.state["catalog"]
             current_revision = self.state["catalog_sha256"]
@@ -294,6 +299,36 @@ class GlobalCatalogV3:
                 bound.quick_buttons = deepcopy(after_profiles[entry_id].get("quick_buttons", []))
                 self._bind_catalog(bound)
                 bound._dispatch()
+
+    async def async_export_baseline_backup(self):
+        """Verified complete pre-migration restore archive, never auto-purged."""
+        baseline=await self._backup.async_load()
+        if (not baseline or baseline.get("format")!=BACKUP_FORMAT or
+                fingerprint(baseline.get("profiles"))!=baseline.get("source_sha256")):
+            raise MigrationBlocked("Migration backup unavailable or checksum invalid")
+        buffer=BytesIO()
+        with ZipFile(buffer,"w",ZIP_DEFLATED,compresslevel=7) as archive:
+            manifest={"format":BACKUP_FORMAT,"schema":3,
+                      "created_at":baseline.get("created_at"),
+                      "source_sha256":baseline["source_sha256"],
+                      "profiles":[]}
+            for entry_id,raw in sorted(baseline["profiles"].items()):
+                filename=f"profiles/{entry_id}.json"
+                manifest["profiles"].append({
+                    "entry_id":entry_id,"path":filename,"sha256":fingerprint(raw)})
+                archive.writestr(filename, json.dumps(raw,sort_keys=True,
+                    ensure_ascii=False,separators=(",",":"),allow_nan=False))
+            archive.writestr("manifest.json",json.dumps(manifest,sort_keys=True,
+                ensure_ascii=False,separators=(",",":"),allow_nan=False))
+        payload=buffer.getvalue()
+        with ZipFile(BytesIO(payload)) as verified:
+            if verified.testzip() is not None:
+                raise MigrationBlocked("Migration backup ZIP CRC validation failed")
+            for item in manifest["profiles"]:
+                data=json.loads(verified.read(item["path"]).decode())
+                if fingerprint(data)!=item["sha256"]:
+                    raise MigrationBlocked("Exported profile checksum differs")
+        return payload,manifest
 
     async def async_rollback_to_local(self, expected_catalog_sha256):
         """Disable shared ownership without rolling old drink data backwards.
