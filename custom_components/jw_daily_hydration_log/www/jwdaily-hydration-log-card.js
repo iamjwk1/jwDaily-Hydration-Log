@@ -577,12 +577,12 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const hidden=all.filter(t=>t.hidden);
   const list=visible.map((t,index)=>`<div class="saved-liquid" data-testid="liquid-manage-row">
    <span class="saved-liquid-icon" title="${this._effectiveColor(t)}">${this._liquidIcon(t,true)}</span> <strong>${jdhlEscape(t.name)}</strong>
-   <span class="muted"></span>
-   <button class="secondary small" data-action="manage-up" data-value="${jdhlEscape(t.id)}" ${index===0?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} up">↑</button>
+   <span class="used-count" title="Recorded drink moments across all profiles">Used: ${Number(t.drink_count_all_profiles)||0}</span>
+   <div class="settings-row-actions"><button class="secondary small" data-action="manage-up" data-value="${jdhlEscape(t.id)}" ${index===0?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} up">↑</button>
    <button class="secondary small" data-action="manage-down" data-value="${jdhlEscape(t.id)}" ${index===visible.length-1?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} down">↓</button>
    <button class="secondary small settings-hide-button" data-action="manage-hide" data-value="${jdhlEscape(t.id)}">Hide</button>
    <button class="secondary small" data-action="manage-edit" data-value="${jdhlEscape(t.id)}">Edit</button>
-   ${t.custom?`<button class="danger small" data-action="manage-remove" data-value="${jdhlEscape(t.id)}" ${t.can_delete?'':'disabled'} title="${t.can_delete?'Delete unused type':'Used in drink history; hide instead'}">Delete</button>`:''}
+   ${t.custom?`<button class="danger small" data-action="manage-remove" data-value="${jdhlEscape(t.id)}" ${t.can_delete?'':'disabled'} title="${t.can_delete?'Delete unused type':'Used in drink history; hide instead'}">Delete</button>`:''}</div>
    </div>`).join('');
   return `<div class="manage">
    ${this._settingsSection?'':'<h3>Liquid types</h3>'}<p class="muted manage-intro">Change names, icons, colors and order. Hide any type, or delete unused custom types. Used types can only be hidden; history remains intact.</p>
@@ -723,12 +723,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <label>Default volume (mL)<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label>
       <label>MDI icon<input data-field="icon_mdi" value="${E(draft.icon_mdi)}" placeholder="mdi:cup"/></label></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-cup-save">Save cup</button></div></section></div>`:''}
-    ${cups.map((c,i)=>`<div class="settings-row"><div class="row-title"><strong>${E(c.name)}</strong><small>${jdhlFmt(Number(c.default_volume_ml))}${c.hidden?' · Hidden':''}</small></div>
-     <button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
+    ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><div class="row-title"><strong>${E(c.name)}</strong><small>${jdhlFmt(Number(c.default_volume_ml))}${c.hidden?' · Hidden':''}</small></div>
+     <span class="used-count" title="Recorded drink moments across all profiles">Used: ${Number(c.drink_count_all_profiles)||0}</span>
+     <div class="settings-row-actions"><button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
      <button class="secondary small" data-action="settings-cup-down" data-value="${E(c.id)}" ${i===cups.length-1?'disabled':''} aria-label="Move down">↓</button>
      <button class="secondary small settings-hide-button" data-action="settings-cup-toggle" data-value="${E(c.id)}">${c.hidden?'Restore':'Hide'}</button>
      <button class="secondary small" data-action="settings-cup-edit" data-value="${E(c.id)}">Edit</button>
-     <button class="danger small" data-action="settings-cup-delete" data-value="${E(c.id)}" ${c.can_delete?'':'disabled'} title="${c.can_delete?'Delete unused cup':'Used in drink history; hide instead'}">Delete</button></div>`).join('')}
+     <button class="danger small" data-action="settings-cup-delete" data-value="${E(c.id)}" ${c.can_delete?'':'disabled'} title="${c.can_delete?'Delete unused cup':'Used in drink history; hide instead'}">Delete</button></div></div>`).join('')}
     ${this._settingsDeleteCupId?`<div class="delete-warning" role="alert"><strong>Delete Cup?</strong>
       <p>Delete unused cup? All profiles retain drink history. Linked Quick buttons will be removed.</p>
       <div class="dialog-actions"><button class="secondary small" data-action="settings-cup-delete-cancel">Cancel</button>
