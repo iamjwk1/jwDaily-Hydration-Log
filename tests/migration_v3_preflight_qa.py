@@ -38,6 +38,7 @@ assert res["profiles"][0]["ledger_sha256"]==m._record_signature(a)
 assert m.build_preflight(before)==res
 
 b["custom_liquid_types"][0]["id"]="custom_a"
+b["custom_liquid_types"][0]["name"]="Different recipe"
 try:
     m.build_preflight({"p1":a,"p2":b})
 except m.MigrationBlocked as e:
