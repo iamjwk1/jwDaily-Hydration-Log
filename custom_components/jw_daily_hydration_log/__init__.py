@@ -537,22 +537,13 @@ async def ws_profile_edit(hass, connection, msg):
         if not math.isfinite(goal) or not 1 <= goal <= 100000:
             raise ValueError('Daily target must be between 1 and 100000 mL')
         name=c._catalog_name(msg['name'],'Profile name')
+        # Home Assistant options are updated only after one successful
+        # transactional target/name save; no partially persisted goal event.
         old_options=dict(c.entry.options)
-        old_name=c.name
-        old_target=c.target_override_ml
-        try:
-            # Target is profile-owned; full backups keep historical daily snapshots.
-            if round(goal) != c.target_ml:
-                await c.async_set_target(goal)
-            await c.async_set_display_name(name)
-            opts={**c.entry.options,**{k:msg[k] for k in ('age','gender','unit')}}
-            # Legacy preference keys are deliberately ignored; Release 2 can clean storage.
+        opts={**c.entry.options,**{k:msg[k] for k in ('age','gender','unit')}}
+        await c.async_update_profile_identity_target(name,goal)
+        if opts!=old_options or c.entry.title!=name:
             hass.config_entries.async_update_entry(c.entry,options=opts,title=name)
-        except Exception:
-            # Fail safely if any part of the profile update fails.
-            c.target_override_ml=old_target
-            c.name=c.profile_display_name=old_name
-            raise
         connection.send_result(msg['id'],dict(updated=True,name=name,slug=c.slug,
                                                 daily_target_ml=c.target_ml,
                                                 stable_entry_id=c.entry_id))
