@@ -15,6 +15,19 @@ LIQUID_TYPES = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 DEFAULT_DAILY_TARGET_ML = 2000
 
 
+def historical_default_target_ml(age: int, gender: str,
+                                 pregnancy: bool = False,
+                                 lactation: bool = False) -> int:
+    """Only for one-time migration; never used for new daily targets."""
+    if lactation:return 3000
+    if pregnancy:return 2400
+    if age <= 3:return 900
+    if age <= 8:return 1200
+    if age <= 13:return 1900 if gender=='male' else 1600
+    if age <= 18:return 2600 if gender=='male' else 1800
+    return 3000 if gender=='male' else 2200
+
+
 def target_ml(age: int, gender: str, pregnancy: bool = False,
               lactation: bool = False) -> int:
     """New profiles default to 2000 mL/day; legacy signature is retained in beta32.
