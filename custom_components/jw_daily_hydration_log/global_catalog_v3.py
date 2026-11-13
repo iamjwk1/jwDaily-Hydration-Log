@@ -167,7 +167,10 @@ class GlobalCatalogV3:
         # observations and Quick buttons without introducing a second catalogue.
         raw = await coordinator._store.async_load()
         if raw is None:
-            raise MigrationBlocked("Profile storage disappeared during attachment")
+            raw = {"data_model_version":2,"records":[],"quick_buttons":[],"cup_types":[],
+                   "custom_liquid_types":[],"liquid_overrides":{},"liquid_colors":{},
+                   "hidden_builtin_liquids":[],"liquid_order":[]}
+
         self.profile_snapshots[coordinator.entry_id] = deepcopy(raw)
         self.live[coordinator.entry_id] = coordinator
         self._bind_catalog(coordinator)
