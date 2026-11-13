@@ -3,7 +3,7 @@
 ## Updated dialogs (approved visual references)
 - **Manage profiles:** compact, approximately 486px wide on desktop. Profile icon, display name and stable slug/target remain left aligned, with Edit to the right. Consistent Back to settings / Add profile footer.
 - **Liquid types:** compact, approximately 590px wide on desktop; usage counts, labels and all actions remain logically grouped. Small-screen layouts keep the action buttons together rather than breaking individual buttons.
-- **Cup types:** reduced desktop dialog width to approximately 610px, minimal whitespace between the cup name and action controls, no horizontal divider lines between cup rows, and less vertical row spacing. Default volume and historical **Used** count are vertically centered.
+- **Cup types:** reduced desktop dialog width to approximately 545px, minimal whitespace between the cup name and action controls, no horizontal divider lines between cup rows, and less vertical row spacing. Default volume and historical **Used** count are vertically centered.
 - **Edit Liquid Type:** reduced to approximately 468px; shorter liquid name, material icon, filename selector and hexadecimal color controls. A thumbnail of the currently selected MDI/SVG is always shown, and uploading an SVG refreshes the preview immediately. SVG artwork is not lost when cancelling the editor.
 - Popup buttons and footer ordering remain consistent with beta.34. Labels and visual content are in English.
 - Responsive verification covers 360, 420, 540, 720, 950 and 1400 px screen widths. Browser tests assert correct popup widths, cup-row divider removal, aligned controls, bounded inputs and live SVG upload preview.
