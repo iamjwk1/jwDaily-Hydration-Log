@@ -49,7 +49,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
   this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;
-  this._profilesData=null;this._profileDraft=null;this._profileEditSlug='';
+  this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
   this._fetching=false;this._fetchAgain=false;this._tickTimer=null;
@@ -123,10 +123,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(this._fetching){this._fetchAgain=true;return;}
   this._fetching=true;const profile=this._config.profile;const date=this._viewDate||this._todayISO();
   try{const res=await this._hass.callWS({type:'jw_daily_hydration_log/history',profile,date});
-   if(this._config?.profile===profile&&(this._viewDate||this._todayISO())===date){this._history=res;this._render();}
+   if(this._config?.profile===profile&&(this._viewDate||this._todayISO())===date){this._history=res;this._render();if(!this._profilesData&&this._hass?.user?.is_admin)this._loadProfilesForExport();}
   }catch(e){this._alert(e);}finally{this._fetching=false;if(this._fetchAgain){this._fetchAgain=false;this._fetchHistory();}}
  }
  async _field(e){const field=e.target?.dataset?.field;if(!field)return;
+  if(field==='export_profile'){this._exportProfile=e.target.value||'all';return;}
   if(field==='data_import_mode'&&e.type==='change'){
    this._dataImportMode=e.target.value;this._dataImportPreview=null;this._render(true);return;
   }
@@ -472,8 +473,9 @@ class JwDailyHydrationLogCard extends HTMLElement {
    this._undoId=null;this._status='';this._history=null;await this._fetchHistory();
   }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
  }
+ async _loadProfilesForExport(){try{this._profilesData=await this._hass.callWS({type:'jw_daily_hydration_log/profiles_list'});this._render(true);}catch(e){this._alert(e);}}
  async _export(){this._busy=true;this._status='Preparing Excel export…';this._error='';this._render(true);
-  try{const response=await this._hass.callWS({type:'jw_daily_hydration_log/export'});
+  try{const selected=this._exportProfile||'all';const response=await this._hass.callWS({type:'jw_daily_hydration_log/export',...(selected==='all'?{}:{profile:selected})});
    if(!/^UEs/.test(response.base64||''))throw Error('Invalid Excel payload from Home Assistant.');
    /* Use a locally generated data URL; this avoids blob:http mixed-download flags
       in Chromium when HA is accessed through a reverse proxy. No external URL. */
@@ -1267,7 +1269,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._historyHTML()}
    ${this._modalHTML()}
    <footer class="card-footer">
-    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><button class="secondary" data-action="export" aria-label="Export all data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
+    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><label for="jwdhl-export-profile">Export hydration data:</label> <select id="jwdhl-export-profile" data-field="export_profile"><option value="all" ${!this._exportProfile||this._exportProfile==='all'?'selected':''}>All profiles</option>${(this._profilesData?.profiles||[]).map(p=>`<option value="${jdhlEscape(p.slug)}" ${this._exportProfile===p.slug?'selected':''}>${jdhlEscape(p.name)}</option>`).join('')}</select> <button class="secondary" data-action="export" aria-label="Export hydration data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
     <span class="card-version">v1.1.0-beta.31</span>
    </footer></div></ha-card>`;
  }
