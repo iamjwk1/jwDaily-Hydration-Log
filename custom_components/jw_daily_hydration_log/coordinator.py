@@ -647,8 +647,12 @@ class HydrationCoordinator:
                 for key, name, icon in _BUILTIN_LIQUIDS]
         for item in base:
             item.update(self.liquid_overrides.get(item['id'], {}))
-        items = base + [dict(item, hidden=False) for item in self.custom_liquid_types]
+        items = base + [dict(item, hidden=bool(item.get('hidden',False))) for item in self.custom_liquid_types]
         for item in items:
+            mgr=self._global_catalog_v3
+            if mgr:
+                item['drink_count_all_profiles']=mgr.liquid_use_count(item['id'])
+                item['can_delete']=bool(item.get('custom')) and item['drink_count_all_profiles']==0
             ident = item['id']
             item['color_override'] = self.liquid_colors.get(ident)
             item['color'] = self.liquid_color(ident, item['name'])
@@ -682,7 +686,7 @@ class HydrationCoordinator:
                 raise ValueError('Liquid name already exists')
             item = dict(id='custom_' + uuid4().hex[:12], name=name,
                         icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
-                        icon_svg=icon_svg, custom=True)
+                        icon_svg=icon_svg, custom=True, hidden=False)
             self.custom_liquid_types.append(item)
             if selected_color:
                 self.liquid_colors[item['id']] = selected_color
@@ -691,6 +695,19 @@ class HydrationCoordinator:
             await self._save()
             self._dispatch()
             return dict(item)
+
+    async def async_set_custom_liquid_visibility(self, liquid_type: str,
+                                                visible: bool) -> dict:
+        if type(visible) is not bool:
+            raise ValueError('Expected boolean visibility')
+        async with self._lock:
+            item=next((t for t in self.custom_liquid_types if t['id']==liquid_type),None)
+            if item is None:
+                raise ValueError('Custom liquid type not found')
+            item['hidden']=not visible
+            await self._save()
+            self._dispatch()
+            return next(t for t in self.get_liquid_definitions() if t['id']==liquid_type)
 
     async def async_delete_liquid_type(self, liquid_type: str) -> None:
         async with self._lock:
@@ -804,7 +821,16 @@ class HydrationCoordinator:
                                       for q in self.quick_buttons)
 
     def get_cup_types(self) -> list[dict]:
-        return [dict(c) for c in self.cup_types]
+        mgr=self._global_catalog_v3
+        result=[]
+        for cup in self.cup_types:
+            item=dict(cup)
+            item['drink_count_all_profiles']=(mgr.cup_use_count(cup['id']) if mgr
+                else sum(r.get('kind')=='drink' and r.get('cup_type_id')==cup['id']
+                         for r in self.records))
+            item['can_delete']=item['drink_count_all_profiles']==0
+            result.append(item)
+        return result
 
     def get_quick_buttons(self) -> list[dict]:
         liquid_names = {x['id']: x['name'] for x in self.get_liquid_definitions()}
