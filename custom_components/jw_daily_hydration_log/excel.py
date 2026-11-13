@@ -141,7 +141,7 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
     for row in sorted(rows):
-        rowheight=(' ht="44" customHeight="1"' if index==1 and row>=11 else (' ht="44" customHeight="1"' if index==2 and row==11 else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else '')))
+        rowheight=(' ht="44" customHeight="1"' if index==3 and row>=2 else (' ht="44" customHeight="1"' if index==1 and row>=11 else (' ht="44" customHeight="1"' if index==2 and row==11 else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else ''))))
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
@@ -461,8 +461,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     buttonsrows[row]=[(1,'Profile settings — exported values',2,None)]
     row+=1
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Age','Gender','Unit','Source mode','Source sensor','Daily target mL',
-        'Target override mL','Pregnancy','Lactation'],1)]
+       ['Profile','Age','Gender','Unit','Daily target mL','Target override mL','Quick button count'],1)]
     for p in profiles:
         row+=1
         cfg=p['config']
