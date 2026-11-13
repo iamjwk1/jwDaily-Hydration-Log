@@ -160,6 +160,8 @@ class HydrationCoordinator:
         # Native v2 profile-scoped Cup and Quick catalogs.
         self.cup_types: list[dict[str, Any]] = []
         self.quick_buttons: list[dict[str, Any]] = []
+        self._global_catalog_v3 = None
+        self._global_catalog_sha256 = None
         self.data_model_version: int = 2
         self.profile_display_name: str = self.name
 
@@ -604,7 +606,7 @@ class HydrationCoordinator:
             self._dispatch()
 
     async def _save(self) -> None:
-        await self._store.async_save(dict(consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
+        payload=dict(consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
             last_reset_date=self.last_reset_date,target_override_ml=self.target_override_ml,
             last_source_value=self._last_source_value,source_baseline=self._source_baseline_ml,
             records=self.records,source_readings=self.source_readings,daily_archive=self.daily_archive,
@@ -615,7 +617,13 @@ class HydrationCoordinator:
             hidden_builtin_liquids=self.hidden_builtin_liquids,
             cup_types=self.cup_types, quick_buttons=self.quick_buttons,
             data_model_version=self.data_model_version,
-            profile_display_name=self.profile_display_name))
+            profile_display_name=self.profile_display_name)
+        # Release 1 retains every legacy field/copy for reversible migration.
+        catalog=getattr(self, '_global_catalog_v3', None)
+        if catalog is None:
+            await self._store.async_save(payload)
+        else:
+            await catalog.async_save(self,payload)
 
     @callback
     def _dispatch(self) -> None:
@@ -691,7 +699,7 @@ class HydrationCoordinator:
                 raise ValueError('Custom liquid not found')
             if any(x.get('kind') == 'drink' and x.get('liquid_type_id') == liquid_type for x in self.records):
                 raise ValueError('This liquid is used in drink history and cannot be deleted')
-            if any(q.get('liquid_type_id') == liquid_type for q in self.quick_buttons):
+            if self._global_catalog_v3 is None and any(q.get('liquid_type_id') == liquid_type for q in self.quick_buttons):
                 raise ValueError('This liquid is used by Quick buttons; hide it instead')
             self.custom_liquid_types.remove(item)
             self.liquid_order = [key for key in self.liquid_order if key != liquid_type]
@@ -819,10 +827,20 @@ class HydrationCoordinator:
     async def async_manage_cup(self, action: str, cup_id: str = '', name: str = '',
                                volume_ml: float | None = None, icon_mdi: str = '',
                                order: list[str] | None = None) -> list[dict]:
-        if action not in ('add', 'update', 'hide', 'restore', 'reorder'):
+        if action not in ('add', 'update', 'hide', 'restore', 'reorder', 'delete'):
             raise ValueError('Invalid cup action')
         async with self._lock:
-            if action == 'reorder':
+            if action == 'delete':
+                cup = next((c for c in self.cup_types if c['id'] == cup_id), None)
+                if cup is None:
+                    raise ValueError('Cup type not found')
+                if any(r.get('kind')=='drink' and r.get('cup_type_id')==cup_id
+                       for r in self.records):
+                    raise ValueError('Cup is used in drink history; hide it')
+                if self._global_catalog_v3 is None and any(q.get('cup_type_id')==cup_id for q in self.quick_buttons):
+                    raise ValueError('Cup is used by Quick buttons; hide it')
+                self.cup_types = [c for c in self.cup_types if c['id'] != cup_id]
+            elif action == 'reorder':
                 if not isinstance(order, list) or set(order) != {c['id'] for c in self.cup_types} or len(order) != len(self.cup_types):
                     raise ValueError('Cup order must include every cup exactly once')
                 lookup = {c['id']: c for c in self.cup_types}
