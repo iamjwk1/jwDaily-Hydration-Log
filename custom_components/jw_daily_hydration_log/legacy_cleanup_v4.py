@@ -119,9 +119,28 @@ class LegacyCleanupV4:
                 raise MigrationBlocked("Original v4 pre-cleanup backup is corrupt")
             needs_changes = any(before[e] != after[e] for e in before)
             if not needs_changes and journal is None:
-                return {"status": "clean", "profiles_checked": len(before),
-                        "removed_fields": 0, "writes": False,
-                        "backup_status": "not_needed"}
+                # Nothing is deleted, so no new rollback archive or journal is
+                # warranted. Persist a one-time readback-verified CLEAN status
+                # instead of leaving users with NOT_RECORDED / UNKNOWN.
+                # Repeat restarts do not write again. Upgrade compatibility
+                # code remains available for older profiles that still need it.
+                previous = await self._status.async_load()
+                if previous is not None:
+                    if previous.get("format") != STATUS_FORMAT or previous.get("status") != "clean":
+                        raise MigrationBlocked("Unexpected v4 cleanup status")
+                    if (previous.get("profiles_checked") == len(before)
+                            and previous.get("removed_fields") == 0):
+                        return dict(previous, writes=False, backup_status="not_needed")
+                status = {
+                    "format": STATUS_FORMAT, "status": "clean",
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "profiles_checked": len(before), "removed_fields": 0,
+                    "profile_fields_removed": {key: [] for key in before},
+                    "v3_baseline_preserved": True,
+                    "history_unchanged": True, "backup_status": "not_needed",
+                }
+                await self._save_verified(self._status, status, "zero-change completion status")
+                return dict(status, writes=False)
             if existing_backup is None and (needs_changes or journal):
                 backup = {
                     "format": BACKUP_FORMAT,
