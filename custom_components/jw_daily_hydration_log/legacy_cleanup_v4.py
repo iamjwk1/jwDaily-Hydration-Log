@@ -16,21 +16,15 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN
+from .const import DOMAIN, LEGACY_V4_TOP_LEVEL_FIELDS, LEGACY_V4_STATUS_FORMAT
 from .migration_v3 import MigrationBlocked, fingerprint, _record_signature, GLOBAL_KEYS
 
 BACKUP_FORMAT = "jwDaily-Hydration-Log-v4-precleanup-backup"
 JOURNAL_FORMAT = "jwDaily-Hydration-Log-v4-cleanup-journal"
-STATUS_FORMAT = "jwDaily-Hydration-Log-v4-cleanup-status"
+STATUS_FORMAT = LEGACY_V4_STATUS_FORMAT
 
-# Verified unused by the native v2 + global v3 runtime. Values within the
-# historical ledger (and even historical source sensor readings) are NEVER
-# cleaned, because they form part of the user's drink history.
-OBSOLETE_TOP_LEVEL = frozenset({
-    "volume_buttons", "legacy_mappings", "legacy_cup_defaults",
-    "conversion_state", "pregnancy", "lactation",
-    "source_sensor", "source_mode",
-})
+# Upgrade compatibility only. Do not modify historical readings or records.
+OBSOLETE_TOP_LEVEL = LEGACY_V4_TOP_LEVEL_FIELDS
 
 
 def cleanup_plan(raw: dict) -> dict:
