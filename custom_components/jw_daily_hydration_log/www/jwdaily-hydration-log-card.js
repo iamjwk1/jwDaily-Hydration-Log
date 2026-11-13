@@ -59,7 +59,23 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this.shadowRoot.addEventListener('keydown',e=>{
    if(e.key==='Escape'&&this._historyCalendarOpen){this._historyCalendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._calendarOpen){this._calendarOpen=false;this._render(true);return;}
-   if(e.key==='Escape'&&(this._profileDraft||this._settingsDraft||this._customDraft||this._settingsDeleteCupId||this._settingsDeleteQuickId||this._managePendingDelete)){if(this._settingsSection==='profile'){this._profileDraft=null;this._profileEditSlug='';}else if(this._settingsDraft){this._settingsDraft=null;this._settingsEditId=null;}else{this._customDraft=null;this._editingLiquidId=null;this._settingsDeleteCupId=null;this._settingsDeleteQuickId=null;this._managePendingDelete=null;}this._render(true);return;}
+   if(e.key==='Escape'){
+    const page=this._settingsSection;
+    const top=(page==='profile'&&!!this._profileDraft)||
+      (page==='cups'&&!!(this._settingsDraft||this._settingsDeleteCupId))||
+      (page==='quick'&&!!(this._settingsDraft||this._settingsDeleteQuickId))||
+      (page==='liquids'&&!!(this._customDraft||this._managePendingDelete))||
+      (!page&&this._manageOpen&&!!(this._customDraft||this._managePendingDelete));
+    if(top){
+      if(page==='profile'){this._profileDraft=null;this._profileEditSlug='';}
+      else if(page==='cups'||page==='quick'){this._settingsDraft=null;this._settingsEditId=null;this._settingsDeleteCupId=null;this._settingsDeleteQuickId=null;}
+      else{this._customDraft=null;this._editingLiquidId=null;this._managePendingDelete=null;}
+      this._error='';this._render(true);return;
+    }
+    if(page==='quick'&&this._profileDraft){
+      this._settingsSection='profile';this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._render(true);return;
+    }
+   }
    if(e.key==='Escape'&&this._settingsSection){this._settingsSection=null;this._settingsDraft=null;
     this._manageOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._modal){this._modal=null;this._confirmDelete=false;this._render(true);}
@@ -698,6 +714,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    </div>`;
  }
  _settingsHTML(){const page=this._settingsSection;const draft=this._settingsDraft;
+   const nested=(page==='profile'&&!!this._profileDraft)||(page==='cups'&&!!(this._settingsDraft||this._settingsDeleteCupId))||(page==='quick'&&!!(this._settingsDraft||this._settingsDeleteQuickId))||(page==='liquids'&&!!(this._customDraft||this._managePendingDelete));
   const nav=[['profile','Manage profiles','Edit, add or copy settings','mdi:account-multiple'],
     ['liquids','Liquid types','Names, icons and colors','mdi:water'],
     ['cups','Cup types','Reusable containers and volumes','mdi:glass-mug-variant'],
@@ -762,7 +779,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
   else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.34</p>
    <p class="settings-note">Each drink record stores independent Liquid and Cup IDs. Settings and Data can be backed up separately.</p></div>`;
-  return `<div class="overlay" role="presentation"><section class="dialog dialog-settings dialog-page-${page}" role="dialog" aria-modal="true" aria-label="Settings">
+  return `<div class="overlay" role="presentation"><section class="dialog dialog-settings dialog-page-${page}" role="dialog" aria-modal="${!nested}" aria-label="Settings">
     <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({transfer:'Import & Export',quick:'Quick buttons'}[page]||'Settings')}</h3>
     <button class="secondary small" data-action="settings-close" aria-label="Close settings">✕</button></div>
     ${this._error?`<p class="error" role="alert">${E(this._error)}</p>`:''}
