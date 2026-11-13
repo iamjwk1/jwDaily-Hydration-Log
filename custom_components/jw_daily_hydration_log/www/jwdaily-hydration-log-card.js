@@ -627,7 +627,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  _profileHTML(){
   const E=jdhlEscape,profiles=this._profilesData?.profiles||[],d=this._profileDraft;
-  return `<div class="settings-section"><h3>Profiles</h3><p class="settings-note">Each profile keeps separate settings and drink history. The dashboard card remains linked to its configured profile.</p>
+  return `<div class="settings-section"><p class="settings-note">Each profile keeps separate settings and drink history.</p>
    ${profiles.map(p=>`<div class="settings-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E(p.slug)} · ${p.daily_target_ml} mL goal</small></div>
     <button class="secondary small" data-action="settings-profile-quick" data-value="${E(p.slug)}">Quick buttons</button>
     <button class="secondary small" data-action="settings-profile-edit" data-value="${E(p.slug)}">Edit</button></div>`).join('')}
@@ -641,7 +641,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${!this._profileEditSlug?`<label>Copy settings from<select data-field="copy_from"><option value="">Start with default settings</option>${profiles.map(p=>`<option value="${E(p.slug)}" ${p.slug===d.copy_from?'selected':''}>${E(p.name)}</option>`).join('')}</select></label>`:''}
     ${!this._profileEditSlug?'<p class="settings-note">Only configuration is copied. No records, consumed volumes, sensor readings or personal targets are transferred.</p>':'<p class="settings-note">Changing the display name preserves the stable profile slug and entity IDs.</p>'}
     <div class="dialog-actions"><button class="secondary" data-action="settings-profile-cancel">Cancel</button><button data-action="settings-profile-save">${this._profileEditSlug?'Save profile':'Create profile'}</button></div></div>`:''}
-   <div class="dialog-actions"><button data-action="settings-profile-add">+ Add profile</button></div></div>`;
+   <div class="dialog-actions" style="display:flex;justify-content:space-between;align-items:center"><button class="secondary" data-action="settings-home">← Back to settings</button><button data-action="settings-profile-add">+ Add profile</button></div></div>`;
  }
  _transferHTML(){
   const E=jdhlEscape,p=this._settingsImportPreview;
@@ -768,7 +768,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <button class="secondary small" data-action="settings-close" aria-label="Close settings">✕</button></div>
     ${this._error?`<p class="error" role="alert">${E(this._error)}</p>`:''}
     ${body}
-    ${page!=='home'?`<div class="dialog-actions"><button class="secondary" data-action="settings-home">← Back to settings</button></div>`:''}
+    ${page!=='home'&&page!=='profile'?`<div class="dialog-actions"><button class="secondary" data-action="settings-home">← Back to settings</button></div>`:''}
    </section></div>`;
  }
  async _settingsCall(command, data){
