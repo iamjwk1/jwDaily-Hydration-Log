@@ -160,9 +160,15 @@ class GlobalCatalogV3:
         coordinator._global_catalog_sha256 = self.state["catalog_sha256"]
         coordinator._global_catalog_v3 = self
 
-    def attach(self, coordinator):
+    async def async_attach(self, coordinator):
         if not self._started or self.state["status"] != "active":
             raise MigrationBlocked("Global catalog not initialized")
+        # New profiles may be created after migration. Keep their profile-local
+        # observations and Quick buttons without introducing a second catalogue.
+        raw = await coordinator._store.async_load()
+        if raw is None:
+            raise MigrationBlocked("Profile storage disappeared during attachment")
+        self.profile_snapshots[coordinator.entry_id] = deepcopy(raw)
         self.live[coordinator.entry_id] = coordinator
         self._bind_catalog(coordinator)
 
