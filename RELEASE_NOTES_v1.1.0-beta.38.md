@@ -1,6 +1,6 @@
 # jwDaily Hydration Log v1.1.0-beta.38 — acceptance corrections
 
-Status: candidate on review branch; **not a published HACS release** until CI, browser acceptance and release publication succeed.
+Status: HACS **pre-release candidate**. Automated validations must pass before publication; Home Assistant live acceptance and historical-data checks remain required before stable release.
 
 Based on user acceptance results for beta.37: 49 accepted, 6 UI failures, 4 independent data/backup checks open; one additional glass-formatting failure was reported subsequently.
 
@@ -23,4 +23,4 @@ This change is frontend-only except for synchronized manifest/constant version i
 - [ ] Live Home Assistant acceptance.
 - [ ] Four open historical-data/import/backup checks.
 
-Do not mark as released or recommend installation until all required publication tests pass.
+Do not claim stable acceptance until live Home Assistant and backup checks are performed. A verified GitHub pre-release can be used for live beta testing after automated validations pass.
