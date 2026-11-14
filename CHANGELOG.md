@@ -1,3 +1,7 @@
+## v1.1.0-beta.39 (2026-11-14)
+- Fix Add drink moment capabilities check: beta.38 compared against a stale beta.37 backend version and displayed a false restart warning even when frontend/backend matched.
+- Synchronize frontend/backend to beta.39; extend version-parity and Chromium regressions without changing drink data or behavior.
+
 ## v1.1.0-beta.37 (2026-11-14)
 - Profile-specific display units (mL, L, US fl oz) across cards, charts, drink entry, quick buttons and four-sheet Excel export; canonical mL history preserved.
 - Native visual Home Assistant icon library picker for Liquid, Cup and profile Quick editors; choose mockup 07 Icon-first compact.
