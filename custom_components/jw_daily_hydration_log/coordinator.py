@@ -930,7 +930,7 @@ class HydrationCoordinator:
     async def async_manage_quick(self, action: str, quick_id: str = '',
                                  liquid_type_id: str = '', cup_type_id: str = '',
                                  label_mode: str = 'automatic', custom_label: str = '',
-                                 order: list[str] | None = None) -> list[dict]:
+                                 order: list[str] | None = None, icon_mdi: str = '') -> list[dict]:
         if action not in ('add','update','hide','restore','reorder','delete'):
             raise ValueError('Invalid quick-button action')
         async with self._lock:
@@ -968,6 +968,8 @@ class HydrationCoordinator:
                     raise ValueError('Choose an active liquid type')
                 if not self.valid_cup(cup_type_id):
                     raise ValueError('Choose an active cup type')
+                if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}',icon_mdi):
+                    raise ValueError('Invalid Quick button MDI icon')
                 if label_mode not in ('automatic','custom'):
                     raise ValueError('Label mode must be automatic or custom')
                 if label_mode == 'custom':
@@ -987,7 +989,7 @@ class HydrationCoordinator:
                        q['cup_type_id'] == cup_type_id for q in self.quick_buttons):
                     raise ValueError('A Quick button already uses this Liquid and Cup combination')
                 props = dict(liquid_type_id=liquid_type_id,cup_type_id=cup_type_id,
-                             label_mode=label_mode,custom_label=custom_label,hidden=False)
+                             label_mode=label_mode,custom_label=custom_label,icon_mdi=icon_mdi,hidden=False)
                 if action == 'add':
                     self.quick_buttons.append(dict(id='quick_' + uuid4().hex[:12], **props))
                 else:
