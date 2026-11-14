@@ -148,6 +148,7 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
         if lid not in all_ids or cid not in cup_ids:raise ValueError('Quick button refers to an unknown Liquid or Cup')
         if (lid,cid) in combos:raise ValueError('Duplicate Liquid/Cup Quick button combination')
         combos.add((lid,cid))
+        if button.get('icon_mdi') and not MDI.fullmatch(button['icon_mdi']):raise ValueError('Invalid Quick button icon')
         if button.get('label_mode','automatic') not in ('automatic','custom'):raise ValueError('Invalid button label mode')
         if button.get('label_mode')=='custom':_name(button.get('custom_label'),'Custom button label')
         if type(button.get('hidden',False)) is not bool:raise ValueError('Invalid button visibility')
