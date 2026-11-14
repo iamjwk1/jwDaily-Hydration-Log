@@ -20,10 +20,10 @@ import zlib
 from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
-from .const import default_liquid_color
+from .const import default_liquid_color, from_ml
 from .excel_icons import drawing_parts
 
-VERSION = '1.1.0-beta.36'
+VERSION = '1.1.0-beta.37'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -163,18 +163,20 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     return ''.join(parts).encode('utf-8')
 
 
-def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None) -> bytes:
+def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None, unit: str = 'mL', mixed: bool = False) -> bytes:
     """Structured Excel tables, including table filters and header layout."""
     if table_number==1:
-        label='tblHydrationLog'; right='I'
-        headers=['Date+time','Profile','Age','Gender','Target_x000a_(mL)',
-                 'Liquid name','Volume_x000a_(mL)','Cup used']
+        label='tblHydrationLog'; right='K' if mixed else 'I'
+        headers=['Date+time','Profile','Age','Gender',f'Target_x000a_({_unit_label(unit)})',
+                 'Liquid name',f'Volume_x000a_({_unit_label(unit)})','Cup used']
+        if mixed:headers+=['Profile unit','Volume (profile unit)']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
     else:
         label='tblDailyIntake'
         assert liquid_headers is not None
-        right=_col(10+len(liquid_headers))
-        headers=['Date','Profile','Age','Gender','Full day','Target_x000a_(mL)','Drink_x000a_count','Volume_x000a_(mL)','%']
+        right=_col(10+len(liquid_headers)+(2 if mixed else 0))
+        headers=['Date','Profile','Age','Gender','Full day',f'Target_x000a_({_unit_label(unit)})','Drink_x000a_count',f'Volume_x000a_({_unit_label(unit)})','%']
+        if mixed:headers+=['Profile unit','Volume (profile unit)']
         headers += [name.replace('\n','_x000a_') for name in liquid_headers]
         attrs='headerRowDxfId="0" dataDxfId="32" headerRowBorderDxfId="30" tableBorderDxfId="31" totalsRowBorderDxfId="29"'
     # Excel tables must have at least one row below their header in the table range.
@@ -309,6 +311,16 @@ def _record_table(profiles: list[dict], tz: ZoneInfo):
     return result
 
 
+def _unit(p):
+    u=p.get('config',{}).get('unit','mL')
+    return u if u in ('mL','L','fl_oz') else 'mL'
+
+def _unit_label(unit):
+    return 'fl oz' if unit=='fl_oz' else unit
+
+def _volume(ml,unit):
+    return round(from_ml(float(ml or 0),unit), 6)
+
 def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', when: datetime | None = None) -> bytes:
     """Match the supplied four-sheet reference, retaining ALL drink records.
 
@@ -318,6 +330,9 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     except (KeyError,ValueError): tz=ZoneInfo('UTC')
     now=when.astimezone(tz) if when is not None else datetime.now(tz)
     today=now.date().isoformat()
+    mixed=len(profiles)>1
+    export_unit=(_unit(profiles[0]) if not mixed and profiles else 'mL')
+    unit_label=_unit_label(export_unit)
     records=_record_table(profiles,tz)
     current={}
     for profile in profiles:
@@ -330,7 +345,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         ordered_types.append(('other',current['other'],False))
     if not current:
         ordered_types=[(lid,lid.title(),False) for lid in _BUILTIN]
-    liquid_headers=[f'{name}\n(mL)' for _,name,_ in ordered_types]
+    liquid_headers=[f'{name}\n({unit_label if not mixed else "mL"})' for _,name,_ in ordered_types]
     # Resolve one effective color per (profile, stable ID), including old IDs
     # that occur only in that profile's historical records.
     export_types = []
@@ -381,32 +396,36 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         return rows
 
     logrows=summary('Home Assistant jwDaily Hydration log - Hydration log','Drink log rows',len(records))
-    heads=['Date+time','Profile','Age','Gender','Target\n(mL)','Liquid name','Volume\n(mL)','Cup used']
-    hstyles=[10,11,11,11,11,23,24,24]
+    heads=['Date+time','Profile','Age','Gender',f'Target\n({unit_label})','Liquid name',f'Volume\n({unit_label})','Cup used']
+    if mixed:heads+=['Profile unit','Volume (profile unit)']
+    hstyles=[10,11,11,11,11,23,24,24]+([11,24] if mixed else [])
     logrows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(heads,hstyles),2)]
     for rownum,r in enumerate(records,12):
         _,stamp,name,age,gender,target,liquid,volume,_,_,cup_name,cup_default,button_label=r
-        cup_used=(f'{cup_name} ({cup_default:g} mL)' if cup_name and isinstance(cup_default,(int,float)) else cup_name)
-        sty=[25,26,27,27,27,26,28,26]
+        rowunit=_unit(r[0]);cup_used=(f'{cup_name} ({_volume(cup_default,rowunit if not mixed else "mL"):g} {_unit_label(rowunit if not mixed else "mL")})' if cup_name and isinstance(cup_default,(int,float)) else cup_name)
+        sty=[25,26,27,27,27,26,28,26]+([26,28] if mixed else [])
         if rownum==len(records)+11:
-            sty=[29,30,31,31,31,30,32,30]
-        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate([stamp,name,age,gender,target,liquid,volume,cup_used],2)]
+            sty=[29,30,31,31,31,30,32,30]+([30,32] if mixed else [])
+        vals=[stamp,name,age,gender,_volume(target,export_unit),liquid,_volume(volume,export_unit),cup_used]
+        if mixed:vals+=[_unit_label(rowunit),_volume(volume,rowunit)]
+        logrows[rownum]=[(col,value,sty[col-2],None) for col,value in enumerate(vals,2)]
     if not records:
         logrows[12]=[]
 
     drows=summary('Home Assistant jwDaily Hydration Log  - Daily totals','Daily total rows',len(days),second=True)
-    dheads=['Date','Profile','Age','Gender','Full day','Target\n(mL)','Drink\ncount','Volume\n(mL)','%']+liquid_headers
-    dhstyles=[10,11,11,11,12,13,13,13,14]+[fallback_header_style if legacy else 6 for _,_,legacy in ordered_types]
+    dheads=['Date','Profile','Age','Gender','Full day',f'Target\n({unit_label})','Drink\ncount',f'Volume\n({unit_label})','%']+(['Profile unit','Volume (profile unit)'] if mixed else [])+liquid_headers
+    dhstyles=[10,11,11,11,12,13,13,13,14]+([11,13] if mixed else [])+[fallback_header_style if legacy else 6 for _,_,legacy in ordered_types]
     drows[11]=[(col,h,sty,None) for col,(h,sty) in enumerate(zip(dheads,dhstyles),2)]
     for rnum,row in enumerate(days,12):
         values=[_serial(date.fromisoformat(row['day'])),row['cfg']['name'],row['cfg'].get('age'),
                 row['cfg'].get('gender'),'Yes' if row['day']<today else 'No',
-                row['target'],row['count'],row['consumed'],
+                _volume(row['target'],export_unit),row['count'],_volume(row['consumed'],export_unit),
                 round(row['consumed']/row['target']*100,12) if row['target']>0 else 0]
-        values += [round(row['types'].get(lid,0),3) for lid,_,_ in ordered_types]
-        styles=[15,16,27,27,17,16,16,16,18]+[0]*len(ordered_types)
+        if mixed:values += [_unit_label(_unit(row['p'])),_volume(row['consumed'],_unit(row['p']))]
+        values += [_volume(row['types'].get(lid,0),export_unit) for lid,_,_ in ordered_types]
+        styles=[15,16,27,27,17,16,16,16,18]+([16,16] if mixed else [])+[0]*len(ordered_types)
         if rnum==len(days)+11:
-            styles=[19,20,27,27,21,20,20,20,22]+[0]*len(ordered_types)
+            styles=[19,20,27,27,21,20,20,20,22]+([20,20] if mixed else [])+[0]*len(ordered_types)
         drows[rnum]=[(col,value,styles[col-2],f'I{rnum}/G{rnum}*100' if col==10 and row['target']>0 else None)
                      for col,value in enumerate(values,2)]
     if not days:drows[12]=[]
@@ -446,7 +465,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     buttonsrows[row]=[(1,'Quick buttons — current configuration',2,None)]
     row+=1
     headers=['Profile','Button ID','Liquid ID','Liquid name','Cup ID','Cup name',
-             'Label mode','Effective button label','Order','Default volume mL','Visible','Custom label']
+             'Label mode','Effective button label','Order','Default volume mL','Visible','Custom label','MDI icon']
     buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(headers,1)]
     for p in profiles:
         cups={c.get('id'):c for c in p.get('cup_types') or []}
@@ -457,7 +476,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             vals=[p['config']['name'],q.get('id',''),lid,liquids.get(lid,lid),cid,
                   cups.get(cid,{}).get('name',cid),q.get('label_mode','automatic'),
                   q.get('label',''),pos,cups.get(cid,{}).get('default_volume_ml'),
-                  not q.get('hidden',False),q.get('custom_label','')]
+                  not q.get('hidden',False),q.get('custom_label',''),q.get('icon_mdi','')]
             buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
     row+=3
     buttonsrows[row]=[(1,'Profile settings — exported values',2,None)]
@@ -472,10 +491,10 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
     drawing_xml,drawing_rels,icon_images=drawing_parts(icon_rows)
     content=[
-     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25],f'I{max(12,11+len(records))}',max(12,11+len(records)),True),
-     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+[10]*len(ordered_types),f'{_col(10+len(ordered_types))}{max(12,11+len(days))}',max(12,11+len(days)),True),
+     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),f'{"K" if mixed else "I"}{max(12,11+len(records))}',max(12,11+len(records)),True),
+     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+([16,21] if mixed else [])+[10]*len(ordered_types),f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',max(12,11+len(days)),True),
      _worksheet(3,typesrows,[16,24,22,23,13,18,13,19,25,15,19,21],f'L{max(1,len(typesrows))}',len(typesrows),drawing=bool(icon_images)),
-     _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24],f'L{max(1,max(buttonsrows))}',len(buttonsrows)),
+     _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24,24],f'M{max(1,max(buttonsrows))}',len(buttonsrows)),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.
     buffer=BytesIO()
@@ -513,5 +532,5 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             z.writestr(f'xl/worksheets/sheet{i}.xml',s)
             if i<=2:
                 z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/></Relationships>')
-                z.writestr(f'xl/tables/table{i}.xml',_table(i,max(12,11+(len(records) if i==1 else len(days))),liquid_headers if i==2 else None))
+                z.writestr(f'xl/tables/table{i}.xml',_table(i,max(12,11+(len(records) if i==1 else len(days))),liquid_headers if i==2 else None,export_unit,mixed))
     return buffer.getvalue()
