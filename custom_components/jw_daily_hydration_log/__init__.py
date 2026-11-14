@@ -406,6 +406,7 @@ async def ws_manage_cup(hass, connection, msg):
                                   probatio.Optional('cup_type_id'):str,
                                   probatio.Optional('label_mode'):str,
                                   probatio.Optional('custom_label'):str,
+                                  probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('order'):[str]})
 @websocket_api.async_response
 async def ws_manage_quick(hass, connection, msg):
@@ -414,7 +415,7 @@ async def ws_manage_quick(hass, connection, msg):
         result=await c.async_manage_quick(msg['action'],msg.get('quick_id',''),
                                           msg.get('liquid_type_id',''),msg.get('cup_type_id',''),
                                           msg.get('label_mode','automatic'),msg.get('custom_label',''),
-                                          msg.get('order'))
+                                          msg.get('order'),msg.get('icon_mdi',''))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_quick',str(exc));return
     connection.send_result(msg['id'],{'quick_buttons':result})
