@@ -23,6 +23,7 @@ jobs:
           python tests/legacy_cleanup_v4_qa.py
           python tests/beta32_excel_contract_qa.py
           python tests/beta37_excel_units_qa.py
+          python tests/beta39_version_guard_qa.py
           node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
       - name: Actual Chromium settings and Delete/Cancel regression
         run: |
