@@ -1,3 +1,10 @@
+## v1.1.0-beta.37 (2026-11-14)
+- Profile-specific display units (mL, L, US fl oz) across cards, charts, drink entry, quick buttons and four-sheet Excel export; canonical mL history preserved.
+- Native visual Home Assistant icon library picker for Liquid, Cup and profile Quick editors; choose mockup 07 Icon-first compact.
+- Compact consistent managers and Edit Profile Quick buttons preview; profile-scoped icons and settings.
+- Simplified Settings and Import/Export, no migration controls in normal UI, Excel dialog from non-wrapping footer.
+- Mixed-profile export explicitly labels profile units and retains normalized mL; no history writes or legacy backup deletion.
+
 ## v1.1.0-beta.36 (2026-11-13)
 - Match approved compact Manage Profiles and Liquid Types reference widths; tighten Cup Types rows, align Used and volume, remove cup row dividers.
 - Edit Liquid Type shows a live MDI/SVG icon preview and constrained filename/color fields.
