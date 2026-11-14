@@ -319,7 +319,8 @@ def _unit_label(unit):
     return 'fl oz' if unit=='fl_oz' else unit
 
 def _volume(ml,unit):
-    return round(from_ml(float(ml or 0),unit), 6)
+    result = round(from_ml(float(ml or 0),unit), 6)
+    return int(result) if result.is_integer() else result
 
 def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', when: datetime | None = None) -> bytes:
     """Match the supplied four-sheet reference, retaining ALL drink records.
