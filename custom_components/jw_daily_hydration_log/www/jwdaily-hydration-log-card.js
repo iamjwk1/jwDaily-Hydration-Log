@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.36 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.37 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -12,7 +12,15 @@ const jdhlEscape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const jdhlNum=v=>Number.isFinite(Number(v))?Number(v):0;
 const jdhlQuick=a=>{const n=(Array.isArray(a)?a:[]).map(Number).filter(v=>Number.isFinite(v)&&v>0&&v<=100000);return n.length?n:[120,150,300,500];};
 const jdhlOz=29.5735;
-const jdhlFmt=(n,u='mL')=>u==='fl_oz'?`${(n/jdhlOz).toFixed(1)} fl oz`:n>=1000?`${(n/1000).toFixed(2)} L`:`${Number(n.toFixed(1))} mL`;
+const jdhlUnitLabel=u=>u==='fl_oz'?'fl oz':u==='L'?'L':'mL';
+const jdhlFromMl=(n,u)=>u==='fl_oz'?Number(n)/jdhlOz:u==='L'?Number(n)/1000:Number(n);
+const jdhlToMl=(n,u)=>u==='fl_oz'?Number(n)*jdhlOz:u==='L'?Number(n)*1000:Number(n);
+const jdhlDisplayNumber=(n,u)=>{
+ const v=jdhlFromMl(n,u);if(!Number.isFinite(v))return '—';
+ return Number(v.toFixed(u==='L'?3:u==='fl_oz'?2:3)).toLocaleString('en-GB',{maximumFractionDigits:u==='L'?3:u==='fl_oz'?2:3});
+};
+const jdhlFmt=(n,u='mL')=>`${jdhlDisplayNumber(n,u)} ${jdhlUnitLabel(u)}`;
+
 const jdhlDate=d=>`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
 const jdhlIsoDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const jdhlDateToIso=v=>/^\d{2}-\d{2}-\d{4}$/.test(v)?`${v.slice(6)}-${v.slice(3,5)}-${v.slice(0,2)}`:null;
@@ -49,15 +57,23 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
   this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;this._migrationStatus=null;this._migrationBackupVerified=false;
-  this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';this._settingsScopeProfile=null;this._settingsQuickHistory=null;
+  this._profilesData=null;this._exportProfile='all';this._excelOpen=false;this._iconPicker=null;this._profileDraft=null;this._profileEditSlug='';this._settingsScopeProfile=null;this._settingsQuickHistory=null;
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._busy=false;this._error='';this._status='';this._lastState='';this._lastRender='';
   this._fetching=false;this._fetchAgain=false;this._tickTimer=null;
   this.shadowRoot.addEventListener('click',e=>this._click(e));
   this.shadowRoot.addEventListener('input',e=>this._field(e));
   this.shadowRoot.addEventListener('change',e=>this._field(e));
+  this.shadowRoot.addEventListener('value-changed',e=>{
+   if(this._iconPicker&&e.target?.matches?.('[data-icon-library]')){
+    const value=e.detail?.value||e.target.value;
+    if(/^mdi:[a-z0-9-]{2,70}$/.test(value||''))this._iconPicker.selected=value;
+   }
+  },true);
   this.shadowRoot.addEventListener('keydown',e=>{
-   if(e.key==='Escape'&&this._historyCalendarOpen){this._historyCalendarOpen=false;this._render(true);return;}
+   if(e.key==='Escape'&&this._iconPicker){this._iconPicker=null;this._render(true);return;}
+    if(e.key==='Escape'&&this._excelOpen){this._excelOpen=false;this._render(true);return;}
+    if(e.key==='Escape'&&this._historyCalendarOpen){this._historyCalendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'&&this._calendarOpen){this._calendarOpen=false;this._render(true);return;}
    if(e.key==='Escape'){
     const page=this._settingsSection;
@@ -73,7 +89,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
       this._error='';this._render(true);return;
     }
     if(page==='quick'&&this._profileDraft){
-      this._settingsSection='profile';this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._render(true);return;
+      this._settingsSection='profile';this._profileQuickHistory=this._settingsQuickHistory;this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._render(true);return;
     }
    }
    if(e.key==='Escape'&&this._settingsSection){this._settingsSection=null;this._settingsDraft=null;
@@ -98,7 +114,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._settingsImportContent='';this._settingsImportPreview=null;this._settingsImportFilename='';
   this._dataImportContent='';this._dataImportFilename='';this._dataImportMode='merge';this._dataImportPreview=null;
   this._fullRestoreContent='';this._fullRestoreFilename='';this._fullRestorePreview=null;this._fullBackupSaved=false;this._migrationStatus=null;this._migrationBackupVerified=false;
-  this._profilesData=null;this._exportProfile='all';this._profileDraft=null;this._profileEditSlug='';
+  this._profilesData=null;this._exportProfile='all';this._excelOpen=false;this._iconPicker=null;this._profileDraft=null;this._profileEditSlug='';
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;
   this._history=null;this._lastState='';this._lastRender='';this._render(true);this._fetchHistory();
  }
@@ -134,6 +150,9 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const val=jdhlNum(e.state),unit=e.attributes?.unit_of_measurement;
   return unit==='L'?val*1000:unit==='fl oz'?val*jdhlOz:val;
  }
+ _unit(){return ['mL','L','fl_oz'].includes(this._history?.profile_settings?.unit)?this._history.profile_settings.unit:'mL';}
+ _fmt(v,u=this._unit()){return jdhlFmt(v,u);}
+ _unitLabel(){return jdhlUnitLabel(this._unit());}
  _alert(e){this._error=String(e?.message||e||'Unknown error');this._status='';this._render(true);}
  async _fetchHistory(){
   if(!this._hass||!this._config?.profile)return;
@@ -176,8 +195,15 @@ class JwDailyHydrationLogCard extends HTMLElement {
    catch(err){this._alert(err);}return;
   }
   if(this._settingsSection==='profile'&&this._profileDraft&&Object.hasOwn(this._profileDraft,field)){
-   this._profileDraft[field]=e.target.type==='checkbox'?e.target.checked:e.target.value;return;
-  }
+    const d=this._profileDraft;
+    if(field==='unit'){
+      d.unit=e.target.value;
+      d.daily_target_ml=String(Number(jdhlFromMl(d.daily_target_base_ml,d.unit).toFixed(d.unit==='mL'?3:d.unit==='L'?3:2)));
+      this._render(true);return;
+    }
+    if(field==='daily_target_ml')d.daily_target_base_ml=jdhlToMl(Number(e.target.value),d.unit);
+    d[field]=e.target.type==='checkbox'?e.target.checked:e.target.value;return;
+   }
   if(this._settingsSection && this._settingsDraft && Object.hasOwn(this._settingsDraft,field)){
    this._settingsDraft[field]=e.target.value;
    if(field==='label_mode'&&e.type==='change')this._render(true);
@@ -215,6 +241,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     if(field==='icon_mdi'&&e.target.value){this._customDraft.icon_svg='';const preview=this.shadowRoot.querySelector('.liquid-svg-preview');if(preview){const mdl=/^mdi:[a-z0-9-]+$/.test(e.target.value)?e.target.value:'mdi:glass-mug-variant';preview.innerHTML=`<ha-icon class="liquid-icon" icon="${jdhlEscape(mdl)}"></ha-icon>`;}}return;}
   }
   if(this._modal){
+   if(field==='volume_ml'){this._modal.volume_base_ml=null;}
    if(field==='time'&&e.type==='change'){
     const normal=jdhlNormalizeTime(e.target.value);
     if(normal){e.target.value=normal;this._modal.time=normal;}else this._modal.time=e.target.value;
@@ -311,7 +338,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  _openEdit(id){const r=this._selectedRecord(id);if(!r)return;
   const d=new Date(r.timestamp);const parts=this._timeParts(d);this._modal={mode:'edit',id:r.id,
    liquid_type:r.liquid_type==='unknown'?'':r.liquid_type,cup_type_id:r.cup_type_id||'',quick_button_id:'',
-   volume_ml:String(r.volume_ml),date:parts.date,time:parts.time};
+   volume_ml:String(Number(jdhlFromMl(r.volume_ml,this._unit()).toFixed(this._unit()==='L'?3:2))),volume_base_ml:r.volume_ml,date:parts.date,time:parts.time};
   this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;this._confirmDelete=false;this._render(true);
  }
  _timeParts(d){
@@ -320,10 +347,10 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const p=Object.fromEntries(pts.map(x=>[x.type,x.value]));
   return {date:`${p.day}-${p.month}-${p.year}`,time:`${p.hour}:${p.minute}:${p.second}`};
  }
- _openNew(){this._modal={mode:'new',id:'',liquid_type:'',cup_type_id:'',quick_button_id:'',volume_ml:'',date:jdhlIsoToDate(this._viewDate||this._todayISO()),time:this._nowTime()};this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;this._confirmDelete=false;this._render(true);}
- _payload(){const m=this._modal,volume=Number(m?.volume_ml),date=m?.date?.trim(),time=jdhlNormalizeTime(m?.time);
+ _openNew(){this._modal={mode:'new',id:'',liquid_type:'',cup_type_id:'',quick_button_id:'',volume_ml:'',volume_base_ml:null,date:jdhlIsoToDate(this._viewDate||this._todayISO()),time:this._nowTime()};this._calendarOpen=false;this._calendarMonth=null;this._historyCalendarOpen=false;this._historyCalendarMonth=null;this._confirmDelete=false;this._render(true);}
+ _payload(){const m=this._modal,volume=m?.volume_base_ml??jdhlToMl(Number(m?.volume_ml),this._unit()),date=m?.date?.trim(),time=jdhlNormalizeTime(m?.time);
   if(!this._liquidInfo(m?.liquid_type) || (m.mode==='new' && this._liquidInfo(m.liquid_type)?.hidden))throw Error('Select a visible liquid type.');
-  if(!Number.isFinite(volume)||volume<=0||volume>100000)throw Error('Enter a volume between 0 and 100,000 mL.');
+  if(!Number.isFinite(volume)||volume<=0||volume>100000)throw Error('Enter a positive volume (maximum 100,000 mL equivalent).');
   if(!/^\d{2}-\d{2}-\d{4}$/.test(date))throw Error('Use DD-MM-YYYY for the date.');
   if(!time)throw Error('Enter a valid 24-hour time: 930 → 09:30, 1430 → 14:30. Hours must be 00–23 and minutes 00–59.');
   const iso=jdhlDateToIso(date);
@@ -334,7 +361,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.36')throw Error(`Frontend v1.1.0-beta.36 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.37')throw Error(`Frontend v1.1.0-beta.37 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -367,23 +394,44 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._calendarMonth=jdhlIsoDate(d).slice(0,7);this._render(true);
  }
  async _click(e){const el=e.target?.closest?.('[data-action]');if(!el||this._busy)return;
-  const action=el.dataset.action;
+   const action=el.dataset.action;
+  if(action==='icon-pick-open'){
+   const scope=el.dataset.value;
+   const current=scope==='liquid'?this._customDraft?.icon_mdi:scope==='cup'?this._settingsDraft?.icon_mdi:this._settingsDraft?.icon_mdi;
+   this._iconPicker={scope,selected:/^mdi:[a-z0-9-]+$/.test(current||'')?current:'mdi:cup'};
+   this._render(true);return;
+  }
+  if(action==='icon-pick-cancel'){this._iconPicker=null;this._render(true);return;}
+  if(action==='icon-pick-liquid-default'){
+   if(this._settingsDraft)this._settingsDraft.icon_mdi='';this._iconPicker=null;this._render(true);return;
+  }
+  if(action==='icon-pick-apply'){
+   const value=this._iconPicker?.selected;
+   if(!/^mdi:[a-z0-9-]{2,70}$/.test(value||'')){this._error='Choose a valid Material Design icon';this._render(true);return;}
+   if(this._iconPicker.scope==='liquid'&&this._customDraft){this._customDraft.icon_mdi=value;this._customDraft.icon_svg='';}
+   else if(this._settingsDraft)this._settingsDraft.icon_mdi=value;
+   this._iconPicker=null;this._render(true);return;
+  }
+
+   if(action==='export-open'){this._excelOpen=true;this._exportProfile='all';if(!this._profilesData)await this._loadProfilesForExport();this._render(true);return;}
+   if(action==='export-cancel'){this._excelOpen=false;this._error='';this._render(true);return;}
+   if(action==='export'&&this._excelOpen){await this._export();return;}
   if(action==='type'){if(!this._modal||this._manageOpen)return;const info=this._liquidInfo(el.dataset.value);
    if(!info||info.hidden)return;this._modal.liquid_type=info.id;
    this._modal.quick_button_id='';
-   if(this._cupInfo(this._modal.cup_type_id))this._modal.volume_ml=String(this._cupInfo(this._modal.cup_type_id).default_volume_ml);
-   else if(this._cupDefs().length)this._modal.volume_ml='';
-   else if(this._modal.mode==='new')this._modal.volume_ml='';
+   if(this._cupInfo(this._modal.cup_type_id)){this._modal.volume_base_ml=this._cupInfo(this._modal.cup_type_id).default_volume_ml;this._modal.volume_ml=String(Number(jdhlFromMl(this._modal.volume_base_ml,this._unit()).toFixed(this._unit()==='L'?3:2)));}
+   else if(this._cupDefs().length){this._modal.volume_ml='';this._modal.volume_base_ml=null;}
+   else if(this._modal.mode==='new'){this._modal.volume_ml='';this._modal.volume_base_ml=null;}
    this._error='';this._render(true);return;}
   if(action==='cup'){if(!this._modal)return;const c=this._cupInfo(el.dataset.value);
    if(!c||c.hidden)return;this._modal.cup_type_id=c.id;this._modal.quick_button_id='';
-   this._modal.volume_ml=String(c.default_volume_ml);this._error='';this._render(true);return;}
+   this._modal.volume_base_ml=c.default_volume_ml;this._modal.volume_ml=String(Number(jdhlFromMl(c.default_volume_ml,this._unit()).toFixed(this._unit()==='L'?3:2)));this._error='';this._render(true);return;}
   if(action==='quick-choice'){if(!this._modal)return;const q=this._quickDefs().find(x=>x.id===el.dataset.value&&x.available);
    if(!q)return;this._modal.liquid_type=q.liquid_type_id;this._modal.cup_type_id=q.cup_type_id;
-   this._modal.quick_button_id=q.id;this._modal.volume_ml=String(q.default_volume_ml);
+   this._modal.quick_button_id=q.id;this._modal.volume_base_ml=q.default_volume_ml;this._modal.volume_ml=String(Number(jdhlFromMl(q.default_volume_ml,this._unit()).toFixed(this._unit()==='L'?3:2)));
    this._error='';this._render(true);return;}
   if(action==='amount'){if(!this._modal||this._manageOpen)return;
-   this._modal.volume_ml=String(el.dataset.value);this._modal.quick_button_id='';this._error='';this._render(true);return;}
+   this._modal.volume_base_ml=Number(el.dataset.value);this._modal.volume_ml=String(Number(jdhlFromMl(this._modal.volume_base_ml,this._unit()).toFixed(this._unit()==='L'?3:2)));this._modal.quick_button_id='';this._error='';this._render(true);return;}
   if(action==='manage-liquids'){if(!this._modal||!this._hass?.user?.is_admin)return;
    this._manageOpen=true;this._customDraft=null;this._editingLiquidId=null;this._managePendingDelete=null;this._error='';this._render(true);return;}
   if(action==='manage-add'){this._customDraft=this._newLiquidDraft();this._editingLiquidId=null;this._error='';this._render(true);return;}
@@ -510,7 +558,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    link.href='data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,'+response.base64;
    link.download=response.filename||'jwDaily Hydration Log - All Data.xlsx';
    this.shadowRoot.appendChild(link);link.click();link.remove();
-   this._status='Excel export started';
+   this._status='Excel export started';this._excelOpen=false;
   }catch(e){this._alert(e);}finally{this._busy=false;this._render(true);}
  }
  _glass(pct,remaining,target){
@@ -534,8 +582,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
    <path d="M38 ${targetY} L122 ${targetY}" stroke="#fff" stroke-opacity=".95" stroke-width="5" stroke-dasharray="4 5" stroke-linecap="round"/>
    <path d="M38 ${targetY} L122 ${targetY}" stroke="#e04444" stroke-width="2.6" stroke-dasharray="4 5" stroke-linecap="round"/>
   </svg>
-  <span class="cup-target">${jdhlEscape(jdhlFmt(target))}</span>
-  ${remaining>0?`<span class="cup-remaining" style="top:${(100*remainingY/200).toFixed(2)}%">${jdhlEscape(jdhlFmt(remaining))}</span>`:''}
+  <span class="cup-target">${jdhlEscape(this._fmt(target))}</span>
+  ${remaining>0?`<span class="cup-remaining" style="top:${(100*remainingY/200).toFixed(2)}%">${jdhlEscape(this._fmt(remaining))}</span>`:''}
   </div>`;
  }
  _dayBarsHTML(){
@@ -550,7 +598,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return `<div class="liquid-bars" aria-label="Volumes by liquid type on selected day"><div class="bars-title">${heading}</div>
    ${data.map(x=>`<div class="bar-line"><span title="${jdhlEscape(label(x.liquid_type))}"><i class="type-dot" style="background:${this._typeColor(x.liquid_type,label(x.liquid_type))}" aria-hidden="true"></i>${jdhlEscape(label(x.liquid_type))}</span>
       <div class="bar-track"><div class="bar-fill" style="background:${this._typeColor(x.liquid_type,label(x.liquid_type))};width:${(100*Number(x.volume_ml)/high).toFixed(2)}%"></div></div>
-      <strong>${jdhlFmt(Number(x.volume_ml))}</strong></div>`).join('')}</div>`;
+      <strong>${this._fmt(Number(x.volume_ml))}</strong></div>`).join('')}</div>`;
  }
  _historyCalendarHTML(){
   if(!this._historyCalendarOpen)return '';
@@ -573,13 +621,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  _historyHTML(){if(this._config.show_history===false)return '';
   const iso=this._viewDate||this._todayISO(),rows=Array.isArray(this._history?.entries)?[...this._history.entries].reverse():[];
-  const total=this._history?jdhlFmt(this._history.total_ml,this._config.unit):'—';
+  const total=this._history?this._fmt(this._history.total_ml):'—';
   const canEdit=!!this._hass?.user?.is_admin;
   const table=rows.length?`<div class="history-table"><table><thead><tr><th>Time</th><th>Liquid</th><th>Cup</th><th class="right">Volume</th></tr></thead><tbody>
    ${rows.map(r=>{const time=this._timeParts(new Date(r.timestamp)).time.slice(0,5);
     const liquid=this._liquidName(r.liquid_type),cup=this._cupInfo(r.cup_type_id)?.name||'Unknown';
     return `<tr ${canEdit?`data-action="edit" data-id="${jdhlEscape(r.id)}" title="Edit drink moment" tabindex="0"`:''}>
-    <td>${jdhlEscape(time)}</td><td title="${jdhlEscape(liquid)}">${jdhlEscape(liquid)}</td><td title="${jdhlEscape(cup)}">${jdhlEscape(cup)}</td><td class="right">+${jdhlFmt(Number(r.volume_ml),this._config.unit)} ${canEdit?'✎':''}</td></tr>`;}).join('')}
+    <td>${jdhlEscape(time)}</td><td title="${jdhlEscape(liquid)}">${jdhlEscape(liquid)}</td><td title="${jdhlEscape(cup)}">${jdhlEscape(cup)}</td><td class="right">+${this._fmt(Number(r.volume_ml))} ${canEdit?'✎':''}</td></tr>`;}).join('')}
    </tbody></table></div>`:`<p class="muted center">${this._history?'No drinks recorded on this date.':'Loading drink history…'}</p>`;
   return `<section class="history"><div class="history-head"><h3>Drink history</h3><span class="muted">${rows.length} entries</span></div>
    <div class="date-nav"><button data-action="prev" class="small secondary" aria-label="Previous day">‹</button>
@@ -599,7 +647,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    <button class="secondary small" data-action="manage-down" data-value="${jdhlEscape(t.id)}" ${index===visible.length-1?'disabled':''} aria-label="Move ${jdhlEscape(t.name)} down">↓</button>
    <button class="secondary small settings-hide-button" data-action="manage-hide" data-value="${jdhlEscape(t.id)}">Hide</button>
    <button class="secondary small" data-action="manage-edit" data-value="${jdhlEscape(t.id)}">Edit</button>
-   ${t.custom?`<button class="danger small" data-action="manage-remove" data-value="${jdhlEscape(t.id)}" ${t.can_delete?'':'disabled'} title="${t.can_delete?'Delete unused type':'Used in drink history; hide instead'}">Delete</button>`:''}</div>
+   <button class="danger small" data-action="manage-remove" data-value="${jdhlEscape(t.id)}" ${t.custom&&t.can_delete?'':'disabled'} title="${t.custom?(t.can_delete?'Delete unused type':'Used in drink history; hide instead'):'Built-in types cannot be deleted'}">Delete</button></div>
    </div>`).join('');
   return `<div class="manage">
    ${this._settingsSection?'':'<h3>Liquid types</h3>'}<p class="muted manage-intro">Change names, icons, colors and order. Hide any type, or delete unused custom types. Used types can only be hidden; history remains intact.</p>
@@ -615,10 +663,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
          <button class="danger" data-action="manage-delete-confirm">Confirm delete</button></div></div></section></div>`:'' }
      ${this._settingsSection?'':`<div class="dialog-actions"><button class="secondary" data-action="manage-cancel">← Back to drink</button><button data-action="manage-add">+ Add liquid</button></div>`}`}
     ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Liquid editor"><div class="settings-head"><h3>${this._editingLiquidId?'Edit liquid type':'Add liquid type'}</h3><button class="secondary small" data-action="manage-cancel" aria-label="Close">✕</button></div><div class="manage-editor">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
-    <div class="manage-form-grid">
-     <label>Liquid name<input data-field="custom_name" maxlength="48" value="${jdhlEscape(d.custom_name||'')}" placeholder="e.g. Orange juice"/></label>
-     <label>Material Design Icon<input data-field="icon_mdi" value="${jdhlEscape(d.icon_mdi||'')}" placeholder="mdi:glass-mug-variant"/></label>
-    </div>
+     <div class="liquid-icon-hero">
+      <span class="liquid-icon-hero-graphic">${this._liquidIcon({id:this._editingLiquidId||'',name:d.custom_name||'',icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',color:jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)},true)}</span>
+      <div><strong>Icon</strong><small>${jdhlEscape(d.icon_svg?'Custom SVG':d.icon_mdi||'Default liquid icon')}</small><button class="secondary small" data-action="icon-pick-open" data-value="liquid">Choose icon</button></div>
+     </div>
+     <div class="manage-form-grid liquid-name-row"><label>Liquid name<input data-field="custom_name" maxlength="48" value="${jdhlEscape(d.custom_name||'')}" placeholder="e.g. Orange juice"/></label></div>
     <div class="liquid-svg-section">
      <label class="svg-field">SVG icon (.svg, max 16 KB)<input data-field="custom_svg_file" type="file" accept=".svg,image/svg+xml"/></label>
      <div class="liquid-svg-preview" aria-label="Selected liquid icon preview" role="img">
@@ -630,7 +679,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <label>Color <input type="color" data-field="color_picker" value="${jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)}" aria-label="Choose liquid color" /></label>
       <label>Hex color <input type="text" data-field="color_hex" value="${jdhlEscape(d.color_hex)}" maxlength="32" spellcheck="false" autocapitalize="characters" aria-label="Hex color code" placeholder="#RRGGBB" /></label>
       <span class="color-preview" style="background:${jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)}" role="img" aria-label="Color preview"></span>
-      <button type="button" class="secondary small" data-action="manage-color-reset">Reset to default</button>
+      <button type="button" class="secondary small" data-action="manage-color-reset">Use default color</button>
     </div><p class="color-error error" role="alert" ${jdhlHex(d.color_hex)?'hidden':''}>${jdhlHex(d.color_hex)?'':'Enter a valid color in #RRGGBB format.'}</p>
     <div class="dialog-actions"><button class="secondary" data-action="manage-cancel">Cancel</button>
      <button data-action="manage-save" ${this._busy?'disabled':''}>Save liquid</button></div></div></section></div>`:''}
@@ -650,15 +699,15 @@ class JwDailyHydrationLogCard extends HTMLElement {
  _profileHTML(){
   const E=jdhlEscape,profiles=this._profilesData?.profiles||[],d=this._profileDraft;
   return `<div class="settings-section"><p class="settings-note">Each profile keeps separate settings and drink history.</p>
-   ${profiles.map(p=>`<div class="settings-row profile-settings-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E(p.slug)} · ${p.daily_target_ml} mL goal</small></div>
+   ${profiles.map(p=>`<div class="settings-row profile-settings-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E((p.gender||'').replace(/^./,c=>c.toUpperCase()))} · ${p.age} years · Daily target ${jdhlFmt(p.daily_target_ml,p.unit||'mL')} · Units ${jdhlUnitLabel(p.unit)}</small></div>
     <button class="secondary small" data-action="settings-profile-edit" data-value="${E(p.slug)}">Edit</button></div>`).join('')}
    ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Profile editor"><div class="settings-head"><h3>${this._profileEditSlug?'Edit profile':'Add profile'}</h3><button class="secondary small" data-action="settings-profile-cancel" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
     <label class="span-2">Profile name<input data-field="name" maxlength="48" value="${E(d.name)}"/></label>
     <label>Age<input type="number" min="1" max="120" data-field="age" value="${E(d.age)}"/></label>
     <label>Gender<select data-field="gender"><option value="male" ${d.gender==='male'?'selected':''}>Male</option><option value="female" ${d.gender==='female'?'selected':''}>Female</option></select></label>
     <label>Units<select data-field="unit">${['mL','L','fl_oz'].map(v=>`<option value="${v}" ${d.unit===v?'selected':''}>${v}</option>`).join('')}</select></label>
-    <label>Daily target (mL)<input type="number" min="1" max="100000" step="1" data-field="daily_target_ml" value="${E(d.daily_target_ml)}"/></label>
-    ${this._profileEditSlug?`<button class="secondary" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}">Manage Quick buttons</button>`:''}
+    <label>Daily target (${jdhlUnitLabel(d.unit)})<input type="number" min="0.001" max="100000" step="any" data-field="daily_target_ml" value="${E(d.daily_target_ml)}"/></label>
+    ${this._profileEditSlug?`<section class="profile-quick-section span-2"><div class="profile-quick-header"><h4>Quick buttons</h4><button class="secondary small" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}">Edit</button></div><div class="quick-choices profile-quick-choices">${(this._profileQuickHistory?.quick_buttons||[]).map(q=>`<div class="quick-choice" style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))}">${q.icon_mdi?`<ha-icon icon="${E(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}<span>${E(this._liquidName(q.liquid_type_id))} (${E(this._cupInfo(q.cup_type_id)?.name||'Cup')} · ${jdhlFmt(q.default_volume_ml||0,d.unit)})</span></div>`).join('')||'<p class="settings-note">No Quick buttons configured.</p>'}</div></section>`:''}
     ${!this._profileEditSlug?`<label>Copy settings from<select data-field="copy_from"><option value="">Start with default settings</option>${profiles.map(p=>`<option value="${E(p.slug)}" ${p.slug===d.copy_from?'selected':''}>${E(p.name)}</option>`).join('')}</select></label>`:''}
     ${!this._profileEditSlug?'<p class="settings-note">Only configuration is copied. No records, consumed volumes, sensor readings or personal targets are transferred.</p>':'<p class="settings-note">Changing the display name preserves the stable profile slug and entity IDs.</p>'}
     </div><div class="dialog-footer"><button class="secondary" data-action="settings-profile-cancel">Cancel</button><button data-action="settings-profile-save">${this._profileEditSlug?'Save profile':'Create profile'}</button></div></section></div>`:''}
@@ -666,10 +715,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  _transferHTML(){
   const E=jdhlEscape,p=this._settingsImportPreview;
-  return `<div class="settings-section"><h3>Settings import / export</h3>
+  return `<div class="settings-section"><h3>Import & Export</h3>
+   <div class="settings-row"><ha-icon icon="mdi:file-excel"></ha-icon><div class="row-title"><strong>Excel export</strong><small>Download all profiles or a selected profile</small></div><button data-action="export-open">Export to Excel</button></div>
    <p class="settings-note">Profile: <strong>${E(this._history?.profile_settings?.name||this._config.profile)}</strong>. Settings JSON contains no drink records, timestamps, consumption totals, entity IDs or sensor readings.</p>
    <div class="settings-row"><ha-icon icon="mdi:download"></ha-icon><div class="row-title"><strong>Export settings</strong><small>Current profile · JSON with SHA-256</small></div><button data-action="settings-export-json">Export JSON</button></div>
-   <div class="settings-edit"><h4>Import settings</h4><label>Choose a settings JSON file<input type="file" accept=".json,application/json" data-field="settings_import_file"/></label>
+   <details class="transfer-details"><summary>Import settings JSON</summary><div class="settings-edit"><h4>Import settings</h4><label>Choose a settings JSON file<input type="file" accept=".json,application/json" data-field="settings_import_file"/></label>
     ${this._settingsImportFilename?`<p>Selected: ${E(this._settingsImportFilename)}</p>`:''}
     <p class="settings-note">Import overwrites only configuration fields after validation and your explicit approval. Your drink history is never part of the file.</p>
     <button class="secondary" data-action="settings-import-preview" ${!this._settingsImportContent?'disabled':''}>Preview import</button>
@@ -678,11 +728,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
        <p>Drink history: unchanged (${p.drink_count} existing records)</p>
        <p class="settings-note">Save an export of your current settings before importing. The import is blocked if settings changed after preview.</p>
        <div class="dialog-actions"><button data-action="settings-import-apply" class="danger">Confirm and import settings</button></div></div>`:''}
-   </div>
+   </div></details>
    <div class="settings-edit"><h4>Data — drink history and snapshots</h4>
      <p class="settings-note">Data JSON contains the original record IDs, drink entries, source measurements and day archives. Settings are never overwritten by Data import.</p>
      <div class="dialog-actions"><button data-action="data-export-json">Export Data JSON</button></div>
-     <label>Choose Data JSON<input type="file" accept=".json,application/json" data-field="data_import_file"/></label>
+     <details class="transfer-details"><summary>Import drink history JSON</summary><label>Choose Data JSON<input type="file" accept=".json,application/json" data-field="data_import_file"/></label>
      ${this._dataImportFilename?`<p>Selected: ${E(this._dataImportFilename)}</p>`:''}
      <label>Import mode<select data-field="data_import_mode">
       ${[['merge','Merge — add missing IDs only'],['update','Update existing — update matching IDs'],['replace','Replace all — remove all existing Data first']]
@@ -695,11 +745,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
       ${this._dataImportMode==='replace'?'<p class="delete-warning">REPLACE ALL deletes the current profile Data before restoring the chosen file; this cannot be undone without a backup.</p>':''}
       <p class="settings-note">Download and verify a current Full Backup ZIP before confirming. The saved file must be accessible outside Home Assistant.</p>
       <button data-action="data-import-apply" class="danger" ${!this._fullBackupSaved?'disabled':''}>Confirm Data import</button></div>`:''}
-   </div>
+     </details></div>
    <div class="settings-edit"><h4>Full backup / restore</h4>
     <p class="settings-note">ZIP containing settings.json, data.json and a checksummed manifest. Restore requires the original profile ID and replaces both Settings and Data together.</p>
     <div class="dialog-actions"><button data-action="full-backup-export">Export Full Backup ZIP</button></div>
-    <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I verified that the Full Backup ZIP is saved and opens correctly.</label>
+    <details class="transfer-details"><summary>Restore a Full Backup ZIP</summary><label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I verified that the Full Backup ZIP is saved and opens correctly.</label>
     <label>Choose Full Backup ZIP<input type="file" accept=".zip,application/zip" data-field="full_restore_file"/></label>
     ${this._fullRestoreFilename?`<p>Selected: ${E(this._fullRestoreFilename)}</p>`:''}
     <button class="secondary" data-action="full-restore-preview" ${!this._fullRestoreContent?'disabled':''}>Preview Full restore</button>
@@ -708,46 +758,31 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <p>Cups ${this._fullRestorePreview.counts.cups} · Quick buttons ${this._fullRestorePreview.counts.quick_buttons}</p>
       <p class="delete-warning">This overwrites the entire current profile. Review your backup and explicitly confirm.</p>
       <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm and restore Full Backup</button></div>`:''}
-   </div>
-   <div class="settings-edit"><h4>Migration v3 — all profiles</h4>
-    <p class="settings-note">The original pre-migration data and settings remain available. Download and verify the immutable full backup ZIP before rollback.</p>
-    <div class="dialog-actions"><button data-action="migration-status">Check migration status</button>
-     <button data-action="migration-backup-export">Download pre-migration ZIP</button></div>
-    ${this._migrationStatus?`<p>Status: ${E(this._migrationStatus.status)} · Profiles: ${this._migrationStatus.profile_count} · Backup: ${this._migrationStatus.backup_verified?'Verified':'UNAVAILABLE'}</p>`:''}
-    ${this._migrationStatus?.legacy_cleanup_v4?`<p class="settings-note" data-testid="legacy-cleanup-v4-status">Legacy cleanup: ${this._migrationStatus.legacy_cleanup_v4.status==='clean'?'Clean':E(this._migrationStatus.legacy_cleanup_v4.status||'Unknown')} · Removed: ${Number(this._migrationStatus.legacy_cleanup_v4.removed_fields)||0} · History: ${this._migrationStatus.legacy_cleanup_v4.history_unchanged?'Unchanged':'Not confirmed'}</p>`:''}
-    <label class="check-label"><input type="checkbox" data-field="migration_backup_verified" ${this._migrationBackupVerified?'checked':''}/> I downloaded, opened and verified the migration backup ZIP.</label>
-    <button class="danger" data-action="migration-rollback" ${!this._migrationBackupVerified||!this._migrationStatus?.backup_verified?'disabled':''}>Rollback migration (requires prior release)</button>
-   </div>
+    </details></div>
    </div>`;
  }
  _settingsHTML(){const page=this._settingsSection;const draft=this._settingsDraft;
    const nested=(page==='profile'&&!!this._profileDraft)||(page==='cups'&&!!(this._settingsDraft||this._settingsDeleteCupId))||(page==='quick'&&!!(this._settingsDraft||this._settingsDeleteQuickId))||(page==='liquids'&&!!(this._customDraft||this._managePendingDelete));
-  const nav=[['profile','Manage profiles','Edit, add or copy settings','mdi:account-multiple'],
-    ['liquids','Liquid types','Names, icons and colors','mdi:water'],
-    ['cups','Cup types','Reusable containers and volumes','mdi:glass-mug-variant'],
-    ['advanced','Advanced','Settings, Data and backup transfer','mdi:wrench']];
+  const nav=[['profile','Manage profiles','Personal targets, units and Quick buttons','mdi:account-multiple'],
+    ['liquids','Liquid types','Shared liquids and icon colors','mdi:water'],
+    ['cups','Maintain cup types','Shared cups, icons and volumes','mdi:glass-mug-variant'],
+    ['transfer','Import & Export','Settings, history, Excel and backups','mdi:database-arrow-down-outline']];
   const E=jdhlEscape;
   const choice=(items,valueField,labelField,selected,empty='Select')=>`<option value="">${E(empty)}</option>`+
    items.map(t=>`<option value="${E(t[valueField])}" ${t[valueField]===selected?'selected':''}>${E(t[labelField])}</option>`).join('');
   let body='';
-  if(page==='home')body=`<div class="settings-profile-current"><ha-icon icon="mdi:account-circle-outline"></ha-icon>
-    <div><strong>${E(this._history?.profile_settings?.name||this._config.profile)}</strong><small>Active card profile</small></div></div>
-    <div class="settings-category">PROFILE & GOALS</div>
-    <div class="settings-nav">${nav.map(([key,name,desc,icon],i)=>`${i===1?'<div class="settings-category">DRINK CONFIGURATION</div>':''}
-     ${i===3?'<div class="settings-category">MAINTENANCE</div>':''}
-     <button data-action="settings-page" data-value="${key}" class="settings-nav-item secondary">
-       <ha-icon icon="${icon}"></ha-icon><span><strong>${E(name)}</strong><small>${E(desc)}</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>`).join('')}</div>`;
+  if(page==='home')body=`<div class="settings-section settings-home-grid">
+   ${nav.map(([key,name,desc,icon])=>`<button data-action="settings-page" data-value="${key}" class="settings-nav-item secondary"><ha-icon icon="${icon}"></ha-icon><span><strong>${name}</strong><small>${desc}</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button>`).join('')}
+   </div>`;
   else if(page==='liquids')body=this._manageHTML();
-  else if(page==='advanced')body=`<div class="settings-section"><h3>Advanced</h3>
-   <div class="settings-nav"><button class="settings-nav-item secondary" data-action="settings-page" data-value="transfer"><ha-icon icon="mdi:database-arrow-down-outline"></ha-icon><span><strong>Import & Export</strong><small>Separate Settings and Data, plus Full Backup ZIP</small></span><ha-icon icon="mdi:chevron-right"></ha-icon></button></div></div>`;
   else if(page==='transfer')body=this._transferHTML();
   else if(page==='cups'){
    const cups=this._cupDefs();body=`<div class="settings-section"><p class="settings-note">A cup defines a default volume. Existing drink volumes never change.</p>
-    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<label>Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
-      <label>Default volume (mL)<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label>
-      <label>MDI icon<input data-field="icon_mdi" value="${E(draft.icon_mdi)}" placeholder="mdi:cup"/></label></div>
+    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<label class="span-2 cup-name-field">Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
+      <label class="cup-volume-field">Default volume (${this._unitLabel()})<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label>
+      <div class="icon-edit-row span-2"><ha-icon icon="${E(draft.icon_mdi||'mdi:cup')}"></ha-icon><div><strong>Icon</strong><small>${E(draft.icon_mdi||'mdi:cup')}</small></div><button class="secondary small" data-action="icon-pick-open" data-value="cup">Choose icon</button></div></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-cup-save">Save cup</button></div></section></div>`:''}
-    ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><div class="row-title"><strong>${E(c.name)}</strong><small>${jdhlFmt(Number(c.default_volume_ml))}${c.hidden?' · Hidden':''}</small></div>
+    ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><ha-icon class="cup-row-icon" icon="${E(c.icon_mdi||'mdi:cup')}"></ha-icon><div class="row-title"><strong>${E(c.name)}</strong><small>${this._fmt(Number(c.default_volume_ml))}${c.hidden?' · Hidden':''}</small></div>
      <span class="used-count" title="Recorded drink moments across all profiles">Used: ${Number(c.drink_count_all_profiles)||0}</span>
      <div class="settings-row-actions"><button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
      <button class="secondary small" data-action="settings-cup-down" data-value="${E(c.id)}" ${i===cups.length-1?'disabled':''} aria-label="Move down">↓</button>
@@ -762,14 +797,19 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   else if(page==='quick'){
    const quick=this._quickDefs(),liquids=this._liquidDefs().filter(t=>!t.hidden),cups=this._cupDefs().filter(c=>!c.hidden);
-   body=`<div class="settings-section"><p class="settings-note">Profile: ${E(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}. Automatic label: Liquid (Cup). Custom labels never change chart grouping.</p>
+   body=`<div class="settings-section"><p class="settings-note">These Quick buttons belong only to this profile. Changes do not alter recorded drinks.</p>
     ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Quick button editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit Quick button':'Add Quick button'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<label>Liquid<select data-field="liquid_type_id">${choice(liquids,'id','name',draft.liquid_type_id,'Choose liquid')}</select></label>
       <label>Cup<select data-field="cup_type_id">${choice(cups,'id','name',draft.cup_type_id,'Choose cup')}</select></label>
       <label>Button label<select data-field="label_mode"><option value="automatic" ${draft.label_mode==='automatic'?'selected':''}>Automatic: Liquid (Cup)</option><option value="custom" ${draft.label_mode==='custom'?'selected':''}>Custom</option></select></label>
-      ${draft.label_mode==='custom'?`<label>Custom button text<input data-field="custom_label" maxlength="60" value="${E(draft.custom_label)}"/></label>`:''}</div>
+      ${draft.label_mode==='custom'?`<label>Custom button text<input data-field="custom_label" maxlength="60" value="${E(draft.custom_label)}"/></label>`:''}
+      <div class="icon-edit-row span-2"><ha-icon icon="${E(draft.icon_mdi||this._liquidInfo(draft.liquid_type_id)?.icon_mdi||'mdi:cup')}"></ha-icon><div><strong>Quick button icon</strong><small>${E(draft.icon_mdi||'Uses liquid icon')}</small></div><button class="secondary small" data-action="icon-pick-open" data-value="quick">Choose icon</button><button class="secondary small" data-action="icon-pick-liquid-default">Use liquid icon</button></div></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-quick-save">Save Quick button</button></div></section></div>`:''}
-    ${quick.map((q,i)=>`<div class="settings-row quick-settings-row"><div class="row-title"><strong>${E(this._effectiveQuickLabel(q))}</strong>
-     <small>${E(this._liquidName(q.liquid_type_id))} · ${E(this._cupInfo(q.cup_type_id)?.name||'Cup unavailable')} · ${jdhlFmt(Number(q.default_volume_ml||0))}${q.hidden?' · Hidden':''}</small></div>
+    <div class="quick-table-header"><span>Icon</span><span>Liquid type</span><span>Cup type</span><span>Cup volume</span><span>Actions</span></div>
+    ${quick.map((q,i)=>`<div class="settings-row quick-settings-row">
+     ${q.icon_mdi?`<ha-icon icon="${E(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}
+     <span class="quick-col-name">${E(this._liquidName(q.liquid_type_id))}${q.hidden?' (Hidden)':''}</span>
+     <span class="quick-col-cup">${E(this._cupInfo(q.cup_type_id)?.name||'Cup unavailable')}</span>
+     <span class="quick-col-volume">${this._fmt(Number(q.default_volume_ml||0))}</span>
      <div class="settings-row-actions">
      <button class="secondary small" data-action="settings-quick-up" data-value="${E(q.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
      <button class="secondary small" data-action="settings-quick-down" data-value="${E(q.id)}" ${i===quick.length-1?'disabled':''} aria-label="Move down">↓</button>
@@ -784,14 +824,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   else if(page==='profile')body=this._profileHTML();
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
-  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.36</p>
+  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.37</p>
    <p class="settings-note">Each drink record stores independent Liquid and Cup IDs. Settings and Data can be backed up separately.</p></div>`;
   return `<div class="overlay" role="presentation"><section class="dialog dialog-settings dialog-page-${page}" role="dialog" aria-modal="${!nested}" aria-label="Settings">
-    <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({transfer:'Import & Export',quick:'Quick buttons'}[page]||'Settings')}</h3>
+    <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({transfer:'Import & Export',quick:'Edit Quick Buttons - '+(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}[page]||'Settings')}</h3>
     <button class="secondary small" data-action="settings-close" aria-label="Close settings">✕</button></div>
     ${this._error?`<p class="error" role="alert">${E(this._error)}</p>`:''}
     ${body}
-    ${page!=='home'?`<div class="dialog-footer main-dialog-footer"><button class="secondary" data-action="settings-home">← ${page==='quick'&&this._profileDraft?'Back to profile':page==='transfer'?'Back to advanced':'Back to settings'}</button>${page==='profile'?`<button data-action="settings-profile-add">+ Add profile</button>`:page==='cups'?`<button data-action="settings-cup-add">+ Add cup</button>`:page==='liquids'?`<button data-action="manage-add">+ Add liquid</button>`:page==='quick'?`<button data-action="settings-quick-add">+ Add Quick button</button>`:''}</div>`:''}
+    ${page!=='home'?`<div class="dialog-footer main-dialog-footer"><button class="secondary" data-action="settings-home">← ${page==='quick'&&this._profileDraft?'Back to profile':'Back to settings'}</button>${page==='profile'?`<button data-action="settings-profile-add">+ Add profile</button>`:page==='cups'?`<button data-action="settings-cup-add">+ Add cup</button>`:page==='liquids'?`<button data-action="manage-add">+ Add liquid</button>`:page==='quick'?`<button data-action="settings-quick-add">+ Add Quick button</button>`:''}</div>`:''}
    </section></div>`;
  }
  async _settingsCall(command, data){
@@ -904,25 +944,25 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   if(action==='settings-profile-add'||action==='settings-profile-edit'){
    this._error='';const current=this._profilesData?.profiles?.find(p=>p.slug===id);this._profileEditSlug=current?.slug||'';
-   this._profileDraft={name:current?.name||'',age:String(current?.age||30),gender:current?.gender||'male',
-      unit:current?.unit||'mL',daily_target_ml:String(current?.daily_target_ml||2000),copy_from:''};
-   this._render(true);return;
+   this._profileQuickHistory=null;this._profileDraft={name:current?.name||'',age:String(current?.age||30),gender:current?.gender||'male',
+      unit:current?.unit||'mL',daily_target_base_ml:Number(current?.daily_target_ml||2000),daily_target_ml:String(Number(jdhlFromMl(current?.daily_target_ml||2000,current?.unit||'mL').toFixed((current?.unit||'mL')==='mL'?3:(current?.unit||'mL')==='L'?3:2))),copy_from:''};
+   this._render(true);if(current?.slug){try{this._profileQuickHistory=await this._hass.callWS({type:'jw_daily_hydration_log/history',profile:current.slug,date:this._todayISO()});this._render(true);}catch(e){this._error=String(e.message||e);this._render(true);}}return;
   }
   if(action==='settings-profile-cancel'){this._profileDraft=null;this._profileEditSlug='';this._render(true);return;}
   if(action==='settings-profile-save'){
    const d=this._profileDraft;if(!d)return;
-   if(!d.name.trim()||!Number.isInteger(Number(d.age))||Number(d.age)<1||Number(d.age)>120||!Number.isInteger(Number(d.daily_target_ml))||Number(d.daily_target_ml)<1||Number(d.daily_target_ml)>100000){
+   if(!d.name.trim()||!Number.isInteger(Number(d.age))||Number(d.age)<1||Number(d.age)>120||!Number.isFinite(d.daily_target_base_ml)||d.daily_target_base_ml<1||d.daily_target_base_ml>100000){
     this._alert('Enter a valid name, age (1–120) and daily target (1–100000 mL).');return;}
    try{await this._ensureBackend();const editing=!!this._profileEditSlug;
     const req={type:'jw_daily_hydration_log/'+(editing?'profile_edit':'profile_create'),
       ...(editing?{profile:this._profileEditSlug}:{copy_from:d.copy_from||''}),
-      name:d.name.trim(),age:Number(d.age),gender:d.gender,unit:d.unit,daily_target_ml:Number(d.daily_target_ml)};
+      name:d.name.trim(),age:Number(d.age),gender:d.gender,unit:d.unit,daily_target_ml:d.daily_target_base_ml};
     await this._hass.callWS(req);this._profileDraft=null;this._profileEditSlug='';
     await this._loadProfiles();await this._fetchHistory();this._render(true);
    }catch(e){this._alert(e);}return;
   }
   if(action==='settings-close'){this._settingsSection=null;this._settingsDraft=null;this._profileDraft=null;this._profileEditSlug='';this._customDraft=null;this._manageOpen=false;this._render(true);return;}
-  if(action==='settings-home'){if(this._settingsSection==='quick'&&this._profileDraft){this._settingsSection='profile';this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._render(true);return;}this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(['transfer'].includes(this._settingsSection)?'advanced':'home');return;}
+  if(action==='settings-home'){if(this._settingsSection==='quick'&&this._profileDraft){this._settingsSection='profile';this._profileQuickHistory=this._settingsQuickHistory;this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._render(true);return;}this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen('home');return;}
   if(action==='settings-page'){this._settingsScopeProfile=null;this._settingsQuickHistory=null;this._settingsOpen(id);return;}
   if(action==='settings-discard'){this._settingsDraft=null;this._settingsEditId=null;this._render(true);return;}
   if(action==='settings-quick-delete'){
@@ -951,14 +991,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   if(action==='settings-cup-add'||action==='settings-cup-edit'){
    this._error='';const c=this._cupInfo(id);this._settingsEditId=c?.id||null;
-   this._settingsDraft={name:c?.name||'',volume_ml:String(c?.default_volume_ml||''),icon_mdi:c?.icon_mdi||'mdi:cup'};this._render(true);return;
+   this._settingsDraft={name:c?.name||'',volume_ml:String(Number(jdhlFromMl(c?.default_volume_ml||0,this._unit()).toFixed(this._unit()==='L'?3:2))),icon_mdi:c?.icon_mdi||'mdi:cup'};this._render(true);return;
   }
   if(action==='settings-cup-save'){
-   const d=this._settingsDraft||{};const n=Number(d.volume_ml);
+   const d=this._settingsDraft||{};const n=jdhlToMl(Number(d.volume_ml),this._unit());
    if(!String(d.name||'').trim()||!Number.isFinite(n)||n<=0||n>100000){this._alert('Provide a cup name and positive volume up to 100,000 mL.');return;}
    await this._settingsCall('manage_cup',{action:this._settingsEditId?'update':'add',...(this._settingsEditId?{cup_id:this._settingsEditId}:{}),name:d.name,volume_ml:n,icon_mdi:d.icon_mdi||''});return;
-  }
-  if(action==='settings-cup-toggle'||action==='settings-quick-toggle'){
+  }  if(action==='settings-cup-toggle'||action==='settings-quick-toggle'){
    const cup=action==='settings-cup-toggle',item=cup?this._cupInfo(id):this._quickDefs().find(q=>q.id===id);
    if(!item)return;await this._settingsCall(cup?'manage_cup':'manage_quick',{action:item.hidden?'restore':'hide',...(cup?{cup_id:id}:{quick_id:id})});return;
   }
@@ -971,7 +1010,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(action==='settings-quick-add'||action==='settings-quick-edit'){
    this._error='';const q=this._quickDefs().find(x=>x.id===id);this._settingsEditId=q?.id||null;
    this._settingsDraft={liquid_type_id:q?.liquid_type_id||'',cup_type_id:q?.cup_type_id||'',
-    label_mode:q?.label_mode||'automatic',custom_label:q?.custom_label||''};this._render(true);return;
+    label_mode:q?.label_mode||'automatic',custom_label:q?.custom_label||'',icon_mdi:q?.icon_mdi||''};this._render(true);return;
   }
   if(action==='settings-quick-save'){
    const d=this._settingsDraft||{};
@@ -981,7 +1020,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     this._alert('Enter a custom button label.');return;}
    await this._settingsCall('manage_quick',{action:this._settingsEditId?'update':'add',
      ...(this._settingsEditId?{quick_id:this._settingsEditId}:{}),liquid_type_id:d.liquid_type_id,
-     cup_type_id:d.cup_type_id,label_mode:d.label_mode,custom_label:d.custom_label||''});return;
+     cup_type_id:d.cup_type_id,label_mode:d.label_mode,custom_label:d.custom_label||'',icon_mdi:d.icon_mdi||''});return;
   }
   if(action==='settings-target-save'){
    const node=this.shadowRoot.querySelector('[data-field="target_ml"]');
@@ -1000,7 +1039,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${chosen?`style="--liquid-choice-bg:${chosen};--liquid-choice-ink:${jdhlContrastInk(chosen)}"`:''}>
     ${this._liquidIcon(t)}<span>${jdhlEscape(t.name)}</span></button>`;}).join('');
   const amounts=this._buttons().map(v=>`<button class="amount ${Number(m.volume_ml)===v?'selected':''}"
-     data-action="amount" data-value="${v}">${jdhlFmt(v)}</button>`).join('');
+     data-action="amount" data-value="${v}">${this._fmt(v)}</button>`).join('');
   return `<div class="overlay" role="presentation"><section class="dialog ${this._manageOpen?'dialog-manage-liquids':'dialog-drink'}" role="dialog" aria-modal="true"
     aria-label="${m.mode==='edit'?'Edit drink moment':'Add drink moment'}">
    ${this._manageOpen?this._manageHTML():`
@@ -1009,17 +1048,17 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${this._quickDefs().some(q=>q.available)?`<div class="modal-heading">Quick buttons</div><div class="quick-choices">
      ${this._quickDefs().filter(q=>q.available).map(q=>`<button class="quick-choice ${m.quick_button_id===q.id?'selected':''}"
       data-action="quick-choice" data-value="${jdhlEscape(q.id)}" aria-pressed="${m.quick_button_id===q.id}"
-      style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))}">${jdhlEscape(this._effectiveQuickLabel(q))}</button>`).join('')}</div>`:''}
+      style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))}">${q.icon_mdi?`<ha-icon icon="${jdhlEscape(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}<span>${jdhlEscape(this._effectiveQuickLabel(q))} · ${this._fmt(q.default_volume_ml||0)}</span></button>`).join('')}</div>`:''}
     <div class="modal-heading">Liquid type</div><div class="liquid-choices">${types}</div>
     ${this._cupDefs().some(c=>!c.hidden)?`<div class="modal-heading">Cup type</div><div class="cup-choices">
       ${this._cupDefs().filter(c=>!c.hidden||(m.mode==='edit'&&m.cup_type_id===c.id)).map(c=>`<button
        data-action="cup" data-value="${jdhlEscape(c.id)}" class="cup-choice ${m.cup_type_id===c.id?'selected':''}"
-       aria-pressed="${m.cup_type_id===c.id}">${jdhlEscape(c.name)} · ${jdhlFmt(Number(c.default_volume_ml))}</button>`).join('')}</div>`:''}
+       aria-pressed="${m.cup_type_id===c.id}">${jdhlEscape(c.name)} · ${this._fmt(Number(c.default_volume_ml))}</button>`).join('')}</div>`:''}
 
     ${!this._cupDefs().length?`<div class="modal-heading">Legacy volume buttons</div><div class="volume-choices">${amounts}</div>`:''}
 
     <div class="fields">
-     <label>Custom amount (mL)<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${jdhlEscape(m.volume_ml)}" placeholder="Enter or select"/></label>
+     <label>Custom amount (${this._unitLabel()})<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${jdhlEscape(m.volume_ml)}" placeholder="Enter or select"/></label>
      <label>Date (DD-MM-YYYY)<div class="date-select"><button type="button" class="date-trigger secondary" data-action="calendar-toggle" aria-label="Choose date" aria-expanded="${this._calendarOpen}">${jdhlEscape(m.date)} <span aria-hidden="true">▦</span></button>${this._calendarHTML()}</div></label>
      <label>Time (24-hour)<input data-field="time" type="text" inputmode="numeric" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="1430 → 14:30" title="Type 0930 for 09:30; colon is optional" value="${jdhlEscape(m.time)}"/></label>
     </div>
@@ -1031,8 +1070,27 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <button data-action="save" ${this._busy?'disabled':''}>Save</button></div>`}`}
    </section></div>`;
  }
+ _iconPickerHTML(){if(!this._iconPicker)return '';
+  return `<div class="overlay editor-overlay icon-modal-overlay" role="presentation"><section class="dialog dialog-editor icon-library-dialog" role="dialog" aria-modal="true" aria-label="Choose a Material Design Icon">
+   <div class="settings-head"><h3>Choose icon</h3><button class="secondary small" data-action="icon-pick-cancel" aria-label="Close icon library">✕</button></div>
+   <p class="settings-note">Search the full Home Assistant Material Design Icons library by name or alias and select a graphic.</p>
+   <ha-icon-picker data-icon-library label="Search icons" value="${jdhlEscape(this._iconPicker.selected)}"></ha-icon-picker>
+   <div class="icon-selected-preview"><ha-icon icon="${jdhlEscape(this._iconPicker.selected)}"></ha-icon><span>${jdhlEscape(this._iconPicker.selected)}</span></div>
+   <div class="dialog-footer"><button class="secondary" data-action="icon-pick-cancel">Cancel</button><button data-action="icon-pick-apply">Apply icon</button></div>
+  </section></div>`;
+ }
+ _excelHTML(){if(!this._excelOpen)return '';
+  return `<div class="overlay editor-overlay" role="presentation"><section class="dialog dialog-editor dialog-excel" role="dialog" aria-modal="true" aria-label="Export hydration data">
+   <div class="settings-head"><h3>Export to Excel</h3><button class="secondary small" data-action="export-cancel" aria-label="Close export">✕</button></div>
+   ${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
+   <label class="excel-export-label">Export hydration data:
+    <select data-field="export_profile"><option value="all" ${!this._exportProfile||this._exportProfile==='all'?'selected':''}>All profiles</option>${(this._profilesData?.profiles||[]).map(p=>`<option value="${jdhlEscape(p.slug)}" ${this._exportProfile===p.slug?'selected':''}>${jdhlEscape(p.name)}</option>`).join('')}</select>
+   </label><p class="settings-note">The workbook contains four sheets with profile-specific history and shared Liquid/Cup settings.</p>
+   <div class="dialog-footer"><button class="secondary" data-action="export-cancel">Cancel</button><button data-action="export" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>
+  </section></div>`;
+ }
  _render(force=false){if(!this._config||!this._hass)return;
-  if((this._modal||this._settingsSection)&&!force)return; // Preserve typed popup fields.
+  if((this._modal||this._settingsSection||this._excelOpen)&&!force)return; // Preserve typed popup fields.
   const selectedDate=this._viewDate||this._todayISO(),isToday=selectedDate===this._todayISO();
   const daySummary=this._history?.date===selectedDate?this._history?.day_summary:null;
   const pendingPast=!isToday&&!daySummary;
@@ -1573,6 +1631,79 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .dialog-editor[aria-label="Liquid editor"] .color-editor input[data-field="color_hex"]{width:105px;max-width:105px}
 }
 
+
+/* v1.1.0-beta.37: simple Settings, unwrapped footer, discrete Excel export */
+.card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;padding:6px 0 0}
+.card-footer .card-version{white-space:nowrap!important;word-break:normal;flex:none;font-size:.72rem;line-height:1.1}
+.card-footer>button{font-size:.79rem;padding:5px 9px;white-space:nowrap}
+.dialog-excel{width:min(440px,calc(100vw - 20px))}
+.excel-export-label{display:flex;flex-direction:column;gap:7px;margin:13px 0}
+.excel-export-label select{max-width:330px;min-height:39px}
+.dialog-page-home{width:min(520px,calc(100vw - 20px))!important}
+.settings-home-grid{display:grid;grid-template-columns:1fr;gap:4px}
+.settings-home-grid .settings-nav-item{width:100%;min-height:62px}
+.transfer-details{margin:10px 0;border:1px solid var(--divider-color,#d1dce2);border-radius:9px;padding:10px}
+.transfer-details summary{cursor:pointer;font-weight:600;min-height:28px}
+.transfer-details .settings-edit{margin:9px 0 3px}
+
+
+/* beta.37 Icon-first compact / native Home Assistant icon library */
+.icon-library-dialog{width:min(490px,calc(100vw - 20px));position:relative;z-index:10050}
+.icon-modal-overlay{z-index:10050!important}
+.icon-library-dialog ha-icon-picker{display:block;min-height:56px;width:100%;margin:13px 0}
+.icon-selected-preview,.icon-edit-row,.liquid-icon-hero{display:flex;align-items:center;gap:11px}
+.icon-selected-preview{background:var(--secondary-background-color,#eef2f5);border-radius:10px;padding:8px 12px;overflow-wrap:anywhere}
+.icon-selected-preview ha-icon{--mdc-icon-size:32px}
+.icon-edit-row{grid-column:1/-1;flex-wrap:wrap;padding:6px;background:var(--secondary-background-color,#f3f6f8);border-radius:10px}
+.icon-edit-row>ha-icon{--mdc-icon-size:30px}
+.icon-edit-row>div{display:flex;flex-direction:column;gap:2px;flex:1;min-width:140px}
+.icon-edit-row small{color:var(--secondary-text-color,#5c6b72);font-size:.73rem}
+.liquid-icon-hero{padding:9px;min-height:66px;border:1px solid var(--divider-color,#d6e0e5);border-radius:12px;margin-bottom:11px}
+.liquid-icon-hero-graphic{width:58px;height:58px;display:grid;place-items:center;background:var(--secondary-background-color,#ecf2f5);border-radius:10px}
+.liquid-icon-hero-graphic .liquid-icon{width:38px;height:38px;--mdc-icon-size:38px}
+.liquid-icon-hero>div{display:flex;align-items:start;flex-direction:column;gap:4px;flex:1}
+.liquid-icon-hero>div small{font-size:.72rem;color:var(--secondary-text-color)}
+.liquid-name-row{grid-template-columns:1fr!important}
+.liquid-name-row input{max-width:280px!important}
+.dialog-editor[aria-label="Liquid editor"] .color-editor label:nth-child(2),
+.dialog-editor[aria-label="Liquid editor"] .color-editor input[data-field="color_hex"]{width:112px!important;max-width:112px!important}
+.dialog-page-cups .cup-settings-row{grid-template-columns:27px minmax(110px,1fr) 56px max-content!important}
+.dialog-page-cups .cup-row-icon{--mdc-icon-size:23px;align-self:center}
+.profile-quick-section{border-top:1px solid var(--divider-color,#d3dce0);padding:11px 0 4px}
+.profile-quick-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.profile-quick-header h4{margin:0;font-size:1rem}
+.profile-quick-choices{display:flex;gap:7px;flex-wrap:wrap}
+.profile-quick-choices .quick-choice{display:inline-flex;align-items:center;gap:5px;padding:7px 10px;cursor:default}
+.profile-quick-choices .quick-choice ha-icon,.quick-choices .quick-choice ha-icon{--mdc-icon-size:20px}
+.dialog-page-quick{width:min(815px,calc(100vw - 20px))!important}
+.quick-table-header,.quick-settings-row.settings-row{display:grid;grid-template-columns:30px minmax(75px,1fr) minmax(90px,1fr) 85px max-content;align-items:center;gap:8px}
+.quick-table-header{padding:6px 0;font-size:.78rem;font-weight:600;color:var(--secondary-text-color,#667780)}
+.quick-settings-row.settings-row{padding:4px 0!important;border-bottom:0!important;min-height:36px!important}
+.quick-settings-row>ha-icon{--mdc-icon-size:21px}
+.quick-col-volume{white-space:nowrap;font-size:.82rem}
+.quick-settings-row .settings-row-actions{grid-column:5!important;justify-content:end}
+@media(max-width:720px){.quick-table-header{display:none}.quick-settings-row.settings-row{grid-template-columns:26px minmax(65px,1fr) minmax(65px,1fr) 75px;gap:5px}.quick-settings-row .settings-row-actions{grid-column:1/-1!important;justify-self:end}.dialog-page-cups .cup-settings-row{grid-template-columns:25px minmax(0,1fr) auto!important}.dialog-page-cups .cup-settings-row .settings-row-actions{grid-column:1/-1!important}}
+
+
+/* beta37 form widths, manager action positions */
+.dialog-editor[aria-label="Profile editor"]{width:min(582px,calc(100vw - 24px))!important}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{grid-template-columns:100px 160px 145px;gap:11px 14px}
+.dialog-editor[aria-label="Profile editor"] .editor-body label{min-width:0}
+.dialog-editor[aria-label="Profile editor"] .editor-body label.span-2{grid-column:1/-1}
+.dialog-editor[aria-label="Profile editor"] [data-field="name"]{max-width:300px}
+.dialog-editor[aria-label="Profile editor"] [data-field="age"]{max-width:90px}
+.dialog-editor[aria-label="Profile editor"] [data-field="gender"]{max-width:145px}
+.dialog-editor[aria-label="Profile editor"] [data-field="unit"]{max-width:115px}
+.dialog-editor[aria-label="Profile editor"] [data-field="daily_target_ml"]{max-width:180px}
+.dialog-editor[aria-label="Profile editor"] .profile-quick-section{grid-column:1/-1}
+.dialog-page-liquids .saved-liquid{border-bottom:0!important;margin:2px 0}
+.dialog-page-liquids .saved-liquid .settings-row-actions button{font-size:.81rem!important}
+.dialog-page-cups .cup-settings-row .row-title{gap:7px}
+.dialog-editor[aria-label="Cup editor"] .cup-name-field input{max-width:250px}
+.dialog-editor[aria-label="Cup editor"] .cup-volume-field input{max-width:130px}
+@media(max-width:600px){.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dialog-editor[aria-label="Profile editor"] .editor-body label.span-2{grid-column:1/-1}}
+@media(max-width:420px){.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{grid-template-columns:1fr}}
+
    </style><ha-card><div class="root">
    <header class="main-head">${this._config.show_title!==false?`<h2>${jdhlEscape(title)}</h2>`:'<span></span>'}
 
@@ -1581,7 +1712,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
     ${pendingPast?`<p class="day-loading">Loading ${jdhlEscape(jdhlIsoToDate(selectedDate))}…</p>`:`
     <div class="hero">
       <div class="glass-side"><div class="glass-stack">
-        <div class="taken-slot"><span class="taken" style="--fill-y:${(100*(pct>100?19:179-(179-39)*Math.min(100,Math.max(0,pct))/100)/200).toFixed(2)}%">${jdhlFmt(consumed)}</span></div>
+        <div class="taken-slot"><span class="taken" style="--fill-y:${(100*(pct>100?19:179-(179-39)*Math.min(100,Math.max(0,pct))/100)/200).toFixed(2)}%">${this._fmt(consumed)}</span></div>
         <div class="glass-frame">${this._config.show_cup!==false?this._glass(pct,remaining,target):''}</div>
         <div class="drink-count">◷ ${count} drink moments</div>
       </div></div>
@@ -1594,20 +1725,23 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._error?`<div class="error" role="alert">${jdhlEscape(this._error)}</div>`:''}
    ${this._historyHTML()}
    ${this._modalHTML()}
+   ${this._excelHTML()}
+   ${this._iconPickerHTML()}
    <footer class="card-footer">
-    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<div class="export"><label for="jwdhl-export-profile">Export hydration data:</label> <select id="jwdhl-export-profile" data-field="export_profile"><option value="all" ${!this._exportProfile||this._exportProfile==='all'?'selected':''}>All profiles</option>${(this._profilesData?.profiles||[]).map(p=>`<option value="${jdhlEscape(p.slug)}" ${this._exportProfile===p.slug?'selected':''}>${jdhlEscape(p.name)}</option>`).join('')}</select> <button class="secondary" data-action="export" aria-label="Export hydration data to Excel (.xlsx)" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button></div>`:''}
-    <span class="card-version">v1.1.0-beta.36</span>
+    ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<button class="secondary" data-action="export-open" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button>`:''}
+    <span class="card-version">v1.1.0-beta.37</span>
    </footer></div></ha-card>`;
+  const picker=this.shadowRoot.querySelector('[data-icon-library]');
+  if(picker){picker.hass=this._hass;picker.value=this._iconPicker?.selected||'';}
  }
 }
 
 const JDHL_EDITOR_LABELS={profile:'Person',title:'Card title',show_title:'Show title',show_cup:'Show glass',
  show_manual:'Show Add drink button',show_history:'Show drink history',show_export:'Show Excel export',
- unit:'Display units',quick_add:'Quick-select volumes (mL)'};
+ quick_add:'Quick-select volumes (mL)'};
 function jdhlEditorSchema(profiles){return [
  {name:'profile',selector:{select:{mode:'dropdown',options:profiles}}},{name:'title',selector:{text:{}}},
  {name:'',type:'grid',schema:['show_title','show_cup','show_manual','show_history','show_export'].map(name=>({name,selector:{boolean:{}}}))},
- {name:'unit',selector:{select:{options:[{value:'mL',label:'Metric (mL/L)'},{value:'fl_oz',label:'Imperial (fl oz)'}]}}},
  {name:'quick_add',selector:{select:{multiple:true,custom_value:true,options:[120,150,200,250,300,500,750,1000].map(n=>({value:String(n),label:String(n)}))}}}
  ];}
 class JwDailyHydrationLogCardEditor extends HTMLElement{
@@ -1660,7 +1794,7 @@ function jdhlChartProfile(hass){
 class JwDailyHydrationChartCard extends HTMLElement {
  constructor(){
   super();this.attachShadow({mode:'open'});this._config=null;this._hass=null;
-  this._kind=this.constructor.chartKind||JDHL_CHART_KINDS[0];this._selectedBucket=null;
+  this._kind=this.constructor.chartKind||JDHL_CHART_KINDS[0];this._selectedBucket=null;this._profileUnit='mL';this._loadedUnitFor='';
   this.shadowRoot.addEventListener('click',e=>{
    const close=e.target.closest('[data-chart-close]');
    if(close){this._selectedBucket=null;this._render();return;}
@@ -1676,7 +1810,8 @@ class JwDailyHydrationChartCard extends HTMLElement {
  }
  static getStubConfig(hass){return {type:`custom:${this.chartKind.tag}`,profile:jdhlChartProfile(hass),title:this.chartKind.title};}
  setConfig(config){if(!config)throw Error('Missing chart card configuration');this._config={...config};this._selectedBucket=null;this._render();}
- set hass(hass){this._hass=hass;this._render();}
+ set hass(hass){this._hass=hass;this._render();this._loadUnit();}
+ async _loadUnit(){const p=this._config?.profile||jdhlChartProfile(this._hass);if(!p||!this._hass?.callWS||p===this._loadedUnitFor)return;this._loadedUnitFor=p;try{const h=await this._hass.callWS({type:'jw_daily_hydration_log/history',profile:p,date:new Date().toISOString().slice(0,10)});this._profileUnit=['mL','L','fl_oz'].includes(h?.profile_settings?.unit)?h.profile_settings.unit:'mL';this._render();}catch{this._loadedUnitFor='';}}
  getCardSize(){return 3;}
  connectedCallback(){
   if(typeof ResizeObserver!=='undefined'&&!this._resizer){
@@ -1714,7 +1849,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const niceTicks=[1,1.25,1.5,2,2.5,3,4,5,7.5,10];
   const step=niceTicks.find(n=>n*power>=rawTick-1e-9)*power;
   const max=step*4;
-  const fmt=v=>Math.round(v).toLocaleString('en-US');
+  const unitState=this._hass.states?.[`sensor.jwdhl_${profile}_consumed_today`]?.attributes?.unit_of_measurement;const unit=unitState==='fl oz'?'fl_oz':unitState==='L'?'L':unitState==='mL'?'mL':(this._profileUnit||'mL');const unitLabel=jdhlUnitLabel(unit);const fmt=v=>jdhlDisplayNumber(v,unit);
   const style=`<style>
   :host{display:block;min-width:0}ha-card{display:flex;flex-direction:column;box-sizing:border-box;padding:16px 15px 10px;min-height:0;height:auto;color:var(--primary-text-color,#172c39)}
   h3{margin:0 0 6px;font-weight:650;font-size:1rem}.notice{font-size:.87rem;color:var(--secondary-text-color,#687783)}
@@ -1738,7 +1873,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.36</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.37</div></ha-card>`;return;}
   const colorSettings=entity?.attributes?.liquid_colors||{};
   const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
@@ -1753,7 +1888,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
    art+=`<line class="grid-line" x1="${left}" x2="${viewWidth-right}" y1="${y}" y2="${y}"/>`;
    art+=`<text class="axis-text" x="${left-8}" y="${y+4}" text-anchor="end">${fmt(value)}</text>`;
   }
-  art+=`<text class="axis-unit" x="13" y="${top+graphH/2}" text-anchor="middle" transform="rotate(-90 13 ${top+graphH/2})">mL</text>`;
+  art+=`<text class="axis-unit" x="13" y="${top+graphH/2}" text-anchor="middle" transform="rotate(-90 13 ${top+graphH/2})">${unitLabel}</text>`;
   records.forEach((r,i)=>{
    const cx=left+(i+.5)*groupW,x=cx-barW/2;
    let bottomY=plotBottom;
@@ -1762,7 +1897,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
     if(amount<=0)continue;
     const height=graphH*amount/max;
     bottomY-=height;
-    art+=`<rect x="${x.toFixed(2)}" y="${bottomY.toFixed(2)}" width="${barW.toFixed(2)}" height="${height.toFixed(2)}" rx="1" fill="${colors.get(key)}" data-chart-bucket="${i}" tabindex="0" role="button" aria-label="Show ${jdhlEscape(r.label)} breakdown"><title>${jdhlEscape(names[key]||key)}: ${fmt(amount)} mL. Tap for details</title></rect>`;
+    art+=`<rect x="${x.toFixed(2)}" y="${bottomY.toFixed(2)}" width="${barW.toFixed(2)}" height="${height.toFixed(2)}" rx="1" fill="${colors.get(key)}" data-chart-bucket="${i}" tabindex="0" role="button" aria-label="Show ${jdhlEscape(r.label)} breakdown"><title>${jdhlEscape(names[key]||key)}: ${fmt(amount)} ${unitLabel}. Tap for details</title></rect>`;
    }
    if(this._kind.days&&r.total===0){
     const message=r.hasData?'0':'—';
@@ -1772,25 +1907,25 @@ class JwDailyHydrationChartCard extends HTMLElement {
    }
    if(this._kind.days&&r.total>0){
     const y=Math.max(13,plotBottom-graphH*r.total/max-6);
-    art+=`<text x="${cx.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--primary-text-color,#243746)">${fmt(r.total)} mL</text>`;
+    art+=`<text x="${cx.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--primary-text-color,#243746)">${fmt(r.total)} ${unitLabel}</text>`;
    }
    if(this._kind.days||displayWidth>=640||i%2===1){
     art+=`<text class="axis-text" x="${cx.toFixed(2)}" y="${plotBottom+19}" text-anchor="middle" font-size="${this._kind.days?13:11}">${jdhlEscape(r.label)}</text>`;
    }
   });
-  const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}${this._kind.days?'':` (${fmt(totals[k])} mL)`}</span>`).join('');
+  const legends=keys.map(k=>`<span><i class="swatch" style="background:${colors.get(k)}"></i>${jdhlEscape(names[k]||k)}${this._kind.days?'':` (${fmt(totals[k])} ${unitLabel})`}</span>`).join('');
   const anyMissing=this._kind.days&&records.some(r=>!r.hasData);
   const anyZero=this._kind.days&&records.some(r=>r.hasData&&r.total===0);
   const missingNote=this._kind.days&&(anyMissing||anyZero)?`<div class="chart-note">${anyMissing?'— No data recorded':''}${anyMissing&&anyZero?' · ':''}${anyZero?'0 = recorded zero intake':''}</div>`:'';
   const selected=Number.isInteger(this._selectedBucket)?records[this._selectedBucket]:null;
   const detailLabel=selected?(this._kind.days?selected.label:`Hour ${this._selectedBucket+1} (${String(this._selectedBucket).padStart(2,'0')}:00–${String(this._selectedBucket).padStart(2,'0')}:59)`):'';
   const selectedKeys=selected?Object.keys(selected.liquids).filter(k=>selected.liquids[k]>0).sort((a,b)=>selected.liquids[b]-selected.liquids[a]):[];
-  const details=!selected?'':`<section class="detail-panel" role="status"><div class="detail-head"><strong>${jdhlEscape(detailLabel)} · ${selected.hasData?`${fmt(selected.total)} mL`:'No data recorded'}</strong><button type="button" data-chart-close aria-label="Close chart details">×</button></div>${selectedKeys.length?`<div class="detail-items">${selectedKeys.map(k=>`<span><i class="swatch" style="display:inline-block;vertical-align:middle;background:${colors.get(k)}"></i> ${jdhlEscape(names[k]||k)}: ${fmt(selected.liquids[k])} mL</span>`).join('')}</div>`:selected.hasData?'<p>No drinks recorded.</p>':'<p>No history is available for this date.</p>'}</section>`;
+  const details=!selected?'':`<section class="detail-panel" role="status"><div class="detail-head"><strong>${jdhlEscape(detailLabel)} · ${selected.hasData?`${fmt(selected.total)} ${unitLabel}`:'No data recorded'}</strong><button type="button" data-chart-close aria-label="Close chart details">×</button></div>${selectedKeys.length?`<div class="detail-items">${selectedKeys.map(k=>`<span><i class="swatch" style="display:inline-block;vertical-align:middle;background:${colors.get(k)}"></i> ${jdhlEscape(names[k]||k)}: ${fmt(selected.liquids[k])} ${unitLabel}</span>`).join('')}</div>`:selected.hasData?'<p>No drinks recorded.</p>':'<p>No history is available for this date.</p>'}</section>`;
 
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
-  const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} mL${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} mL (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in milliliters" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.36</div></ha-card>`;
+  const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} ${unitLabel}${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} ${unitLabel} (${Math.round(total/target*100)}%)`:''}</p>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.37</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -1805,4 +1940,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.36');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.37');
