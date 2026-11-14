@@ -27,16 +27,16 @@ with sync_playwright() as p:
     window.calls=[];window.downloads=[];HTMLAnchorElement.prototype.click=function(){window.downloads.push(this.download||'');};
     window.hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_one_consumed_today':{state:'0.18',attributes:{consumed_ml:180,unit_of_measurement:'L'}},'sensor.jwdhl_one_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_one_drink_count_today':{state:'1',attributes:{}},'sensor.jwdhl_one_manual_consumed':{state:'180',attributes:{manual_consumed_ml:180}}},callWS:async msg=>{
       window.calls.push(msg);
-      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.37'};
-      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.37'};
+      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.38'};
+      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.38'};
       if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'one',name:'Jan-Willem',age:58,gender:'male',unit:'L',daily_target_ml:2000},{slug:'two',name:'Second',age:30,gender:'female',unit:'fl_oz',daily_target_ml:1500}]};
-      if(msg.type.endsWith('/export'))return {base64:'UEsDBBQ=',filename:'test beta37.xlsx'};
+      if(msg.type.endsWith('/export'))return {base64:'UEsDBBQ=',filename:'test beta38.xlsx'};
       return {};
     }};
     window.card=document.createElement('jwdaily-hydration-log-card');card.setConfig({profile:'one',title:'Vocht intake',unit:'mL'});card.hass=window.hass;document.querySelector('#mount').appendChild(card);
   }''')
   root=page.locator('jwdaily-hydration-log-card');page.wait_for_timeout(300)
-  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.37'
+  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.38'
   assert root.locator('.card-version').evaluate('(n)=>getComputedStyle(n).whiteSpace')=='nowrap'
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1
@@ -67,6 +67,9 @@ with sync_playwright() as p:
   root.locator('button[data-action="settings-page"][data-value="cups"]').click()
   assert root.locator('.settings-head h3').inner_text()=='Maintain cup types'
   assert root.locator('.cup-row-icon').count()==2
+  assert root.locator('.cup-volume-value').count()==2
+  assert root.locator('.cup-settings-row .used-count').count()==2
+  assert all(x.strip().startswith('Used:') for x in root.locator('.cup-settings-row .used-count').all_text_contents())
   root.locator('button[data-action="settings-cup-edit"]').first.click()
   assert root.locator('.dialog-editor [data-field="volume_ml"]').input_value()=='0.18'
   root.locator('button[data-action="icon-pick-open"][data-value="cup"]').click()
@@ -82,12 +85,19 @@ with sync_playwright() as p:
   root.locator('button[data-action="manage-edit"]').first.click()
   assert root.locator('.liquid-icon-hero').count()==1
   assert 'Use default color' in root.locator('.dialog-editor').inner_text()
+  assert root.locator('.dialog-editor .color-preview').count()==0
   root.locator('button[data-action="icon-pick-open"][data-value="liquid"]').click()
   assert root.locator('ha-icon-picker[data-icon-library]').count()==1
   root.locator('button[data-action="icon-pick-cancel"]').last.click()
   root.locator('button[data-action="manage-cancel"]').first.click()
   assert root.locator('.liquid-icon-hero').count()==0
   assert not errors,(width,errors)
-  print('BETA37_CHROMIUM_PASS',width)
+  # Adaptive mL formatter is restricted to glass quantities; profile unit handling remains unchanged.
+  assert page.evaluate('jdhlGlassFmt(999, "mL")')=='999 mL'
+  assert page.evaluate('jdhlGlassFmt(1000, "mL")')=='1.0 L'
+  assert page.evaluate('jdhlGlassFmt(1250, "mL")')=='1.25 L'
+  assert page.evaluate('jdhlGlassFmt(2000, "mL")')=='2.0 L'
+  assert page.evaluate('jdhlGlassFmt(2000, "L")')=='2 L'
+  print('BETA38_CHROMIUM_PASS',width)
   page.close()
  browser.close()
