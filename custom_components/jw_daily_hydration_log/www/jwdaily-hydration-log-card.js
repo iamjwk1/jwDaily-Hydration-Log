@@ -838,11 +838,11 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-cup-save">Save cup</button></div></section></div>`:''}
     ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><ha-icon class="cup-row-icon" icon="${E(c.icon_mdi||'mdi:cup')}"></ha-icon><div class="row-title"><span>${E(c.name)}</span>${c.hidden?'<small>Hidden</small>':''}</div><span class="cup-volume-value">${this._fmt(Number(c.default_volume_ml))}</span>
      <span class="used-count" title="Recorded drink moments across all profiles">${Number(c.drink_count_all_profiles)||0}</span>
-     <div class="settings-row-actions"><button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
-     <button class="secondary small" data-action="settings-cup-down" data-value="${E(c.id)}" ${i===cups.length-1?'disabled':''} aria-label="Move down">↓</button>
-     <button class="secondary small settings-hide-button" data-action="settings-cup-toggle" data-value="${E(c.id)}">${c.hidden?'Restore':'Hide'}</button>
-     <button class="secondary small" data-action="settings-cup-edit" data-value="${E(c.id)}">Edit</button>
-     <button class="danger small" data-action="settings-cup-delete" data-value="${E(c.id)}" ${c.can_delete?'':'disabled'} title="${c.can_delete?'Delete unused cup':'Used in drink history; hide instead'}">Delete</button></div></div>`).join('')}
+     <div class="settings-row-actions"><button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move cup type up" title="Move cup type up">↑</button>
+     <button class="secondary small" data-action="settings-cup-down" data-value="${E(c.id)}" ${i===cups.length-1?'disabled':''} aria-label="Move cup type down" title="Move cup type down">↓</button>
+     <button class="secondary small settings-hide-button" data-action="settings-cup-toggle" data-value="${E(c.id)}" title="${c.hidden?'Show':'Hide'} cup type" aria-label="${c.hidden?'Show':'Hide'} cup type"><ha-icon icon="${c.hidden?'mdi:eye-off':'mdi:eye'}"></ha-icon></button>
+     <button class="secondary small" data-action="settings-cup-edit" data-value="${E(c.id)}" title="Edit cup type" aria-label="Edit cup type"><ha-icon icon="mdi:pencil"></ha-icon></button>
+     <button class="danger small" data-action="settings-cup-delete" data-value="${E(c.id)}" ${c.can_delete?'':'disabled'} title="${c.can_delete?'Delete cup type':'Used in drink history; hide instead'}" aria-label="Delete cup type"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div></div>`).join('')}
     ${this._settingsDeleteCupId?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm cup deletion"><div class="settings-head"><h3>Delete cup type?</h3><button class="secondary small" data-action="settings-cup-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">
       <p>Delete unused cup? All profiles retain drink history. Linked Quick buttons will be removed.</p>
       <div class="dialog-actions"><button class="secondary small" data-action="settings-cup-delete-cancel">Cancel</button>
