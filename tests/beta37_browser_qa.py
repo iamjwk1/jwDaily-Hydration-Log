@@ -66,6 +66,9 @@ with sync_playwright() as p:
   assert 'Daily target (L)' in root.locator('.dialog-editor').inner_text()
   assert root.locator('[data-field="daily_target_ml"]').input_value()=='2'
   assert root.locator('.dialog-editor .settings-head h3').inner_text()=='Edit profile - Jan-Willem'
+  if width==950:
+   Path('qa_screenshots').mkdir(exist_ok=True)
+   root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_profile.png')
   assert root.locator('.profile-quick-section').count()==1
   assert 'Quick buttons' in root.locator('.profile-quick-header').inner_text()
   assert root.locator('[data-action="settings-profile-quick"] ha-icon').count()==1
@@ -77,6 +80,7 @@ with sync_playwright() as p:
   assert '180' not in root.locator('.profile-quick-choices .quick-choice').first.inner_text()
   root.locator('[data-action="settings-profile-quick"]').click()
   assert root.locator('.settings-head h3').first.inner_text().startswith('Edit Quick Buttons')
+  if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_edit_quick.png')
   assert root.locator('.quick-settings-row [data-action="settings-quick-toggle"] ha-icon').count()==1
   assert root.locator('.quick-settings-row [data-action="settings-quick-edit"] ha-icon').count()==1
   assert root.locator('.quick-settings-row [data-action="settings-quick-delete"] ha-icon').count()==1
@@ -103,6 +107,7 @@ with sync_playwright() as p:
   root.locator('button[data-action="settings-home"]').click()
   root.locator('button[data-action="settings-page"][data-value="cups"]').click()
   assert root.locator('.settings-head h3').inner_text()=='Maintain cup types'
+  if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_maintain_cups.png')
   assert root.locator('.cup-row-icon').count()==2
   assert root.locator('.cup-table-head').count()==1
   assert root.locator('.cup-settings-row [data-action="settings-cup-edit"] ha-icon').count()==2
@@ -126,6 +131,7 @@ with sync_playwright() as p:
   assert all(x.strip().isdigit() for x in root.locator('.cup-settings-row .used-count').all_text_contents())
   root.locator('button[data-action="settings-cup-edit"]').first.click()
   assert root.locator('.dialog-editor [data-field="volume_ml"]').input_value()=='0.18'
+  if width==950:root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_cup.png')
   assert root.locator('[data-field="cup_icon_color_picker"]').count()==1
   assert '#000000' in root.locator('.cup-icon-editor .liquid-icon').first.get_attribute('style').lower()
   root.locator('button[data-action="icon-pick-open"][data-value="cup"]').click()
@@ -137,6 +143,7 @@ with sync_playwright() as p:
   root.locator('button[data-action="settings-discard"]').first.click()
   root.locator('button[data-action="settings-home"]').click()
   root.locator('button[data-action="settings-page"][data-value="liquids"]').click()
+  if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_maintain_liquids.png')
   assert root.locator('.liquid-list-header').count()==1
   assert root.locator('.settings-head h3').first.inner_text()=='Maintain liquid types'
   assert root.locator('.saved-liquid [data-action="manage-up"]').first.get_attribute('title')=='Move liquid type up'
@@ -151,6 +158,7 @@ with sync_playwright() as p:
   assert root.locator('.saved-liquid button[data-action="manage-remove"]').count()==3
   root.locator('button[data-action="manage-edit"]').first.click()
   assert root.locator('.liquid-live-section').count()==1
+  if width==950:root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_liquid.png')
   assert root.locator('.liquid-live-preview').count()==1
   assert '#000000' in root.locator('.liquid-live-preview .liquid-icon').first.get_attribute('style').lower()
   assert root.locator('[data-action="liquid-icon-default"]').count()==1
@@ -162,6 +170,7 @@ with sync_playwright() as p:
   assert root.locator('.liquid-icon-controls').count()==1
   root.locator('button[data-action="icon-pick-open"][data-value="liquid"]').click()
   assert root.locator('ha-icon-picker[data-icon-library]').count()==1
+  if width==950:root.locator('.icon-library-dialog').screenshot(path='qa_screenshots/beta42_icon_picker.png')
   assert root.locator('button[data-action="icon-pick-source"]').count()==2
   assert root.locator('[data-field="icon_color_picker"]').input_value().lower()=='#000000'
   root.locator('button[data-action="icon-pick-source"][data-value="svg"]').click()
