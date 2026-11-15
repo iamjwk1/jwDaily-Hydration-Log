@@ -2044,6 +2044,148 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .dialog-page-profile .compact-profile-row{grid-template-columns:24px minmax(0,1fr) auto!important}
  .dialog-page-profile .compact-profile-row>.row-title{max-width:none}
 }
+
+/* beta.42 acceptance: compact content-driven dialogs and shared column geometry.
+   Overrides older beta.37-41 rules without modifying data or action handlers. */
+.dialog.dialog-settings.dialog-page-liquids{width:min(505px,calc(100vw - 18px))!important}
+.dialog.dialog-settings.dialog-page-cups{width:min(635px,calc(100vw - 18px))!important}
+.dialog.dialog-settings.dialog-page-quick{width:min(690px,calc(100vw - 18px))!important}
+.dialog-page-liquids .liquid-list-header,.dialog-page-liquids .saved-liquid{
+  display:grid!important;grid-template-columns:28px minmax(116px,1fr) 80px 176px!important;
+  column-gap:8px!important;row-gap:4px!important;align-items:center!important;
+  box-sizing:border-box;width:100%!important;
+}
+.dialog-page-liquids .liquid-list-header>span:first-child{grid-column:2!important}
+.dialog-page-liquids .liquid-list-header>span:nth-child(2){grid-column:3!important;text-align:center!important}
+.dialog-page-liquids .saved-liquid .used-count{
+ grid-column:3!important;justify-self:stretch!important;text-align:center!important;
+ color:var(--primary-text-color,#111)!important;
+}
+.dialog-page-liquids .saved-liquid .settings-row-actions{
+ grid-column:4!important;justify-self:end!important;display:flex!important;gap:4px!important}
+.dialog-page-liquids .saved-liquid-icon{justify-self:start!important}
+.dialog-page-liquids .liquid-type-name{margin-left:0!important}
+.dialog-page-liquids .manage-intro{max-width:none!important;width:100%!important}
+.dialog-page-cups .cup-table-head,.dialog-page-cups .cup-settings-row{
+ display:grid!important;
+ grid-template-columns:28px minmax(123px,1fr) 111px 79px 176px!important;
+ column-gap:6px!important;row-gap:4px!important;align-items:center!important;
+ box-sizing:border-box;width:100%!important;
+}
+.dialog-page-cups .cup-table-head>span:first-child{grid-column:2!important}
+.dialog-page-cups .cup-table-head>span:nth-child(2){grid-column:3!important;text-align:center}
+.dialog-page-cups .cup-table-head>span:nth-child(3){grid-column:4!important;text-align:center}
+.dialog-page-cups .cup-settings-row .cup-volume-value{
+ grid-column:3!important;justify-self:stretch!important;text-align:center!important;
+}
+.dialog-page-cups .cup-settings-row .used-count{
+ grid-column:4!important;justify-self:stretch!important;text-align:center!important;
+ color:var(--primary-text-color,#111)!important;
+}
+.dialog-page-cups .cup-settings-row .settings-row-actions{grid-column:5!important;gap:4px!important;justify-self:end!important}
+.dialog-page-quick .quick-table-header,.dialog-page-quick .quick-settings-row.settings-row{
+ display:grid!important;
+ grid-template-columns:26px minmax(130px,1fr) 142px 88px 176px!important;
+ column-gap:7px!important;row-gap:4px!important;
+ align-items:center!important;width:100%!important;box-sizing:border-box;
+}
+.dialog-page-quick .quick-table-header{font-size:.84rem;white-space:nowrap}
+.dialog-page-quick .quick-table-header>span:first-child{grid-column:2!important}
+.dialog-page-quick .quick-table-header>span:nth-child(2){grid-column:3!important;text-align:center}
+.dialog-page-quick .quick-table-header>span:nth-child(3){grid-column:4!important;text-align:center}
+.dialog-page-quick .quick-col-name{grid-column:2!important;min-width:0}
+.dialog-page-quick .quick-col-cup{grid-column:3!important;justify-self:stretch!important;text-align:center!important;min-width:0}
+.dialog-page-quick .quick-col-volume{grid-column:4!important;justify-self:stretch!important;text-align:center!important}
+.dialog-page-quick .quick-settings-row .settings-row-actions{grid-column:5!important;justify-self:end!important;display:flex!important;gap:4px!important;flex-wrap:nowrap!important}
+.dialog-page-quick .quick-settings-row .settings-row-actions button{
+ width:32px!important;min-width:32px!important;min-height:32px!important;padding:4px!important;
+}
+.dialog-page-quick .quick-settings-row .settings-row-actions button ha-icon{--mdc-icon-size:19px}
+.dialog-page-quick .settings-row{border:0!important;border-bottom:0!important;box-shadow:none!important}
+.dialog-page-quick .main-dialog-footer{border-top:0!important}
+.dialog-editor[aria-label="Profile editor"]{width:min(860px,calc(100vw - 18px))!important}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{
+ display:grid!important;
+ grid-template-columns:minmax(175px,1.6fr) 65px 125px 102px 142px!important;
+ gap:12px 13px!important;align-items:start!important;
+}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label.span-2{
+ grid-column:1!important;min-width:0!important;
+}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label:not(.span-2){min-width:0}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label input,
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label select{width:100%!important;max-width:100%!important;box-sizing:border-box}
+.dialog-editor[aria-label="Profile editor"] .profile-quick-section{grid-column:1/-1!important;border:0!important;border-top:0!important;padding-top:4px!important}
+.dialog-editor[aria-label="Profile editor"] .profile-quick-header{justify-content:flex-start!important;gap:20px!important}
+.dialog-editor[aria-label="Profile editor"] .profile-quick-header button.icon-action{
+ margin:0!important;width:34px!important;min-width:34px!important;min-height:34px!important;padding:4px!important}
+.dialog-editor[aria-label="Profile editor"] .profile-quick-header button ha-icon{--mdc-icon-size:19px}
+.dialog-editor[aria-label="Profile editor"] .dialog-footer{border:0!important;border-top:0!important;padding-top:8px!important}
+.dialog-editor.delete-liquid-dialog{width:min(415px,calc(100vw - 18px))!important}
+.dialog-editor.delete-liquid-dialog .delete-warning{margin:8px 0}
+.dialog-editor[aria-label="Liquid editor"] .liquid-icon-controls{
+ display:grid!important;grid-template-columns:minmax(120px,1fr) 60px 108px 66px!important;
+ column-gap:8px!important;align-items:end!important;
+}
+.dialog-editor[aria-label="Liquid editor"] .liquid-icon-controls label:nth-child(2){min-width:0}
+.dialog-editor[aria-label="Liquid editor"] .liquid-icon-controls .icon-default-btn{
+ min-width:0!important;padding:6px!important;align-self:end!important;
+}
+.dialog-editor[aria-label="Liquid editor"] .liquid-icon-controls input[type=color]{height:35px;width:46px}
+.dialog-editor[aria-label="Liquid editor"] .liquid-icon-controls input[type=text]{width:105px!important}
+.dialog-editor[aria-label="Liquid editor"] .liquid-name-row input{
+ font-weight:400!important;border:1px solid var(--divider-color,#aebec9)!important;
+ outline:none;box-shadow:none!important;
+}
+.dialog-editor[aria-label="Liquid editor"] .liquid-name-row input:focus{
+ font-weight:400!important;border:1px solid var(--primary-color,#03a9f4)!important;
+ outline:none!important;box-shadow:0 0 0 1px var(--primary-color,#03a9f4)!important;
+}
+.dialog-editor[aria-label="Cup editor"]{width:min(545px,calc(100vw - 18px))!important}
+.dialog-editor[aria-label="Cup editor"] .cup-icon-editor{display:flex!important;flex-wrap:nowrap!important;gap:7px!important;align-items:center!important}
+.dialog-editor[aria-label="Cup editor"] .cup-icon-editor>div{flex:1 1 auto!important;min-width:70px!important}
+.dialog-editor[aria-label="Cup editor"] .cup-icon-editor>button{flex:0 0 auto!important;padding:6px!important}
+.dialog-editor[aria-label="Cup editor"] .cup-icon-editor .cup-icon-color{display:flex;flex-direction:column;gap:3px;font-size:.78rem}
+.dialog-editor[aria-label="Cup editor"] .cup-icon-editor input[type=color]{width:44px;height:35px;padding:2px}
+.beta40-transfer .transfer-action-row:not(.transfer-restore-head)>button{
+ width:157px!important;min-width:157px!important;max-width:157px!important;
+ justify-self:end!important;box-sizing:border-box;
+}
+@media(max-width:720px){
+ .dialog-page-liquids .liquid-list-header,.dialog-page-liquids .saved-liquid{
+  grid-template-columns:28px minmax(90px,1fr) 80px 176px!important;
+ }
+ .dialog-page-cups .cup-table-head,.dialog-page-cups .cup-settings-row{
+  grid-template-columns:28px minmax(110px,1fr) 104px 75px 176px!important;
+ }
+ .dialog-page-quick .quick-table-header,.dialog-page-quick .quick-settings-row.settings-row{
+  grid-template-columns:26px minmax(100px,1fr) 120px 80px 176px!important;
+ }
+ .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{
+  grid-template-columns:minmax(145px,1fr) 64px 120px 97px!important;
+ }
+ .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label:nth-of-type(5){grid-column:1!important}
+}
+@media(max-width:620px){
+ .dialog-page-liquids .liquid-list-header,.dialog-page-liquids .saved-liquid{
+  grid-template-columns:27px minmax(0,1fr) 79px!important;
+ }
+ .dialog-page-liquids .saved-liquid .settings-row-actions{grid-column:1/-1!important;justify-self:end!important}
+ .dialog-page-cups .cup-table-head,.dialog-page-cups .cup-settings-row{
+  grid-template-columns:26px minmax(0,1fr) 103px 74px!important;
+ }
+ .dialog-page-cups .cup-settings-row .settings-row-actions{grid-column:1/-1!important;justify-self:end!important}
+ .dialog-page-quick .quick-table-header{display:none!important}
+ .dialog-page-quick .quick-settings-row.settings-row{
+  grid-template-columns:26px minmax(0,1fr) 116px 70px!important;
+ }
+ .dialog-page-quick .quick-settings-row .settings-row-actions{grid-column:1/-1!important;justify-self:end!important}
+ .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{
+  grid-template-columns:minmax(130px,1fr) minmax(86px,1fr)!important;
+ }
+ .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label.span-2{grid-column:1/-1!important}
+ .dialog-editor[aria-label="Cup editor"] .cup-icon-editor{flex-wrap:wrap!important}
+}
    </style><ha-card><div class="root">
    <header class="main-head">${this._config.show_title!==false?`<h2>${jdhlEscape(title)}</h2>`:'<span></span>'}
 
