@@ -710,10 +710,10 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return `<div class="manage">
    ${this._settingsSection?'':'<h3>Liquid types</h3>'}<p class="muted manage-intro">Change names, icons, colors and order. Hide any type, or delete unused custom types. Used types can only be hidden; history remains intact.</p>
    ${this._error?`<p role="alert" class="error">${jdhlEscape(this._error)}</p>`:''}
-   ${`<div class="saved-liquids">${list||'<p class="muted">No visible types. Restore one below or add your own.</p>'}</div>
+   ${`<div class="liquid-list-header"><span>Liquid type</span><span>Times used</span></div><div class="saved-liquids">${list||'<p class="muted">No visible types. Restore one below or add your own.</p>'}</div>
      ${hidden.length?`<h4>Hidden liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
-        `<div class="hidden-liquid">${this._liquidIcon(t,true)} <strong>${jdhlEscape(t.name)}</strong>
-         <span class="used-count" title="Recorded drinks across all profiles">${Number(t.drink_count_all_profiles)||0}</span><button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}">Restore</button></div>`).join('')}</div>`:''}
+        `<div class="hidden-liquid">${this._liquidIcon(t,true)} <span>${jdhlEscape(t.name)}</span>
+         <span class="used-count" title="Recorded drinks across all profiles">${Number(t.drink_count_all_profiles)||0}</span><button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}" title="Show liquid type" aria-label="Show liquid type"><ha-icon icon="mdi:eye-off"></ha-icon></button></div>`).join('')}</div>`:''}
      ${this._managePendingDelete?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm liquid deletion"><div class="settings-head"><h3>Delete liquid type?</h3><button class="secondary small" data-action="manage-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">${this._managePendingDelete.custom?
         `Permanently delete ${jdhlEscape(this._managePendingDelete.name)}? Only unused custom types can be deleted.`:
         `Remove ${jdhlEscape(this._managePendingDelete.name)} from Add choices? History and Excel remain intact; you can restore it later.`}
@@ -1891,7 +1891,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 }
 .dialog-editor[aria-label="Liquid editor"]{width:min(480px,calc(100vw - 20px))!important;padding:18px}
 .dialog-editor[aria-label="Liquid editor"] .manage-editor{margin:0;padding:0}
-.liquid-live-section h4,.liquid-button-color-title,.liquid-icon-controls .editor-section-title,.liquid-name-row .editor-section-title{font:600 .93rem/1.3 inherit;margin:0 0 7px}
+.liquid-live-section h4,.liquid-button-color-title,.liquid-icon-controls .editor-section-title,.liquid-name-row .editor-section-title{font-family:inherit;font-size:.93rem;font-weight:600;line-height:1.3;margin:0 0 7px}
 .liquid-live-section{margin:0 0 15px}
 .liquid-live-preview{display:inline-flex;align-items:center;gap:9px;border:1px solid #7a8991;border-radius:10px;padding:9px 13px;min-height:40px}
 .liquid-live-preview .liquid-icon{--mdc-icon-size:24px;width:24px;height:24px}
