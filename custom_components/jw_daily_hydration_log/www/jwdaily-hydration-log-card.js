@@ -316,6 +316,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return `<ha-icon class="liquid-icon${tinted?' tinted-liquid-icon':''}" icon="${jdhlEscape(icon)}"
     ${jdhlHex(t.icon_color)?`style="color:${jdhlHex(t.icon_color)}"`:tinted?`style="color:${this._effectiveColor(t)}"`:''} aria-hidden="true"></ha-icon>`;
  }
+ _quickIcon(q){
+  const liquid=this._liquidInfo(q.liquid_type_id)||{};
+  const background=this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id));
+  const c=jdhlHex(q.icon_color)||jdhlHex(liquid.icon_color)||jdhlContrastInk(background);
+  return this._liquidIcon({icon_mdi:q.icon_mdi||(!q.icon_svg?liquid.icon_mdi:''),
+    icon_svg:q.icon_svg||(!q.icon_mdi?liquid.icon_svg:''),
+    icon_color:c,color:background},true);
+ }
  _newLiquidDraft(existing=null){return {custom_name:existing?.name||'',icon_mdi:existing?existing.icon_mdi:'mdi:glass-mug-variant',
   icon_svg:existing?.icon_svg||'',icon_color:existing?.icon_color||'',
   color_custom:!!jdhlHex(existing?.color_override),
@@ -762,7 +770,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <label>Gender<select data-field="gender"><option value="male" ${d.gender==='male'?'selected':''}>Male</option><option value="female" ${d.gender==='female'?'selected':''}>Female</option></select></label>
     <label>Units<select data-field="unit">${['mL','L','fl_oz'].map(v=>`<option value="${v}" ${d.unit===v?'selected':''}>${v}</option>`).join('')}</select></label>
     <label>Daily target (${jdhlUnitLabel(d.unit)})<input type="number" min="0.001" max="100000" step="any" data-field="daily_target_ml" value="${E(d.daily_target_ml)}"/></label>
-    ${this._profileEditSlug?`<section class="profile-quick-section span-2"><div class="profile-quick-header"><h4>Quick buttons</h4><button class="secondary small" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}">Edit</button></div><div class="quick-choices profile-quick-choices">${(this._profileQuickHistory?.quick_buttons||[]).map(q=>`<div class="quick-choice" style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))};--quick-ink:${jdhlContrastInk(this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id)))}">${q.icon_mdi?`<ha-icon icon="${E(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}<span>${E(this._liquidName(q.liquid_type_id))} (${E(this._cupInfo(q.cup_type_id)?.name||'Cup')} · ${jdhlFmt(q.default_volume_ml||0,d.unit)})</span></div>`).join('')||'<p class="settings-note">No Quick buttons configured.</p>'}</div></section>`:''}
+    ${this._profileEditSlug?`<section class="profile-quick-section span-2"><div class="profile-quick-header"><h4>Quick buttons</h4><button class="secondary small" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}">Edit</button></div><div class="quick-choices profile-quick-choices">${(this._profileQuickHistory?.quick_buttons||[]).map(q=>`<div class="quick-choice" style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))};--quick-ink:${jdhlContrastInk(this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id)))}">${this._quickIcon(q)}<span>${E(this._effectiveQuickLabel(q))}</span></div>`).join('')||'<p class="settings-note">No Quick buttons configured.</p>'}</div></section>`:''}
     ${!this._profileEditSlug?`<label>Copy settings from<select data-field="copy_from"><option value="">Start with default settings</option>${profiles.map(p=>`<option value="${E(p.slug)}" ${p.slug===d.copy_from?'selected':''}>${E(p.name)}</option>`).join('')}</select></label>`:''}
     ${!this._profileEditSlug?'<p class="settings-note">Only configuration is copied. No records, consumed volumes, sensor readings or personal targets are transferred.</p>':''}
     </div><div class="dialog-footer"><button class="secondary" data-action="settings-profile-cancel">Cancel</button><button data-action="settings-profile-save">${this._profileEditSlug?'Save profile':'Create profile'}</button></div></section></div>`:''}
@@ -1102,7 +1110,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${this._quickDefs().some(q=>q.available)?`<div class="modal-heading">Quick buttons</div><div class="quick-choices">
      ${this._quickDefs().filter(q=>q.available).map(q=>`<button class="quick-choice ${m.quick_button_id===q.id?'selected':''}"
       data-action="quick-choice" data-value="${jdhlEscape(q.id)}" aria-pressed="${m.quick_button_id===q.id}"
-      style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))};--quick-ink:${jdhlContrastInk(this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id)))}">${q.icon_mdi?`<ha-icon icon="${jdhlEscape(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}<span>${jdhlEscape(this._effectiveQuickLabel(q))}</span></button>`).join('')}</div>`:''}
+      style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))};--quick-ink:${jdhlContrastInk(this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id)))}">${this._quickIcon(q)}<span>${jdhlEscape(this._effectiveQuickLabel(q))}</span></button>`).join('')}</div>`:''}
     <div class="modal-heading">Liquid type</div><div class="liquid-choices">${types}</div>
     ${this._cupDefs().some(c=>!c.hidden)?`<div class="modal-heading">Cup type</div><div class="cup-choices">
       ${this._cupDefs().filter(c=>!c.hidden||(m.mode==='edit'&&m.cup_type_id===c.id)).map(c=>`<button
