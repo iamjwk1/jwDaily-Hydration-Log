@@ -178,6 +178,21 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(field==='full_backup_verified'){this._fullBackupSaved=!!e.target.checked;this._render(true);return;}
   if(field==='migration_backup_verified'){this._migrationBackupVerified=!!e.target.checked;this._render(true);return;}
   if(field==='full_restore_scope'){this._fullRestoreScope=e.target.value;this._fullRestorePreview=null;this._render(true);return;}
+  if(this._iconPicker && (field==='icon_source'||field==='icon_color_hex'||field==='icon_color_picker'||field==='icon_svg_file')){
+   const p=this._iconPicker;
+   if(field==='icon_source'){p.source=e.target.value;this._render(true);return;}
+   if(field==='icon_color_picker'||field==='icon_color_hex'){
+     const v=e.target.value;if(field==='icon_color_picker'||e.type==='change'){p.color=jdhlHex(v)||v;}
+     const color=jdhlHex(v);if(color){p.color=color;const h=this.shadowRoot.querySelector('[data-field="icon_color_hex"]');const c=this.shadowRoot.querySelector('[data-field="icon_color_picker"]');if(h&&h!==e.target)h.value=color;if(c&&c!==e.target)c.value=color;}
+     return;
+   }
+   if(field==='icon_svg_file'&&e.type==='change'){
+     const file=e.target.files?.[0];if(!file)return;
+     if(file.size>16000||!(/\.svg$/i.test(file.name)||file.type==='image/svg+xml')){this._alert('Choose an SVG file up to 16 KB');return;}
+     try{const svg=await file.text();if(!/<svg(?:\s|>)/i.test(svg)||/<script|<!DOCTYPE|<!ENTITY|onload\s*=|javascript:/i.test(svg))throw Error('Choose a safe SVG document');p.svg=svg;p.source='svg';this._render(true);}catch(err){this._alert(err);}
+     return;
+   }
+  }
   if(field==='model_unknown_confirmed'){
    this._modelUnknownConfirmed=!!e.target.checked;return;
   }
@@ -407,19 +422,27 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(action==='transfer-tab'){this._transferTab=el.dataset.value;this._fullRestorePreview=null;this._error='';this._render(true);return;}
   if(action==='icon-pick-open'){
    const scope=el.dataset.value;
-   const current=scope==='liquid'?this._customDraft?.icon_mdi:scope==='cup'?this._settingsDraft?.icon_mdi:this._settingsDraft?.icon_mdi;
-   this._iconPicker={scope,selected:/^mdi:[a-z0-9-]+$/.test(current||'')?current:'mdi:cup'};
+   const d=scope==='liquid'?this._customDraft:this._settingsDraft;
+   if(!d)return;
+   const source=d.icon_svg?'svg':'mdi';
+   this._iconPicker={scope,source,selected:d.icon_mdi||'mdi:cup',svg:d.icon_svg||'',color:d.icon_color||''};
    this._render(true);return;
   }
+  if(action==='icon-pick-source'){this._iconPicker.source=el.dataset.value;this._render(true);return;}
   if(action==='icon-pick-cancel'){this._iconPicker=null;this._render(true);return;}
   if(action==='icon-pick-liquid-default'){
-   if(this._settingsDraft)this._settingsDraft.icon_mdi='';this._iconPicker=null;this._render(true);return;
+   if(this._settingsDraft){this._settingsDraft.icon_mdi='';this._settingsDraft.icon_svg='';}
+   this._iconPicker=null;this._render(true);return;
   }
   if(action==='icon-pick-apply'){
-   const value=this._iconPicker?.selected;
-   if(!/^mdi:[a-z0-9-]{2,70}$/.test(value||'')){this._error='Choose a valid Material Design icon';this._render(true);return;}
-   if(this._iconPicker.scope==='liquid'&&this._customDraft){this._customDraft.icon_mdi=value;this._customDraft.icon_svg='';}
-   else if(this._settingsDraft)this._settingsDraft.icon_mdi=value;
+   const p=this._iconPicker;if(!p)return;
+   if(p.source==='mdi'&&!/^mdi:[a-z0-9-]{2,70}$/.test(p.selected||'')){this._alert('Choose a valid Home Assistant icon');return;}
+   if(p.source==='svg'&&(!p.svg||new TextEncoder().encode(p.svg).length>16000)){this._alert('Choose a valid SVG file up to 16 KB');return;}
+   if(p.color&&!jdhlHex(p.color)){this._alert('Enter a valid icon color (#RRGGBB)');return;}
+   const d=p.scope==='liquid'?this._customDraft:this._settingsDraft;if(!d)return;
+   d.icon_mdi=p.source==='mdi'?p.selected:'';
+   d.icon_svg=p.source==='svg'?p.svg:'';
+   d.icon_color=p.color||'';
    this._iconPicker=null;this._render(true);return;
   }
 
@@ -1074,14 +1097,26 @@ class JwDailyHydrationLogCard extends HTMLElement {
    </section></div>`;
  }
  _iconPickerHTML(){if(!this._iconPicker)return '';
-  return `<div class="overlay editor-overlay icon-modal-overlay" role="presentation"><section class="dialog dialog-editor icon-library-dialog" role="dialog" aria-modal="true" aria-label="Choose a Material Design Icon">
+  const p=this._iconPicker,E=jdhlEscape,valid=jdhlHex(p.color)||'#152936';
+  return `<div class="overlay editor-overlay icon-modal-overlay" role="presentation"><section class="dialog dialog-editor icon-library-dialog" role="dialog" aria-modal="true" aria-label="Choose icon">
    <div class="settings-head"><h3>Choose icon</h3><button class="secondary small" data-action="icon-pick-cancel" aria-label="Close icon library">✕</button></div>
-   <p class="settings-note">Search the full Home Assistant Material Design Icons library by name or alias and select a graphic.</p>
-   <ha-icon-picker data-icon-library label="Search icons" value="${jdhlEscape(this._iconPicker.selected)}"></ha-icon-picker>
-   <div class="icon-selected-preview"><ha-icon icon="${jdhlEscape(this._iconPicker.selected)}"></ha-icon><span>${jdhlEscape(this._iconPicker.selected)}</span></div>
+   <p class="settings-note">Select <strong>either</strong> a Home Assistant icon or a custom SVG image. Only the selected source is saved.</p>
+   <div class="icon-source-tabs">
+     <button class="secondary ${p.source==='mdi'?'selected':''}" data-action="icon-pick-source" data-value="mdi">HA Icons</button>
+     <button class="secondary ${p.source==='svg'?'selected':''}" data-action="icon-pick-source" data-value="svg">Upload SVG</button>
+   </div>
+   ${p.source==='mdi'?`<ha-icon-picker data-icon-library label="Search icons" value="${E(p.selected)}"></ha-icon-picker>`:
+   `<label>Choose SVG image (max 16 KB)<input type="file" data-field="icon_svg_file" accept=".svg,image/svg+xml"/></label>`}
+   <div class="icon-selected-preview">
+    ${p.source==='svg'&&p.svg?this._liquidIcon({icon_svg:p.svg,icon_color:valid,icon_mdi:''},true):`<ha-icon icon="${E(p.selected)}" style="color:${valid}"></ha-icon>`}
+    <span>${p.source==='svg'?(p.svg?'Custom SVG selected':'No SVG selected'):E(p.selected)}</span>
+   </div>
+   <div class="icon-color-fields"><label>Icon color<input type="color" data-field="icon_color_picker" value="${valid}"/></label>
+    <label>Hex color<input type="text" data-field="icon_color_hex" maxlength="7" value="${E(p.color)}" placeholder="#RRGGBB"/></label></div>
    <div class="dialog-footer"><button class="secondary" data-action="icon-pick-cancel">Cancel</button><button data-action="icon-pick-apply">Apply icon</button></div>
   </section></div>`;
  }
+
  _excelHTML(){if(!this._excelOpen)return '';
   return `<div class="overlay editor-overlay" role="presentation"><section class="dialog dialog-editor dialog-excel" role="dialog" aria-modal="true" aria-label="Export hydration data">
    <div class="settings-head"><h3>Export to Excel</h3><button class="secondary small" data-action="export-cancel" aria-label="Close export">✕</button></div>
