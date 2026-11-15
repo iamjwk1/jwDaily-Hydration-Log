@@ -8,7 +8,7 @@ manifest = json.loads((component / 'manifest.json').read_text(encoding='utf-8'))
 version = manifest['version']
 constants = (component / 'const.py').read_text(encoding='utf-8')
 card = (component / 'www/jwdaily-hydration-log-card.js').read_text(encoding='utf-8')
-assert version == '1.1.0-beta.39', version
+assert version == '1.1.0-beta.40', version
 assert f"VERSION = '{version}'" in constants
 prefix = "if(info?.version!=='"
 guards = [line.strip() for line in card.splitlines() if prefix in line]
