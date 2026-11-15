@@ -1813,6 +1813,127 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 @media(max-width:420px){
  .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{grid-template-columns:1fr 1fr}
 }
+
+/* beta.40 consolidated acceptance: accessible compact responsive dialogs */
+.dialog-drink .fields{grid-template-columns:118px 154px 128px!important;gap:9px;align-items:start}
+.dialog-drink .fields input[data-field="volume_ml"]{max-width:118px!important}
+.dialog-drink .fields input[data-field="time"]{max-width:128px!important}
+.dialog-drink .fields .date-select{max-width:154px}
+.dialog-drink .fields .date-trigger{max-width:154px!important;width:154px!important}
+@media(max-width:470px){.dialog-drink .fields{grid-template-columns:150px 150px!important}}
+@media(max-width:335px){.dialog-drink .fields{grid-template-columns:1fr!important}}
+.quick-choices .quick-choice,.profile-quick-choices .quick-choice{
+ background:var(--quick-color,#9fd3f1)!important;color:var(--quick-ink,#142b37)!important;
+ border:1px solid color-mix(in srgb,var(--quick-ink,#142b37) 25%,transparent)!important;
+ border-left:0!important;box-shadow:none;
+}
+.quick-choices .quick-choice:hover,.profile-quick-choices .quick-choice:hover{filter:brightness(.97)}
+.quick-choices .quick-choice.selected{box-shadow:inset 0 0 0 3px var(--quick-ink,#142b37)!important}
+.profile-quick-choices .quick-choice{display:inline-flex;flex:0 0 auto;max-width:100%}
+.quick-choice .liquid-icon,.profile-quick-choices .liquid-icon{flex:0 0 22px;width:22px;height:22px}
+.dialog-page-profile .compact-profile-row{grid-template-columns:29px minmax(0,max-content) max-content!important;
+ justify-content:start;column-gap:12px;border-bottom:0!important;padding:7px 0!important}
+.dialog-page-profile .compact-profile-row button{margin-left:12px}
+.dialog-editor[aria-label="Profile editor"]{width:min(520px,calc(100vw - 20px))!important}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{
+ grid-template-columns:78px 126px 87px!important;gap:10px 11px!important}
+.dialog-editor[aria-label="Profile editor"] [data-field="age"]{max-width:78px!important}
+.dialog-editor[aria-label="Profile editor"] [data-field="gender"]{max-width:126px!important}
+.dialog-editor[aria-label="Profile editor"] [data-field="unit"]{max-width:87px!important}
+.dialog-editor[aria-label="Profile editor"] [data-field="daily_target_ml"]{max-width:110px!important}
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit label{white-space:nowrap}
+.dialog-editor[aria-label="Profile editor"] .profile-quick-section{border-top:0;padding-top:10px}
+@media(max-width:510px){
+.dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{grid-template-columns:78px 126px!important}
+.dialog-page-profile .compact-profile-row{grid-template-columns:26px minmax(0,1fr) auto!important}
+.dialog-page-profile .compact-profile-row button{margin-left:0}
+}
+.dialog-page-liquids{width:min(670px,calc(100vw - 20px))!important}
+.dialog-page-liquids .saved-liquid{grid-template-columns:27px minmax(125px,1fr) 58px max-content!important;gap:4px!important;border-bottom:0!important;min-height:39px;padding:4px 0}
+.dialog-page-liquids .liquid-type-name{font-weight:400;font-size:.9rem}
+.dialog-page-liquids .used-count,.dialog-page-cups .used-count{color:var(--primary-text-color,#111)!important;white-space:nowrap}
+.dialog-page-liquids .saved-liquid .settings-row-actions{grid-column:4!important;justify-self:end;gap:4px}
+.dialog-page-liquids .saved-liquid .settings-row-actions button{width:32px!important;min-width:32px!important;min-height:32px!important;padding:4px!important}
+.dialog-page-liquids .saved-liquid .settings-row-actions button ha-icon{--mdc-icon-size:19px}
+.dialog-page-liquids .saved-liquid .settings-hide-button{font-size:0}
+.liquid-list-header{display:grid;grid-template-columns:27px minmax(125px,1fr) 58px max-content;gap:4px;font-size:.9rem;font-weight:500;margin:10px 0 2px}
+.liquid-list-header span:first-child{grid-column:1/3}
+.liquid-list-header span:last-child{grid-column:3}
+.dialog-page-cups{width:min(740px,calc(100vw - 18px))!important}
+.dialog-page-cups .cup-table-head{display:grid;grid-template-columns:minmax(0,1fr) 104px 65px 195px;
+ padding-left:31px;gap:5px;margin-top:12px;margin-bottom:7px;font-size:.88rem;font-weight:500}
+.dialog-page-cups .cup-settings-row{grid-template-columns:26px minmax(0,1fr) 104px 65px 195px!important;gap:5px!important;min-height:40px;border:0!important}
+.dialog-page-cups .cup-settings-row .cup-volume-value{white-space:nowrap}
+.dialog-page-cups .cup-settings-row .used-count{justify-self:start}
+.dialog-page-cups .cup-settings-row .settings-row-actions{grid-column:5!important;justify-self:end;gap:3px}
+.dialog-page-cups .cup-settings-row .row-title{font-weight:400}
+.dialog-editor[aria-label="Cup editor"]{width:min(470px,calc(100vw - 20px))!important}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body{grid-template-columns:minmax(0,205px) 146px!important;gap:13px!important}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body .icon-edit-row{grid-column:1/-1!important;grid-row:1;padding:7px}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body .cup-name-field{grid-column:1!important;grid-row:2}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body .cup-volume-field{grid-column:2!important;grid-row:2}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body .cup-name-field input{width:100%;max-width:205px!important}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body .cup-volume-field input{width:105px!important}
+.dialog-editor[aria-label="Cup editor"] .icon-edit-row .liquid-icon{--mdc-icon-size:27px;width:27px;height:27px}
+@media(max-width:720px){
+.dialog-page-liquids .saved-liquid{grid-template-columns:27px minmax(80px,1fr) 55px max-content!important}
+.dialog-page-liquids .saved-liquid .settings-row-actions{grid-column:4!important}
+.dialog-page-cups .cup-table-head{grid-template-columns:minmax(0,1fr) 88px 62px 0px}
+.dialog-page-cups .cup-settings-row{grid-template-columns:25px minmax(0,1fr) 88px 62px!important}
+.dialog-page-cups .cup-settings-row .settings-row-actions{grid-column:1/-1!important}
+}
+@media(max-width:530px){
+.dialog-page-liquids .saved-liquid{grid-template-columns:26px minmax(0,1fr) 56px!important}
+.dialog-page-liquids .saved-liquid .settings-row-actions{grid-column:1/-1!important}
+.dialog-page-cups .cup-table-head{grid-template-columns:minmax(0,1fr) 80px 55px 0px;font-size:.76rem}
+.dialog-page-cups .cup-settings-row{grid-template-columns:25px minmax(0,1fr) 80px 55px!important;font-size:.84rem}
+.dialog-editor[aria-label="Cup editor"] .cup-editor-body{grid-template-columns:minmax(0,1fr) 122px!important}
+}
+.dialog-editor[aria-label="Liquid editor"]{width:min(480px,calc(100vw - 20px))!important;padding:18px}
+.dialog-editor[aria-label="Liquid editor"] .manage-editor{margin:0;padding:0}
+.liquid-live-section h4,.liquid-button-color-title,.liquid-icon-controls .editor-section-title,.liquid-name-row .editor-section-title{font:600 .93rem/1.3 inherit;margin:0 0 7px}
+.liquid-live-section{margin:0 0 15px}
+.liquid-live-preview{display:inline-flex;align-items:center;gap:9px;border:1px solid #7a8991;border-radius:10px;padding:9px 13px;min-height:40px}
+.liquid-live-preview .liquid-icon{--mdc-icon-size:24px;width:24px;height:24px}
+.liquid-live-label{font-size:.94rem}
+.liquid-icon-controls{display:grid;grid-template-columns:minmax(130px,1fr) 52px 105px;gap:9px;align-items:end;margin-bottom:17px}
+.liquid-icon-controls label{display:flex;flex-direction:column;gap:5px;font-size:.84rem}
+.liquid-icon-selection .liquid-selected-icon{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.liquid-icon-selection .liquid-selected-icon .liquid-icon{--mdc-icon-size:25px;width:25px;height:25px}
+.liquid-selected-icon span{font-size:.74rem;color:var(--secondary-text-color)}
+.liquid-icon-controls input[type=color]{width:43px;height:35px;padding:2px}
+.liquid-icon-controls input[type=text]{width:105px;max-width:105px}
+.liquid-name-row input{max-width:260px!important}
+.liquid-button-color-title{margin:16px 0 5px!important}
+.dialog-editor[aria-label="Liquid editor"] .color-editor{margin:0;gap:7px;align-items:end}
+.dialog-editor[aria-label="Liquid editor"] .color-editor label:nth-child(2),
+.dialog-editor[aria-label="Liquid editor"] .color-editor input[data-field="color_hex"]{width:105px!important;max-width:105px!important}
+.dialog-editor[aria-label="Liquid editor"] .color-editor button{margin-left:2px}
+.beta40-transfer{display:grid;gap:12px}
+.dialog-page-transfer{width:min(555px,calc(100vw - 20px))!important}
+.transfer-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.transfer-tabs button{display:flex;gap:6px;align-items:center;justify-content:center;padding:8px 5px!important;min-width:0;font-size:.86rem}
+.transfer-tabs button ha-icon{--mdc-icon-size:19px}
+.transfer-tabs .active{background:#b3e5fc;border-bottom:3px solid #0277bd;font-weight:600}
+.transfer-panel{display:flex;flex-direction:column;align-items:flex-start;gap:11px;border:1px solid var(--divider-color);border-radius:11px;padding:13px}
+.transfer-panel>strong{font-size:1.02rem}
+.transfer-panel p{margin:0;color:var(--secondary-text-color);font-size:.88rem}
+.transfer-panel label{width:100%;max-width:310px;display:flex;flex-direction:column;gap:5px;font-size:.86rem}
+.transfer-panel select,.transfer-panel input[type=file]{max-width:310px;box-sizing:border-box;padding:7px}
+.transfer-panel .check-label{display:flex;flex-direction:row;align-items:center;max-width:none}
+.beta40-advanced{border:1px solid var(--divider-color);border-radius:9px;padding:9px 11px;font-size:.85rem}
+.beta40-advanced summary{cursor:pointer;font-weight:500}
+.beta40-advanced label{display:flex;flex-direction:column;gap:5px;margin:8px 0}
+.transfer-advanced-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0}
+.icon-library-dialog{width:min(465px,calc(100vw - 18px))!important}
+.icon-source-tabs{display:flex;gap:6px;margin:11px 0}
+.icon-source-tabs .selected{background:#b3e5fc!important;border-color:#0077ad!important}
+.icon-selected-preview{margin:11px 0}
+.icon-selected-preview .liquid-icon{width:32px;height:32px}
+.icon-color-fields{display:flex;gap:11px;align-items:end;margin:12px 0}
+.icon-color-fields label{display:flex;flex-direction:column;gap:4px;font-size:.86rem}
+.icon-color-fields input[type=color]{width:47px;height:34px;padding:2px}
+.icon-color-fields input[type=text]{width:115px}
    </style><ha-card><div class="root">
    <header class="main-head">${this._config.show_title!==false?`<h2>${jdhlEscape(title)}</h2>`:'<span></span>'}
 
