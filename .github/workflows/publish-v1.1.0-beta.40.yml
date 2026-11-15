@@ -36,6 +36,7 @@ jobs:
           python tests/beta32_excel_contract_qa.py
           python tests/beta37_excel_units_qa.py
           python tests/beta39_version_guard_qa.py
+          python tests/beta40_restore_scope_qa.py
           node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
       - name: Chromium settings and deletion regression
         run: |
