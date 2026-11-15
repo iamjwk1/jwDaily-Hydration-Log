@@ -278,14 +278,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
    const declared=[...String(t.icon_svg).matchAll(/(?:fill|stroke)\s*=\s*["']([^"']+)["']/gi)]
        .map(x=>x[1].toLowerCase()).filter(x=>!['none','currentcolor','transparent'].includes(x));
    if(tinted&&new Set(declared).size<=1)
-    return `<span class="liquid-icon svg-icon masked-icon" aria-hidden="true" style="background-color:${this._effectiveColor(t)};mask-image:url(&quot;${jdhlEscape(src)}&quot;);-webkit-mask-image:url(&quot;${jdhlEscape(src)}&quot;)"></span>`;
+    return `<span class="liquid-icon svg-icon masked-icon" aria-hidden="true" style="background-color:${jdhlHex(t.icon_color)||this._effectiveColor(t)};mask-image:url(&quot;${jdhlEscape(src)}&quot;);-webkit-mask-image:url(&quot;${jdhlEscape(src)}&quot;)"></span>`;
    return `<img class="liquid-icon svg-icon" alt="" src="${jdhlEscape(src)}"/>`;}
   const icon=/^mdi:[a-z0-9-]+$/.test(t.icon_mdi||'')?t.icon_mdi:'mdi:glass-mug-variant';
   return `<ha-icon class="liquid-icon${tinted?' tinted-liquid-icon':''}" icon="${jdhlEscape(icon)}"
-    ${tinted?`style="color:${this._effectiveColor(t)}"`:''} aria-hidden="true"></ha-icon>`;
+    ${jdhlHex(t.icon_color)?`style="color:${jdhlHex(t.icon_color)}"`:tinted?`style="color:${this._effectiveColor(t)}"`:''} aria-hidden="true"></ha-icon>`;
  }
  _newLiquidDraft(existing=null){return {custom_name:existing?.name||'',icon_mdi:existing?existing.icon_mdi:'mdi:glass-mug-variant',
-  icon_svg:existing?.icon_svg||'',
+  icon_svg:existing?.icon_svg||'',icon_color:existing?.icon_color||'',
   color_custom:!!jdhlHex(existing?.color_override),
   color_hex:jdhlHex(existing?.color_override)||this._effectiveColor(existing||{id:'',name:''})};}
  async _saveCustomLiquid(){const draft=this._customDraft;if(!draft||!this._hass?.user?.is_admin)return;
@@ -297,7 +297,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   this._busy=true;this._error='';this._status=existingId?'Updating liquid type…':'Saving liquid type…';
   try{await this._ensureBackend();const saved=await this._hass.callWS({type:existingId?'jw_daily_hydration_log/update_liquid_type':'jw_daily_hydration_log/add_liquid_type',
    profile:this._config.profile,...(existingId?{liquid_type:existingId}:{}),name,
-   icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',color:color||''});
+   icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',color:color||'',icon_color:draft.icon_color||''});
    await this._fetchHistory();this._customDraft=null;this._editingLiquidId=null;
    if(!existingId&&this._modal?.mode==='new'){
     this._modal.liquid_type=saved.id;
@@ -994,12 +994,12 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   if(action==='settings-cup-add'||action==='settings-cup-edit'){
    this._error='';const c=this._cupInfo(id);this._settingsEditId=c?.id||null;
-   this._settingsDraft={name:c?.name||'',volume_ml:String(Number(jdhlFromMl(c?.default_volume_ml||0,this._unit()).toFixed(this._unit()==='L'?3:2))),icon_mdi:c?.icon_mdi||'mdi:cup'};this._render(true);return;
+   this._settingsDraft={name:c?.name||'',volume_ml:String(Number(jdhlFromMl(c?.default_volume_ml||0,this._unit()).toFixed(this._unit()==='L'?3:2))),icon_mdi:c?.icon_mdi||'',icon_svg:c?.icon_svg||'',icon_color:c?.icon_color||''};this._render(true);return;
   }
   if(action==='settings-cup-save'){
    const d=this._settingsDraft||{};const n=jdhlToMl(Number(d.volume_ml),this._unit());
    if(!String(d.name||'').trim()||!Number.isFinite(n)||n<=0||n>100000){this._alert('Provide a cup name and positive volume up to 100,000 mL.');return;}
-   await this._settingsCall('manage_cup',{action:this._settingsEditId?'update':'add',...(this._settingsEditId?{cup_id:this._settingsEditId}:{}),name:d.name,volume_ml:n,icon_mdi:d.icon_mdi||''});return;
+   await this._settingsCall('manage_cup',{action:this._settingsEditId?'update':'add',...(this._settingsEditId?{cup_id:this._settingsEditId}:{}),name:d.name,volume_ml:n,icon_mdi:d.icon_mdi||'',icon_svg:d.icon_svg||'',icon_color:d.icon_color||''});return;
   }  if(action==='settings-cup-toggle'||action==='settings-quick-toggle'){
    const cup=action==='settings-cup-toggle',item=cup?this._cupInfo(id):this._quickDefs().find(q=>q.id===id);
    if(!item)return;await this._settingsCall(cup?'manage_cup':'manage_quick',{action:item.hidden?'restore':'hide',...(cup?{cup_id:id}:{quick_id:id})});return;
@@ -1013,7 +1013,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   if(action==='settings-quick-add'||action==='settings-quick-edit'){
    this._error='';const q=this._quickDefs().find(x=>x.id===id);this._settingsEditId=q?.id||null;
    this._settingsDraft={liquid_type_id:q?.liquid_type_id||'',cup_type_id:q?.cup_type_id||'',
-    label_mode:q?.label_mode||'automatic',custom_label:q?.custom_label||'',icon_mdi:q?.icon_mdi||''};this._render(true);return;
+    label_mode:q?.label_mode||'automatic',custom_label:q?.custom_label||'',icon_mdi:q?.icon_mdi||'',icon_svg:q?.icon_svg||'',icon_color:q?.icon_color||''};this._render(true);return;
   }
   if(action==='settings-quick-save'){
    const d=this._settingsDraft||{};
@@ -1023,7 +1023,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     this._alert('Enter a custom button label.');return;}
    await this._settingsCall('manage_quick',{action:this._settingsEditId?'update':'add',
      ...(this._settingsEditId?{quick_id:this._settingsEditId}:{}),liquid_type_id:d.liquid_type_id,
-     cup_type_id:d.cup_type_id,label_mode:d.label_mode,custom_label:d.custom_label||'',icon_mdi:d.icon_mdi||''});return;
+     cup_type_id:d.cup_type_id,label_mode:d.label_mode,custom_label:d.custom_label||'',icon_mdi:d.icon_mdi||'',icon_svg:d.icon_svg||'',icon_color:d.icon_color||''});return;
   }
   if(action==='settings-target-save'){
    const node=this.shadowRoot.querySelector('[data-field="target_ml"]');
