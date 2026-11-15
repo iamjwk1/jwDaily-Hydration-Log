@@ -2103,7 +2103,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .dialog-page-quick .quick-settings-row .settings-row-actions button ha-icon{--mdc-icon-size:19px}
 .dialog-page-quick .settings-row{border:0!important;border-bottom:0!important;box-shadow:none!important}
 .dialog-page-quick .main-dialog-footer{border-top:0!important}
-.dialog-editor[aria-label="Profile editor"]{width:min(940px,calc(100vw - 18px))!important}
+.dialog-editor[aria-label="Profile editor"]{width:min(740px,calc(100vw - 18px))!important}
 .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{
  display:grid!important;
  grid-template-columns:210px 65px 125px 102px 142px!important;
