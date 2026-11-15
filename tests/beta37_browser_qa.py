@@ -64,6 +64,8 @@ with sync_playwright() as p:
   assert root.locator('[data-field="daily_target_ml"]').input_value()=='2'
   assert root.locator('.profile-quick-section').count()==1
   assert 'Quick buttons' in root.locator('.profile-quick-header').inner_text()
+  assert root.locator('.profile-quick-choices .quick-choice').count()==1
+  assert '180' not in root.locator('.profile-quick-choices .quick-choice').first.inner_text()
   root.locator('[data-field="unit"]').select_option('fl_oz');assert 'Daily target (fl oz)' in root.locator('.dialog-editor').inner_text()
   assert abs(float(root.locator('[data-field="daily_target_ml"]').input_value())-67.63)<.01
   root.locator('button[data-action="settings-profile-cancel"]').last.click()
@@ -74,6 +76,11 @@ with sync_playwright() as p:
   assert root.locator('.cup-table-head').count()==1
   assert root.locator('.cup-volume-value').count()==2
   assert root.locator('.cup-settings-row .used-count').count()==2
+  for row in root.locator('.cup-settings-row').all():
+   use=row.locator('.used-count').bounding_box(); actions=row.locator('.settings-row-actions').bounding_box()
+   assert use and actions
+   assert use['x']+use['width'] <= actions['x']+1 or actions['y']>=use['y']+use['height']-1,(width,use,actions)
+
   assert all(x.strip().isdigit() for x in root.locator('.cup-settings-row .used-count').all_text_contents())
   root.locator('button[data-action="settings-cup-edit"]').first.click()
   assert root.locator('.dialog-editor [data-field="volume_ml"]').input_value()=='0.18'
@@ -91,11 +98,15 @@ with sync_playwright() as p:
   root.locator('button[data-action="manage-edit"]').first.click()
   assert root.locator('.liquid-live-section').count()==1
   assert root.locator('.liquid-live-preview').count()==1
+  assert root.locator('.liquid-selected-icon').count()==1
   assert 'Use default color' in root.locator('.dialog-editor').inner_text()
   assert root.locator('.dialog-editor .color-preview').count()==0
   assert root.locator('.liquid-icon-controls').count()==1
   root.locator('button[data-action="icon-pick-open"][data-value="liquid"]').click()
   assert root.locator('ha-icon-picker[data-icon-library]').count()==1
+  assert root.locator('button[data-action="icon-pick-source"]').count()==2
+  root.locator('button[data-action="icon-pick-source"][data-value="svg"]').click()
+  assert root.locator('input[data-field="icon_svg_file"]').count()==1
   root.locator('button[data-action="icon-pick-cancel"]').last.click()
   root.locator('button[data-action="manage-cancel"]').first.click()
   assert root.locator('.liquid-live-section').count()==0
