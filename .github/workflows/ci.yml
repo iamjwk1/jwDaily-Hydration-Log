@@ -31,3 +31,12 @@ jobs:
           python -m pip install --disable-pip-version-check playwright
           python -m playwright install --with-deps chromium
           python tests/beta37_browser_qa.py
+
+      - name: Preserve beta42 Chromium visual QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta42-chromium-ui-screenshots
+          path: qa_screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 7

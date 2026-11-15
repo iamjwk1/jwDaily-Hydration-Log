@@ -27,8 +27,8 @@ with sync_playwright() as p:
     window.calls=[];window.downloads=[];HTMLAnchorElement.prototype.click=function(){window.downloads.push(this.download||'');};
     window.hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_one_consumed_today':{state:'0.18',attributes:{consumed_ml:180,unit_of_measurement:'L'}},'sensor.jwdhl_one_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_one_drink_count_today':{state:'1',attributes:{}},'sensor.jwdhl_one_manual_consumed':{state:'180',attributes:{manual_consumed_ml:180}}},callWS:async msg=>{
       window.calls.push(msg);
-      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.41'};
-      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.41'};
+      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.42'};
+      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.42'};
       if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'one',name:'Jan-Willem',age:58,gender:'male',unit:'L',daily_target_ml:2000},{slug:'two',name:'Second',age:30,gender:'female',unit:'fl_oz',daily_target_ml:1500}]};
       if(msg.type.endsWith('/export'))return {base64:'UEsDBBQ=',filename:'test beta38.xlsx'};
       return {};
@@ -36,7 +36,7 @@ with sync_playwright() as p:
     window.card=document.createElement('jwdaily-hydration-log-card');card.setConfig({profile:'one',title:'Vocht intake',unit:'mL'});card.hass=window.hass;document.querySelector('#mount').appendChild(card);
   }''')
   root=page.locator('jwdaily-hydration-log-card');page.wait_for_timeout(300)
-  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.41'
+  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.42'
   assert root.locator('.card-version').evaluate('(n)=>getComputedStyle(n).whiteSpace')=='nowrap'
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1
@@ -65,19 +65,49 @@ with sync_playwright() as p:
   root.locator('button[data-action="settings-profile-edit"]').first.click()
   assert 'Daily target (L)' in root.locator('.dialog-editor').inner_text()
   assert root.locator('[data-field="daily_target_ml"]').input_value()=='2'
+  assert root.locator('.dialog-editor .settings-head h3').inner_text()=='Edit profile - Jan-Willem'
+  if width==950:
+   Path('qa_screenshots').mkdir(exist_ok=True)
+   root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_profile.png')
   assert root.locator('.profile-quick-section').count()==1
   assert 'Quick buttons' in root.locator('.profile-quick-header').inner_text()
+  assert root.locator('[data-action="settings-profile-quick"] ha-icon').count()==1
+  assert root.locator('[data-action="settings-profile-quick"]').get_attribute('title')=='Edit quick buttons'
   assert root.locator('.profile-quick-choices .quick-choice').count()==1
   assert root.locator('.profile-quick-choices .quick-choice').first.evaluate('(n)=>getComputedStyle(n).borderRadius')!='0px'
   assert root.locator('.profile-quick-choices').first.evaluate('(n)=>getComputedStyle(n).flexWrap')=='wrap'
 
   assert '180' not in root.locator('.profile-quick-choices .quick-choice').first.inner_text()
+  root.locator('[data-action="settings-profile-quick"]').click()
+  assert root.locator('.settings-head h3').first.inner_text().startswith('Edit Quick Buttons')
+  if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_edit_quick.png')
+  assert root.locator('.quick-settings-row [data-action="settings-quick-toggle"] ha-icon').count()==1
+  assert root.locator('.quick-settings-row [data-action="settings-quick-edit"] ha-icon').count()==1
+  assert root.locator('.quick-settings-row [data-action="settings-quick-delete"] ha-icon').count()==1
+  if width>720:
+   header=root.locator('.quick-table-header span');row=root.locator('.quick-settings-row').first
+   assert abs(header.nth(0).bounding_box()['x']-row.locator('.quick-col-name').bounding_box()['x'])<9
+   for idx,cls in [(1,'.quick-col-cup'),(2,'.quick-col-volume')]:
+    hb=header.nth(idx).bounding_box();vb=row.locator(cls).bounding_box()
+    assert abs((hb['x']+hb['width']/2)-(vb['x']+vb['width']/2))<8
+  root.locator('button[data-action="settings-home"]').last.click()
+  assert root.locator('.profile-quick-section').count()==1
+  page.evaluate("""() => {
+    const q=card._profileQuickHistory.quick_buttons[0];
+    card._profileQuickHistory.quick_buttons=[{...q,id:'q0',liquid_type_id:'water',cup_type_id:'cup2',label_mode:'automatic',icon_mdi:'mdi:water'},q];
+    card._render(true);
+  }""")
+  assert root.locator('.profile-quick-choices .quick-choice').count()==2
+  assert root.locator('.profile-quick-choices .quick-choice').first.inner_text().startswith('Water (')
+  page.evaluate("""() => {card._profileQuickHistory.quick_buttons.splice(0,1);card._render(true);}""")
+
   root.locator('[data-field="unit"]').select_option('fl_oz');assert 'Daily target (fl oz)' in root.locator('.dialog-editor').inner_text()
   assert abs(float(root.locator('[data-field="daily_target_ml"]').input_value())-67.63)<.01
   root.locator('button[data-action="settings-profile-cancel"]').last.click()
   root.locator('button[data-action="settings-home"]').click()
   root.locator('button[data-action="settings-page"][data-value="cups"]').click()
   assert root.locator('.settings-head h3').inner_text()=='Maintain cup types'
+  if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_maintain_cups.png')
   assert root.locator('.cup-row-icon').count()==2
   assert root.locator('.cup-table-head').count()==1
   assert root.locator('.cup-settings-row [data-action="settings-cup-edit"] ha-icon').count()==2
@@ -101,7 +131,11 @@ with sync_playwright() as p:
   assert all(x.strip().isdigit() for x in root.locator('.cup-settings-row .used-count').all_text_contents())
   root.locator('button[data-action="settings-cup-edit"]').first.click()
   assert root.locator('.dialog-editor [data-field="volume_ml"]').input_value()=='0.18'
+  if width==950:root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_cup.png')
+  assert root.locator('[data-field="cup_icon_color_picker"]').count()==1
+  assert '#000000' in root.locator('.cup-icon-editor .liquid-icon').first.get_attribute('style').lower()
   root.locator('button[data-action="icon-pick-open"][data-value="cup"]').click()
+  assert root.locator('[data-field="icon_color_picker"]').input_value().lower()=='#000000'
   assert root.locator('ha-icon-picker[data-icon-library]').count()==1
   root.locator('ha-icon-picker[data-icon-library]').evaluate('el=>el.dispatchEvent(new CustomEvent("value-changed",{detail:{value:"mdi:glass-wine"},bubbles:true,composed:true}))')
   root.locator('button[data-action="icon-pick-apply"]').click()
@@ -109,6 +143,7 @@ with sync_playwright() as p:
   root.locator('button[data-action="settings-discard"]').first.click()
   root.locator('button[data-action="settings-home"]').click()
   root.locator('button[data-action="settings-page"][data-value="liquids"]').click()
+  if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_maintain_liquids.png')
   assert root.locator('.liquid-list-header').count()==1
   assert root.locator('.settings-head h3').first.inner_text()=='Maintain liquid types'
   assert root.locator('.saved-liquid [data-action="manage-up"]').first.get_attribute('title')=='Move liquid type up'
@@ -123,14 +158,21 @@ with sync_playwright() as p:
   assert root.locator('.saved-liquid button[data-action="manage-remove"]').count()==3
   root.locator('button[data-action="manage-edit"]').first.click()
   assert root.locator('.liquid-live-section').count()==1
+  if width==950:root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_liquid.png')
   assert root.locator('.liquid-live-preview').count()==1
+  assert '#000000' in root.locator('.liquid-live-preview .liquid-icon').first.get_attribute('style').lower()
+  assert root.locator('[data-action="liquid-icon-default"]').count()==1
+  assert root.locator('.liquid-name-row input').first.evaluate('(n)=>getComputedStyle(n).fontWeight') in ('400','normal')
   assert root.locator('.liquid-selected-icon').count()==1
   assert 'Use default color' in root.locator('.dialog-editor').inner_text()
   assert root.locator('.dialog-editor .color-preview').count()==0
+  assert root.locator('[data-field="liquid_icon_color_picker"]').input_value().lower()=='#000000'
   assert root.locator('.liquid-icon-controls').count()==1
   root.locator('button[data-action="icon-pick-open"][data-value="liquid"]').click()
   assert root.locator('ha-icon-picker[data-icon-library]').count()==1
+  if width==950:root.locator('.icon-library-dialog').screenshot(path='qa_screenshots/beta42_icon_picker.png')
   assert root.locator('button[data-action="icon-pick-source"]').count()==2
+  assert root.locator('[data-field="icon_color_picker"]').input_value().lower()=='#000000'
   root.locator('button[data-action="icon-pick-source"][data-value="svg"]').click()
   assert root.locator('input[data-field="icon_svg_file"]').count()==1
   root.locator('button[data-action="icon-pick-cancel"]').last.click()
