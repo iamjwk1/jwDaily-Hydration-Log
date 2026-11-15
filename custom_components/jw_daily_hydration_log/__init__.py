@@ -283,13 +283,14 @@ async def ws_delete_drink(hass:HomeAssistant, connection:websocket_api.ActiveCon
                                   probatio.Required('name'):str,
                                   probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('icon_svg'):str,
-                                  probatio.Optional('color'):str})
+                                  probatio.Optional('color'):str,
+                                  probatio.Optional('icon_color'):str})
 @websocket_api.async_response
 async def ws_add_liquid_type(hass:HomeAssistant, connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         c=_resolve(hass,msg['profile'])
         item=await c.async_add_liquid_type(msg['name'],msg.get('icon_mdi',''),
-                                           msg.get('icon_svg',''),msg.get('color',''))
+                                           msg.get('icon_svg',''),msg.get('color',''),msg.get('icon_color',''))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return
@@ -316,13 +317,14 @@ async def ws_delete_liquid_type(hass:HomeAssistant,connection:websocket_api.Acti
                                   probatio.Required('name'):str,
                                   probatio.Optional('icon_mdi'):str,
                                   probatio.Optional('icon_svg'):str,
-                                  probatio.Optional('color'):str})
+                                  probatio.Optional('color'):str,
+                                  probatio.Optional('icon_color'):str})
 @websocket_api.async_response
 async def ws_update_liquid_type(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:dict)->None:
     try:
         item=await _resolve(hass,msg['profile']).async_update_liquid_type(
             msg['liquid_type'],msg['name'],msg.get('icon_mdi',''),
-            msg.get('icon_svg',''),msg.get('color'))
+            msg.get('icon_svg',''),msg.get('color'),msg.get('icon_color'))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_liquid_type',str(exc))
         return
@@ -385,13 +387,16 @@ async def ws_set_liquid_order(hass:HomeAssistant,connection:websocket_api.Active
                                   probatio.Optional('name'):str,
                                   probatio.Optional('volume_ml'):float,
                                   probatio.Optional('icon_mdi'):str,
+                                  probatio.Optional('icon_svg'):str,
+                                  probatio.Optional('icon_color'):str,
                                   probatio.Optional('order'):[str]})
 @websocket_api.async_response
 async def ws_manage_cup(hass, connection, msg):
     try:
         c=_resolve(hass,msg['profile'])
         result=await c.async_manage_cup(msg['action'],msg.get('cup_id',''),msg.get('name',''),
-                                        msg.get('volume_ml'),msg.get('icon_mdi',''),msg.get('order'))
+                                        msg.get('volume_ml'),msg.get('icon_mdi',''),msg.get('order'),
+                                        msg.get('icon_svg',''),msg.get('icon_color',''))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_cup',str(exc));return
     connection.send_result(msg['id'],{'cup_types':result})
@@ -407,6 +412,8 @@ async def ws_manage_cup(hass, connection, msg):
                                   probatio.Optional('label_mode'):str,
                                   probatio.Optional('custom_label'):str,
                                   probatio.Optional('icon_mdi'):str,
+                                  probatio.Optional('icon_svg'):str,
+                                  probatio.Optional('icon_color'):str,
                                   probatio.Optional('order'):[str]})
 @websocket_api.async_response
 async def ws_manage_quick(hass, connection, msg):
@@ -415,7 +422,8 @@ async def ws_manage_quick(hass, connection, msg):
         result=await c.async_manage_quick(msg['action'],msg.get('quick_id',''),
                                           msg.get('liquid_type_id',''),msg.get('cup_type_id',''),
                                           msg.get('label_mode','automatic'),msg.get('custom_label',''),
-                                          msg.get('order'),msg.get('icon_mdi',''))
+                                          msg.get('order'),msg.get('icon_mdi',''),
+                                          msg.get('icon_svg',''),msg.get('icon_color',''))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'invalid_quick',str(exc));return
     connection.send_result(msg['id'],{'quick_buttons':result})
