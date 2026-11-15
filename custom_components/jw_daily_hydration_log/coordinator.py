@@ -693,7 +693,7 @@ class HydrationCoordinator:
             any(liquid_type == item['id'] for item in self.custom_liquid_types))
 
     async def async_add_liquid_type(self, name: str, icon_mdi: str = '',
-                                    icon_svg: str = '', color: str = '') -> dict:
+                                    icon_svg: str = '', color: str = '', icon_color: str = '') -> dict:
         if not isinstance(name, str):
             raise ValueError('Liquid name is required')
         name = name.strip()
@@ -713,7 +713,7 @@ class HydrationCoordinator:
                 raise ValueError('Liquid name already exists')
             item = dict(id='custom_' + uuid4().hex[:12], name=name,
                         icon_mdi=icon_mdi or ('mdi:glass-mug-variant' if not icon_svg else ''),
-                        icon_svg=icon_svg, custom=True, hidden=False)
+                        icon_svg=icon_svg, icon_color=_color_override(icon_color) or '', custom=True, hidden=False)
             self.custom_liquid_types.append(item)
             if selected_color:
                 self.liquid_colors[item['id']] = selected_color
@@ -752,7 +752,7 @@ class HydrationCoordinator:
 
     async def async_update_liquid_type(self, liquid_type: str, name: str,
                                       icon_mdi: str = '', icon_svg: str = '',
-                                      color: str | None = None) -> dict:
+                                      color: str | None = None, icon_color: str | None = None) -> dict:
         """Update any liquid's display metadata. Never rewrite its historical ID."""
         if not isinstance(name, str):
             raise ValueError('Liquid name is required')
@@ -776,7 +776,8 @@ class HydrationCoordinator:
                 raise ValueError('Liquid name already exists')
             props = dict(name=name,
                          icon_mdi=icon_mdi or ('mdi:glass-water' if not icon_svg else ''),
-                         icon_svg=icon_svg)
+                         icon_svg=icon_svg,
+                         icon_color=(_color_override(icon_color) or '') if icon_color is not None else existing.get('icon_color',''))
             if existing['custom']:
                 next(item for item in self.custom_liquid_types if item['id'] == liquid_type).update(props)
             else:
@@ -879,7 +880,8 @@ class HydrationCoordinator:
 
     async def async_manage_cup(self, action: str, cup_id: str = '', name: str = '',
                                volume_ml: float | None = None, icon_mdi: str = '',
-                               order: list[str] | None = None) -> list[dict]:
+                               order: list[str] | None = None, icon_svg: str = '',
+                               icon_color: str = '') -> list[dict]:
         if action not in ('add', 'update', 'hide', 'restore', 'reorder', 'delete'):
             raise ValueError('Invalid cup action')
         async with self._lock:
@@ -910,6 +912,8 @@ class HydrationCoordinator:
                     raise ValueError('Cup volume must be between 0 and 100000 mL')
                 if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}', icon_mdi):
                     raise ValueError('Invalid Cup MDI icon')
+                if icon_mdi and icon_svg:raise ValueError('Choose MDI or SVG, not both')
+                if icon_svg:icon_svg=_safe_svg(icon_svg)
                 cup = next((c for c in self.cup_types if c['id'] == cup_id), None)
                 if action == 'update' and cup is None:
                     raise ValueError('Cup type not found')
@@ -918,7 +922,8 @@ class HydrationCoordinator:
                 if any(c['name'].casefold() == name.casefold() and c is not cup for c in self.cup_types):
                     raise ValueError('Cup name already exists')
                 props = dict(name=name, default_volume_ml=valid_volume,
-                             icon_mdi=icon_mdi or 'mdi:cup', hidden=False)
+                             icon_mdi=icon_mdi or ('' if icon_svg else 'mdi:cup'),
+                             icon_svg=icon_svg,icon_color=_color_override(icon_color) or '',hidden=False)
                 if action == 'add':
                     self.cup_types.append(dict(id='cup_' + uuid4().hex[:12], **props))
                 else:
@@ -930,7 +935,8 @@ class HydrationCoordinator:
     async def async_manage_quick(self, action: str, quick_id: str = '',
                                  liquid_type_id: str = '', cup_type_id: str = '',
                                  label_mode: str = 'automatic', custom_label: str = '',
-                                 order: list[str] | None = None, icon_mdi: str = '') -> list[dict]:
+                                 order: list[str] | None = None, icon_mdi: str = '',
+                                 icon_svg: str = '',icon_color: str = '') -> list[dict]:
         if action not in ('add','update','hide','restore','reorder','delete'):
             raise ValueError('Invalid quick-button action')
         async with self._lock:
@@ -970,6 +976,8 @@ class HydrationCoordinator:
                     raise ValueError('Choose an active cup type')
                 if icon_mdi and not re.fullmatch(r'mdi:[a-z0-9-]{2,70}',icon_mdi):
                     raise ValueError('Invalid Quick button MDI icon')
+                if icon_mdi and icon_svg:raise ValueError('Choose MDI or SVG, not both')
+                if icon_svg:icon_svg=_safe_svg(icon_svg)
                 if label_mode not in ('automatic','custom'):
                     raise ValueError('Label mode must be automatic or custom')
                 if label_mode == 'custom':
@@ -989,7 +997,8 @@ class HydrationCoordinator:
                        q['cup_type_id'] == cup_type_id for q in self.quick_buttons):
                     raise ValueError('A Quick button already uses this Liquid and Cup combination')
                 props = dict(liquid_type_id=liquid_type_id,cup_type_id=cup_type_id,
-                             label_mode=label_mode,custom_label=custom_label,icon_mdi=icon_mdi,hidden=False)
+                             label_mode=label_mode,custom_label=custom_label,icon_mdi=icon_mdi,
+                             icon_svg=icon_svg,icon_color=_color_override(icon_color) or '',hidden=False)
                 if action == 'add':
                     self.quick_buttons.append(dict(id='quick_' + uuid4().hex[:12], **props))
                 else:
@@ -1025,6 +1034,8 @@ class HydrationCoordinator:
         for item in cleaned['custom_liquid_types']:
             if item.get('icon_svg'): _safe_svg(item['icon_svg'])
         for item in cleaned['liquid_overrides'].values():
+            if item.get('icon_svg'): _safe_svg(item['icon_svg'])
+        for item in (*cleaned['cup_types'],*cleaned['quick_buttons']):
             if item.get('icon_svg'): _safe_svg(item['icon_svg'])
         async with self._lock:
             if self.settings_revision() != expected_revision:
@@ -1289,6 +1300,8 @@ class HydrationCoordinator:
         for item in settings['custom_liquid_types']:
             if item.get('icon_svg'):_safe_svg(item['icon_svg'])
         for item in settings['liquid_overrides'].values():
+            if item.get('icon_svg'):_safe_svg(item['icon_svg'])
+        for item in (*settings['cup_types'],*settings['quick_buttons']):
             if item.get('icon_svg'):_safe_svg(item['icon_svg'])
         preferences = self._validate_restored_preferences(raw_settings.get('profile_preferences'))
         data = self._validate_import_data(raw_data, settings=settings)
