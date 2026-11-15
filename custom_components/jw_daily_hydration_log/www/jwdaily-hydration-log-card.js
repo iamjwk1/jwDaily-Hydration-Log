@@ -410,7 +410,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.40')throw Error(`Frontend v1.1.0-beta.41 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.41')throw Error(`Frontend v1.1.0-beta.41 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -2011,6 +2011,8 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 }
 .dialog-editor[aria-label="Profile editor"] .profile-quick-choices .quick-choice .liquid-icon,
 .quick-choices .quick-choice .liquid-icon{--mdc-icon-size:21px;width:21px;height:21px;flex:none}
+.dialog-page-cups .cup-table-head>span:first-child{grid-column:2!important}
+.dialog-page-liquids .liquid-list-header>span:first-child{grid-column:2!important}
 .visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:660px){
  .dialog-page-cups .cup-table-head,.dialog-page-cups .cup-settings-row{
