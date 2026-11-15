@@ -27,8 +27,8 @@ with sync_playwright() as p:
     window.calls=[];window.downloads=[];HTMLAnchorElement.prototype.click=function(){window.downloads.push(this.download||'');};
     window.hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_one_consumed_today':{state:'0.18',attributes:{consumed_ml:180,unit_of_measurement:'L'}},'sensor.jwdhl_one_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_one_drink_count_today':{state:'1',attributes:{}},'sensor.jwdhl_one_manual_consumed':{state:'180',attributes:{manual_consumed_ml:180}}},callWS:async msg=>{
       window.calls.push(msg);
-      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.40'};
-      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.40'};
+      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.41'};
+      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.41'};
       if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'one',name:'Jan-Willem',age:58,gender:'male',unit:'L',daily_target_ml:2000},{slug:'two',name:'Second',age:30,gender:'female',unit:'fl_oz',daily_target_ml:1500}]};
       if(msg.type.endsWith('/export'))return {base64:'UEsDBBQ=',filename:'test beta38.xlsx'};
       return {};
@@ -36,7 +36,7 @@ with sync_playwright() as p:
     window.card=document.createElement('jwdaily-hydration-log-card');card.setConfig({profile:'one',title:'Vocht intake',unit:'mL'});card.hass=window.hass;document.querySelector('#mount').appendChild(card);
   }''')
   root=page.locator('jwdaily-hydration-log-card');page.wait_for_timeout(300)
-  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.40'
+  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.41'
   assert root.locator('.card-version').evaluate('(n)=>getComputedStyle(n).whiteSpace')=='nowrap'
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1
@@ -54,6 +54,9 @@ with sync_playwright() as p:
   assert root.locator('[data-action="transfer-scope"]').count()==3
   root.locator('[data-action="transfer-scope"][data-value="settings"]').click()
   assert root.locator('[data-action="transfer-scope"][data-value="settings"]').get_attribute("aria-pressed")=="true"
+  assert root.locator('.beta40-advanced').count()==0
+  assert root.locator('[data-action="settings-export-json"]').count()==0
+  assert root.locator('[data-action="data-export-json"]').count()==0
   assert 'Migration v3' not in root.locator('.dialog-settings').inner_text()
   assert root.locator('button[data-action="migration-rollback"]').count()==0
   root.locator('button[data-action="settings-home"]').click()
@@ -65,6 +68,9 @@ with sync_playwright() as p:
   assert root.locator('.profile-quick-section').count()==1
   assert 'Quick buttons' in root.locator('.profile-quick-header').inner_text()
   assert root.locator('.profile-quick-choices .quick-choice').count()==1
+  assert root.locator('.profile-quick-choices .quick-choice').first.evaluate('(n)=>getComputedStyle(n).borderRadius')!='0px'
+  assert root.locator('.profile-quick-choices').first.evaluate('(n)=>getComputedStyle(n).flexWrap')=='wrap'
+
   assert '180' not in root.locator('.profile-quick-choices .quick-choice').first.inner_text()
   root.locator('[data-field="unit"]').select_option('fl_oz');assert 'Daily target (fl oz)' in root.locator('.dialog-editor').inner_text()
   assert abs(float(root.locator('[data-field="daily_target_ml"]').input_value())-67.63)<.01
@@ -74,6 +80,17 @@ with sync_playwright() as p:
   assert root.locator('.settings-head h3').inner_text()=='Maintain cup types'
   assert root.locator('.cup-row-icon').count()==2
   assert root.locator('.cup-table-head').count()==1
+  assert root.locator('.cup-settings-row [data-action="settings-cup-edit"] ha-icon').count()==2
+  assert root.locator('.cup-settings-row [data-action="settings-cup-delete"] ha-icon').count()==2
+  assert root.locator('.cup-settings-row [data-action="settings-cup-toggle"] ha-icon').count()==2
+  assert root.locator('.cup-settings-row [data-action="settings-cup-up"]').first.get_attribute('title')=='Move cup type up'
+  if width>=720:
+   head=root.locator('.cup-table-head span').all()
+   row=root.locator('.cup-settings-row').first
+   for header,cell in [(head[0],row.locator('.row-title')),(head[1],row.locator('.cup-volume-value')),(head[2],row.locator('.used-count'))]:
+    hx=header.bounding_box()['x'];cx=cell.bounding_box()['x']
+    assert abs(hx-cx)<8,('Cup header misaligned',width,hx,cx)
+
   assert root.locator('.cup-volume-value').count()==2
   assert root.locator('.cup-settings-row .used-count').count()==2
   for row in root.locator('.cup-settings-row').all():
@@ -93,6 +110,15 @@ with sync_playwright() as p:
   root.locator('button[data-action="settings-home"]').click()
   root.locator('button[data-action="settings-page"][data-value="liquids"]').click()
   assert root.locator('.liquid-list-header').count()==1
+  assert root.locator('.settings-head h3').first.inner_text()=='Maintain liquid types'
+  assert root.locator('.saved-liquid [data-action="manage-up"]').first.get_attribute('title')=='Move liquid type up'
+  assert root.locator('.saved-liquid [data-action="manage-down"]').first.get_attribute('title')=='Move liquid type down'
+  if width>=720:
+   head=root.locator('.liquid-list-header span')
+   row=root.locator('.saved-liquid').first
+   assert abs(head.nth(0).bounding_box()['x']-row.locator('.liquid-type-name').bounding_box()['x'])<8
+   assert abs(head.nth(1).bounding_box()['x']-row.locator('.used-count').bounding_box()['x'])<8
+
   assert root.locator('.saved-liquid').count()==3
   assert root.locator('.saved-liquid button[data-action="manage-remove"]').count()==3
   root.locator('button[data-action="manage-edit"]').first.click()
