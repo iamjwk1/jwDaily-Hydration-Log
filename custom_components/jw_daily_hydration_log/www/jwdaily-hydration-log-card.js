@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.1.0-beta.41 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.1.0-beta.42 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -218,6 +218,10 @@ class JwDailyHydrationLogCard extends HTMLElement {
     this._settingsImportPreview=null;this._error='';this._render(true);}
    catch(err){this._alert(err);}return;
   }
+  if(field==='cup_icon_color_picker'&&this._settingsSection==='cups'&&this._settingsDraft){
+   const c=jdhlHex(e.target.value);if(c){this._settingsDraft.icon_color=c;this._render(true);}
+   return;
+  }
   if(this._settingsSection==='profile'&&this._profileDraft&&Object.hasOwn(this._profileDraft,field)){
     const d=this._profileDraft;
     if(field==='unit'){
@@ -245,7 +249,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
     const picker=this.shadowRoot.querySelector('[data-field="liquid_icon_color_picker"]');
     if(input&&input!==e.target)input.value=c;
     if(picker&&picker!==e.target)picker.value=c;
-    this.shadowRoot.querySelectorAll('.liquid-live-preview .liquid-icon, .liquid-selected-icon .liquid-icon').forEach(x=>x.style.color=c);
+    this.shadowRoot.querySelectorAll('.liquid-live-preview ha-icon, .liquid-selected-icon ha-icon').forEach(x=>x.style.color=c);
+    this.shadowRoot.querySelectorAll('.liquid-live-preview .masked-icon, .liquid-selected-icon .masked-icon').forEach(x=>x.style.backgroundColor=c);
    }
    return;
   }
@@ -410,7 +415,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.1.0-beta.41')throw Error(`Frontend v1.1.0-beta.41 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.1.0-beta.42')throw Error(`Frontend v1.1.0-beta.42 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -450,8 +455,16 @@ class JwDailyHydrationLogCard extends HTMLElement {
    const d=scope==='liquid'?this._customDraft:this._settingsDraft;
    if(!d)return;
    const source=d.icon_svg?'svg':'mdi';
-   this._iconPicker={scope,source,selected:d.icon_mdi||'mdi:cup',svg:d.icon_svg||'',color:d.icon_color||''};
+   this._iconPicker={scope,source,selected:d.icon_mdi||'mdi:cup',svg:d.icon_svg||'',color:jdhlHex(d.icon_color)||'#000000'};
    this._render(true);return;
+  }
+  if(action==='liquid-icon-default'){
+   if(this._customDraft){this._customDraft.icon_color='#000000';this._render(true);}
+   return;
+  }
+  if(action==='cup-icon-default'){
+   if(this._settingsDraft){this._settingsDraft.icon_color='#000000';this._render(true);}
+   return;
   }
   if(action==='icon-pick-source'){this._iconPicker.source=el.dataset.value;this._render(true);return;}
   if(action==='icon-pick-cancel'){this._iconPicker=null;this._render(true);return;}
@@ -714,8 +727,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
      ${hidden.length?`<h4>Hidden liquid types</h4><div class="hidden-liquids">${hidden.map(t=>
         `<div class="hidden-liquid">${this._liquidIcon(t,true)} <span>${jdhlEscape(t.name)}</span>
          <span class="used-count" title="Recorded drinks across all profiles">${Number(t.drink_count_all_profiles)||0}</span><button class="secondary small" data-action="manage-restore" data-value="${jdhlEscape(t.id)}" title="Show liquid type" aria-label="Show liquid type"><ha-icon icon="mdi:eye-off"></ha-icon></button></div>`).join('')}</div>`:''}
-     ${this._managePendingDelete?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm liquid deletion"><div class="settings-head"><h3>Delete liquid type?</h3><button class="secondary small" data-action="manage-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">${this._managePendingDelete.custom?
-        `Permanently delete ${jdhlEscape(this._managePendingDelete.name)}? Only unused custom types can be deleted.`:
+     ${this._managePendingDelete?`<div class="overlay editor-overlay"><section class="dialog dialog-editor delete-liquid-dialog" role="dialog" aria-modal="true" aria-label="Confirm liquid deletion"><div class="settings-head"><h3>Delete liquid type?</h3><button class="secondary small" data-action="manage-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">${this._managePendingDelete.custom?
+        `Permanently delete ${jdhlEscape(this._managePendingDelete.name)}?`:
         `Remove ${jdhlEscape(this._managePendingDelete.name)} from Add choices? History and Excel remain intact; you can restore it later.`}
         <div class="dialog-actions"><button class="secondary" data-action="manage-delete-cancel">Cancel</button>
          <button class="danger" data-action="manage-delete-confirm">Confirm delete</button></div></div></section></div>`:'' }
@@ -723,19 +736,20 @@ class JwDailyHydrationLogCard extends HTMLElement {
     ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Liquid editor"><div class="settings-head"><h3>${this._editingLiquidId?'Edit liquid type':'Add liquid type'}</h3><button class="secondary small" data-action="manage-cancel" aria-label="Close">✕</button></div><div class="manage-editor">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
      <div class="liquid-live-section"><h4>Preview</h4>
       <div class="liquid-live-preview" style="background:${jdhlHex(d.color_hex)||'#FFCE3E'};color:${jdhlContrastInk(jdhlHex(d.color_hex)||'#FFCE3E')}">
-       ${this._liquidIcon({id:this._editingLiquidId||'',name:d.custom_name||'',icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',icon_color:d.icon_color||'',color:jdhlHex(d.color_hex)},true)}
+       ${this._liquidIcon({id:this._editingLiquidId||'',name:d.custom_name||'',icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',icon_color:jdhlHex(d.icon_color)||'#000000',color:jdhlHex(d.color_hex)},true)}
        <span class="liquid-live-label">${jdhlEscape(d.custom_name||'Liquid type')}</span>
       </div></div>
      <div class="liquid-icon-controls">
       <div class="liquid-icon-selection"><label class="editor-section-title">Icon</label>
         <div class="liquid-selected-icon">
-          ${this._liquidIcon({icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',icon_color:d.icon_color||'',color:d.color_hex},true)}
+          ${this._liquidIcon({icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',icon_color:jdhlHex(d.icon_color)||'#000000',color:d.color_hex},true)}
           <span>${jdhlEscape(d.icon_svg?'Custom SVG':d.icon_mdi||'mdi:glass-mug-variant')}</span>
         </div>
         <button class="secondary small" data-action="icon-pick-open" data-value="liquid">Choose icon</button>
       </div>
-      <label>Color<input type="color" data-field="liquid_icon_color_picker" value="${jdhlHex(d.icon_color)||'#152936'}"/></label>
-      <label>Hex color<input type="text" data-field="liquid_icon_color_hex" maxlength="7" value="${jdhlEscape(d.icon_color||'')}" placeholder="#RRGGBB"/></label>
+      <label>Color<input type="color" data-field="liquid_icon_color_picker" value="${jdhlHex(d.icon_color)||'#000000'}"/></label>
+      <label>Hex color<input type="text" data-field="liquid_icon_color_hex" maxlength="7" value="${jdhlEscape(jdhlHex(d.icon_color)||'#000000')}" placeholder="#RRGGBB"/></label>
+       <button class="secondary small icon-default-btn" type="button" data-action="liquid-icon-default" title="Reset icon color to black">Default</button>
      </div>
      <div class="manage-form-grid liquid-name-row"><label class="editor-section-title">Liquid name<input data-field="custom_name" maxlength="48" value="${jdhlEscape(d.custom_name||'')}" placeholder="e.g. Orange juice"/></label></div>
      <h4 class="editor-section-title liquid-button-color-title">Button color</h4>
@@ -764,13 +778,13 @@ class JwDailyHydrationLogCard extends HTMLElement {
   return `<div class="settings-section"><p class="settings-note">Each profile keeps separate settings and drink history.</p>
    ${profiles.map(p=>`<div class="settings-row profile-settings-row compact-profile-row"><ha-icon icon="mdi:account-circle-outline"></ha-icon><div class="row-title"><strong>${E(p.name)}</strong><small>${E((p.gender||'').replace(/^./,c=>c.toUpperCase()))} · ${p.age} years · Daily target ${jdhlFmt(p.daily_target_ml,p.unit||'mL')} · Units ${jdhlUnitLabel(p.unit)}</small></div>
     <button class="secondary small" data-action="settings-profile-edit" data-value="${E(p.slug)}">Edit</button></div>`).join('')}
-   ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Profile editor"><div class="settings-head"><h3>${this._profileEditSlug?'Edit profile':'Add profile'}</h3><button class="secondary small" data-action="settings-profile-cancel" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
+   ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Profile editor"><div class="settings-head"><h3>${this._profileEditSlug?`Edit profile - ${E(d.name)}`:'Add profile'}</h3><button class="secondary small" data-action="settings-profile-cancel" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
     <label class="span-2">Profile name<input data-field="name" maxlength="48" value="${E(d.name)}"/></label>
     <label>Age<input type="number" min="1" max="120" data-field="age" value="${E(d.age)}"/></label>
     <label>Gender<select data-field="gender"><option value="male" ${d.gender==='male'?'selected':''}>Male</option><option value="female" ${d.gender==='female'?'selected':''}>Female</option></select></label>
     <label>Units<select data-field="unit">${['mL','L','fl_oz'].map(v=>`<option value="${v}" ${d.unit===v?'selected':''}>${v}</option>`).join('')}</select></label>
     <label>Daily target (${jdhlUnitLabel(d.unit)})<input type="number" min="0.001" max="100000" step="any" data-field="daily_target_ml" value="${E(d.daily_target_ml)}"/></label>
-    ${this._profileEditSlug?`<section class="profile-quick-section span-2"><div class="profile-quick-header"><h4>Quick buttons</h4><button class="secondary small" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}">Edit</button></div><div class="quick-choices profile-quick-choices">${(this._profileQuickHistory?.quick_buttons||[]).map(q=>`<div class="quick-choice" style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))};--quick-ink:${jdhlContrastInk(this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id)))}">${this._quickIcon(q)}<span>${E(this._effectiveQuickLabel(q))}</span></div>`).join('')||'<p class="settings-note">No Quick buttons configured.</p>'}</div></section>`:''}
+    ${this._profileEditSlug?`<section class="profile-quick-section span-2"><div class="profile-quick-header"><h4>Quick buttons</h4><button class="secondary small icon-action" data-action="settings-profile-quick" data-value="${E(this._profileEditSlug)}" title="Edit quick buttons" aria-label="Edit quick buttons"><ha-icon icon="mdi:pencil"></ha-icon></button></div><div class="quick-choices profile-quick-choices">${(this._profileQuickHistory?.quick_buttons||[]).map(q=>`<div class="quick-choice" style="--quick-color:${this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id))};--quick-ink:${jdhlContrastInk(this._typeColor(q.liquid_type_id,this._liquidName(q.liquid_type_id)))}">${this._quickIcon(q)}<span>${E(this._effectiveQuickLabel(q))}</span></div>`).join('')||'<p class="settings-note">No Quick buttons configured.</p>'}</div></section>`:''}
     ${!this._profileEditSlug?`<label>Copy settings from<select data-field="copy_from"><option value="">Start with default settings</option>${profiles.map(p=>`<option value="${E(p.slug)}" ${p.slug===d.copy_from?'selected':''}>${E(p.name)}</option>`).join('')}</select></label>`:''}
     ${!this._profileEditSlug?'<p class="settings-note">Only configuration is copied. No records, consumed volumes, sensor readings or personal targets are transferred.</p>':''}
     </div><div class="dialog-footer"><button class="secondary" data-action="settings-profile-cancel">Cancel</button><button data-action="settings-profile-save">${this._profileEditSlug?'Save profile':'Create profile'}</button></div></section></div>`:''}
@@ -828,10 +842,12 @@ class JwDailyHydrationLogCard extends HTMLElement {
   else if(page==='cups'){
    const cups=this._cupDefs();body=`<div class="settings-section"><p class="settings-note">Only unused cup types can be deleted. Used cup types can be hidden to retain historical data and exports.</p><div class="cup-table-head"><span>Cup type</span><span>Default volume</span><span>Times used</span><span class="visually-hidden">Actions</span></div>
     ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body cup-editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
-      <div class="icon-edit-row span-2">
-       ${this._liquidIcon({icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',icon_color:draft.icon_color||''},true)}
+      <div class="icon-edit-row span-2 cup-icon-editor">
+       ${this._liquidIcon({icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',icon_color:jdhlHex(draft.icon_color)||'#000000'},true)}
        <div><strong>Icon</strong><small>${E(draft.icon_svg?'Custom SVG':draft.icon_mdi||'mdi:cup')}</small></div>
        <button class="secondary small" data-action="icon-pick-open" data-value="cup">Choose icon</button>
+       <label class="cup-icon-color">Icon color<input type="color" data-field="cup_icon_color_picker" aria-label="Cup icon color" value="${jdhlHex(draft.icon_color)||'#000000'}"/></label>
+       <button type="button" class="secondary small" data-action="cup-icon-default" title="Reset icon color to black">Default</button>
       </div>
       <label class="cup-name-field">Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
       <label class="cup-volume-field">Default volume (${this._unitLabel()})<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label></div>
@@ -858,18 +874,18 @@ class JwDailyHydrationLogCard extends HTMLElement {
       ${draft.label_mode==='custom'?`<label>Custom button text<input data-field="custom_label" maxlength="60" value="${E(draft.custom_label)}"/></label>`:''}
       <div class="icon-edit-row span-2"><ha-icon icon="${E(draft.icon_mdi||this._liquidInfo(draft.liquid_type_id)?.icon_mdi||'mdi:cup')}"></ha-icon><div><strong>Quick button icon</strong><small>${E(draft.icon_mdi||'Uses liquid icon')}</small></div><button class="secondary small" data-action="icon-pick-open" data-value="quick">Choose icon</button><button class="secondary small" data-action="icon-pick-liquid-default">Use liquid icon</button></div></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-quick-save">Save Quick button</button></div></section></div>`:''}
-    <div class="quick-table-header"><span>Icon</span><span>Liquid type</span><span>Cup type</span><span>Cup volume</span><span>Actions</span></div>
+    <div class="quick-table-header"><span>Liquid type</span><span>Cup type</span><span>Cup volume</span><span class="visually-hidden">Actions</span></div>
     ${quick.map((q,i)=>`<div class="settings-row quick-settings-row">
      ${q.icon_mdi?`<ha-icon icon="${E(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}
      <span class="quick-col-name">${E(this._liquidName(q.liquid_type_id))}${q.hidden?' (Hidden)':''}</span>
      <span class="quick-col-cup">${E(this._cupInfo(q.cup_type_id)?.name||'Cup unavailable')}</span>
      <span class="quick-col-volume">${this._fmt(Number(q.default_volume_ml||0))}</span>
      <div class="settings-row-actions">
-     <button class="secondary small" data-action="settings-quick-up" data-value="${E(q.id)}" ${i===0?'disabled':''} aria-label="Move up">↑</button>
-     <button class="secondary small" data-action="settings-quick-down" data-value="${E(q.id)}" ${i===quick.length-1?'disabled':''} aria-label="Move down">↓</button>
-     <button class="secondary small settings-hide-button" data-action="settings-quick-toggle" data-value="${E(q.id)}">${q.hidden?'Restore':'Hide'}</button>
-     <button class="secondary small" data-action="settings-quick-edit" data-value="${E(q.id)}">Edit</button>
-     <button class="danger small" data-action="settings-quick-delete" data-value="${E(q.id)}">Delete</button>
+     <button class="secondary small" data-action="settings-quick-up" data-value="${E(q.id)}" ${i===0?'disabled':''} aria-label="Move Quick button up" title="Move Quick button up">↑</button>
+     <button class="secondary small" data-action="settings-quick-down" data-value="${E(q.id)}" ${i===quick.length-1?'disabled':''} aria-label="Move Quick button down" title="Move Quick button down">↓</button>
+     <button class="secondary small settings-hide-button" data-action="settings-quick-toggle" data-value="${E(q.id)}" title="${q.hidden?'Show':'Hide'} Quick button" aria-label="${q.hidden?'Show':'Hide'} Quick button"><ha-icon icon="${q.hidden?'mdi:eye-off':'mdi:eye'}"></ha-icon></button>
+     <button class="secondary small" data-action="settings-quick-edit" data-value="${E(q.id)}" title="Edit Quick button" aria-label="Edit Quick button"><ha-icon icon="mdi:pencil"></ha-icon></button>
+     <button class="danger small" data-action="settings-quick-delete" data-value="${E(q.id)}" title="Delete Quick button" aria-label="Delete Quick button"><ha-icon icon="mdi:delete-outline"></ha-icon></button>
      </div></div>`).join('')}
     ${this._settingsDeleteQuickId?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Confirm Quick button deletion"><div class="settings-head"><h3>Delete Quick button?</h3><button class="secondary small" data-action="settings-quick-delete-cancel" aria-label="Close">✕</button></div><div class="delete-warning" role="alert">
       <p>Permanently remove ${E(this._effectiveQuickLabel(quick.find(q=>q.id===this._settingsDeleteQuickId)||{}))}? Drink history and volumes will remain unchanged. The historical button label is preserved.</p>
@@ -878,7 +894,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   else if(page==='profile')body=this._profileHTML();
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
-  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.41</p>
+  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.1.0-beta.42</p>
    <p class="settings-note">Each drink record stores independent Liquid and Cup IDs. Settings and Data can be backed up separately.</p></div>`;
   return `<div class="overlay" role="presentation"><section class="dialog dialog-settings dialog-page-${page}" role="dialog" aria-modal="${!nested}" aria-label="Settings">
     <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({transfer:'Import & Export',quick:'Edit Quick Buttons - '+(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}[page]||'Settings')}</h3>
@@ -1125,7 +1141,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
    </section></div>`;
  }
  _iconPickerHTML(){if(!this._iconPicker)return '';
-  const p=this._iconPicker,E=jdhlEscape,valid=jdhlHex(p.color)||'#152936';
+  const p=this._iconPicker,E=jdhlEscape,valid=jdhlHex(p.color)||'#000000';
   return `<div class="overlay editor-overlay icon-modal-overlay" role="presentation"><section class="dialog dialog-editor icon-library-dialog" role="dialog" aria-modal="true" aria-label="Choose icon">
    <div class="settings-head"><h3>Choose icon</h3><button class="secondary small" data-action="icon-pick-cancel" aria-label="Close icon library">✕</button></div>
    <p class="settings-note">Select <strong>either</strong> a Home Assistant icon or a custom SVG image. Only the selected source is saved.</p>
@@ -1698,7 +1714,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 }
 
 
-/* v1.1.0-beta.41: simple Settings, unwrapped footer, discrete Excel export */
+/* v1.1.0-beta.42: simple Settings, unwrapped footer, discrete Excel export */
 .card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;padding:6px 0 0}
 .card-footer .card-version{white-space:nowrap!important;word-break:normal;flex:none;font-size:.72rem;line-height:1.1}
 .card-footer>button{font-size:.79rem;padding:5px 9px;white-space:nowrap}
@@ -2053,7 +2069,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._iconPickerHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<button class="secondary" data-action="export-open" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button>`:''}
-    <span class="card-version">v1.1.0-beta.41</span>
+    <span class="card-version">v1.1.0-beta.42</span>
    </footer></div></ha-card>`;
   const picker=this.shadowRoot.querySelector('[data-icon-library]');
   if(picker){picker.hass=this._hass;picker.value=this._iconPicker?.selected||'';}
@@ -2197,7 +2213,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.41</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.1.0-beta.42</div></ha-card>`;return;}
   const colorSettings=entity?.attributes?.liquid_colors||{};
   const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
@@ -2249,7 +2265,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const targetEntity=this._hass.states?.[`sensor.jwdhl_${profile}_daily_target`];
   const target=Number(targetEntity?.state);
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} ${unitLabel}${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} ${unitLabel} (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.41</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.1.0-beta.42</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -2264,4 +2280,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.1.0-beta.41');
+console.info('jwDaily Hydration Log Card v1.1.0-beta.42');
