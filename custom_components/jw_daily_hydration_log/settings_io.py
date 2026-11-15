@@ -115,6 +115,8 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
             raise ValueError('Invalid liquid icon')
         if t.get('icon_svg') and (not isinstance(t['icon_svg'],str) or len(t['icon_svg'].encode())>16000):
             raise ValueError('Invalid liquid SVG')
+        if t.get('icon_color') and not HEX.fullmatch(t['icon_color']):
+            raise ValueError('Invalid liquid icon color')
         if t.get('default_volume_ml') is not None:_number(t['default_volume_ml'],'Liquid volume')
     overrides=s['liquid_overrides']
     if not isinstance(overrides,dict) or not set(overrides)<=BUILTINS or not all(isinstance(v,dict) for v in overrides.values()):
@@ -122,6 +124,7 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
     for override in overrides.values():
         if 'name' in override:_name(override['name'],'Liquid name')
         if override.get('icon_mdi') and not MDI.fullmatch(override['icon_mdi']):raise ValueError('Invalid built-in icon')
+        if override.get('icon_color') and not HEX.fullmatch(override['icon_color']):raise ValueError('Invalid built-in icon color')
     colors=s['liquid_colors']
     if not isinstance(colors,dict) or len(colors)>70 or not all(isinstance(k,str) and HEX.fullmatch(v) for k,v in colors.items()):
         raise ValueError('Invalid hex colors')
@@ -139,6 +142,9 @@ def validate_payload(raw: dict, *, existing_legacy_ids: set[str] | None=None,
         cup_names.add(name.casefold())
         _number(cup.get('default_volume_ml'),'Cup volume')
         if cup.get('icon_mdi') and not MDI.fullmatch(cup['icon_mdi']):raise ValueError('Invalid Cup icon')
+        if cup.get('icon_svg') and (not isinstance(cup['icon_svg'],str) or len(cup['icon_svg'].encode())>16000):raise ValueError('Invalid Cup SVG')
+        if cup.get('icon_mdi') and cup.get('icon_svg'):raise ValueError('Cup cannot specify MDI and SVG')
+        if cup.get('icon_color') and not HEX.fullmatch(cup['icon_color']):raise ValueError('Invalid Cup icon color')
         if type(cup.get('hidden',False)) is not bool:raise ValueError('Invalid cup visibility')
     quick=_list(s['quick_buttons'],'Quick buttons',48)
     _ids(quick,'Quick buttons')
