@@ -444,7 +444,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  async _click(e){const el=e.target?.closest?.('[data-action]');if(!el||this._busy)return;
    const action=el.dataset.action;
-  if(action==='transfer-tab'){this._transferTab=el.dataset.value;this._fullRestorePreview=null;this._error='';this._render(true);return;}
+  if(action==='transfer-scope'){this._fullRestoreScope=el.dataset.value;this._fullRestorePreview=null;this._render(true);return;}
   if(action==='icon-pick-open'){
    const scope=el.dataset.value;
    const d=scope==='liquid'?this._customDraft:this._settingsDraft;
@@ -780,28 +780,33 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const E=jdhlEscape,p=this._fullRestorePreview,mode=this._fullRestoreScope||'all';
   const sub=(this._transferTab||'excel');
   return `<div class="settings-section beta40-transfer">
-    <div class="transfer-tabs" role="tablist" aria-label="Data and backup">
-      ${[['excel','Export to Excel','mdi:file-excel'],['backup','Backup','mdi:archive-arrow-down-outline'],['restore','Restore','mdi:backup-restore']]
-       .map(([id,name,icon])=>`<button role="tab" aria-selected="${sub===id}" class="${sub===id?'active':''}" data-action="transfer-tab" data-value="${id}"><ha-icon icon="${icon}"></ha-icon>${name}</button>`).join('')}
+    <div class="transfer-panel transfer-action-row">
+      <ha-icon icon="mdi:file-excel"></ha-icon><div class="transfer-copy"><strong>Export to Excel</strong>
+       <p>Export one or all profiles to a readable spreadsheet.</p></div>
+      <button data-action="export-open">Export Excel</button>
     </div>
-    ${sub==='excel'?`<div class="transfer-panel"><strong>Export to Excel</strong><p>Export drink history and reports for one or all profiles.</p><button data-action="export-open">Export to Excel</button></div>`:''}
-    ${sub==='backup'?`<div class="transfer-panel"><strong>Backup settings + data</strong><p>Create a verified ZIP with settings, drink history and snapshots for the current profile.</p><button data-action="full-backup-export">Create backup ZIP</button></div>`:''}
-    ${sub==='restore'?`<div class="transfer-panel"><strong>Restore backup</strong>
-      <p>Choose a full backup ZIP and decide what to restore. Settings and drink history can be restored separately.</p>
-      <label>Restore scope<select data-field="full_restore_scope">
-       ${[['all','Everything — settings + data'],['settings','Settings only'],['data','Drink history only']].map(([v,t])=>`<option value="${v}" ${mode===v?'selected':''}>${t}</option>`).join('')}
-      </select></label>
+    <div class="transfer-panel transfer-action-row">
+      <ha-icon icon="mdi:database-arrow-down-outline"></ha-icon><div class="transfer-copy"><strong>Backup settings + data</strong>
+       <p>Create a verified ZIP of current profile settings and drink history.</p></div>
+      <button data-action="full-backup-export">Create backup</button>
+    </div>
+    <div class="transfer-panel transfer-restore">
+      <div class="transfer-action-row transfer-restore-head"><ha-icon icon="mdi:backup-restore"></ha-icon>
+       <div class="transfer-copy"><strong>Restore backup</strong><p>Restore everything, only settings, or only drink history from a ZIP.</p></div>
+      </div>
+      <div class="transfer-scope-buttons" role="group" aria-label="Choose restore scope">
+       ${[['all','Everything'],['settings','Settings only'],['data','Data only']].map(([v,name])=>`<button type="button" class="secondary ${mode===v?'selected':''}" data-action="transfer-scope" data-value="${v}" aria-pressed="${mode===v}">${name}</button>`).join('')}
+      </div>
       <label>Choose backup ZIP<input type="file" accept=".zip,application/zip" data-field="full_restore_file"/></label>
       ${this._fullRestoreFilename?`<p class="settings-note">Selected: ${E(this._fullRestoreFilename)}</p>`:''}
-      <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I have saved a separate current backup for recovery.</label>
+      <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> A separate current backup is saved for recovery.</label>
       <button class="secondary" data-action="full-restore-preview" ${!this._fullRestoreContent?'disabled':''}>Preview restore</button>
       ${p?`<div class="migration-summary"><strong>Restore preview — ${E(mode)}</strong>
-        <p>Existing drinks: ${p.counts.current_records}; incoming: ${p.counts.records}</p>
-        <p>Included cups: ${p.counts.cups}; Quick buttons: ${p.counts.quick_buttons}</p>
-        <p class="delete-warning">Only the selected scope will be replaced. Verify the profile and counts before continuing.</p>
-        <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm restore</button>
-       </div>`:''}
-     </div>`:''}
+        <p>Existing drinks: ${p.counts.current_records}; backup drinks: ${p.counts.records}</p>
+        <p>Cups: ${p.counts.cups} · Quick buttons: ${p.counts.quick_buttons}</p>
+        <p class="delete-warning">Only the selected scope will be replaced. Verify the profile and counts.</p>
+        <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm restore</button></div>`:''}
+    </div>
     <details class="beta40-advanced"><summary>Advanced — individual JSON files</summary>
       <p class="settings-note">Optional separate files. Full backup ZIP is recommended for recovery.</p>
       <div class="transfer-advanced-row"><strong>Settings JSON</strong><button data-action="settings-export-json">Export JSON</button></div>
@@ -823,7 +828,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   const nav=[['profile','Manage profiles','Personal targets, units and Quick buttons','mdi:account-multiple'],
     ['liquids','Liquid types','Shared liquids and icon colors','mdi:water'],
     ['cups','Maintain cup types','Shared cups, icons and volumes','mdi:glass-mug-variant'],
-    ['transfer','Import & Export','Settings, history, Excel and backups','mdi:database-arrow-down-outline']];
+    ['transfer','Data & Backup','Excel, full backup and selective restore','mdi:database-arrow-down-outline']];
   const E=jdhlEscape;
   const choice=(items,valueField,labelField,selected,empty='Select')=>`<option value="">${E(empty)}</option>`+
    items.map(t=>`<option value="${E(t[valueField])}" ${t[valueField]===selected?'selected':''}>${E(t[labelField])}</option>`).join('');
@@ -1934,6 +1939,20 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .icon-color-fields label{display:flex;flex-direction:column;gap:4px;font-size:.86rem}
 .icon-color-fields input[type=color]{width:47px;height:34px;padding:2px}
 .icon-color-fields input[type=text]{width:115px}
+
+/* beta40 approved Data & Backup mockup 2: three compact vertical actions */
+.beta40-transfer .transfer-action-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:11px;align-items:center}
+.beta40-transfer .transfer-action-row>ha-icon{--mdc-icon-size:27px}
+.beta40-transfer .transfer-copy{min-width:0}
+.beta40-transfer .transfer-copy strong{font-size:.95rem}
+.beta40-transfer .transfer-copy p{font-size:.82rem;line-height:1.35;margin:3px 0 0}
+.beta40-transfer .transfer-action-row>button{justify-self:end;white-space:nowrap}
+.beta40-transfer .transfer-restore{gap:10px}
+.beta40-transfer .transfer-restore-head{width:100%}
+.beta40-transfer .transfer-scope-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;width:100%}
+.beta40-transfer .transfer-scope-buttons button{padding:7px 5px!important;font-size:.83rem}
+.beta40-transfer .transfer-scope-buttons .selected{background:#b3e5fc!important;box-shadow:inset 0 0 0 2px #057bab!important;font-weight:600}
+@media(max-width:450px){.beta40-transfer .transfer-action-row{grid-template-columns:28px minmax(0,1fr)}.beta40-transfer .transfer-action-row>button{grid-column:2;justify-self:start}}
    </style><ha-card><div class="root">
    <header class="main-head">${this._config.show_title!==false?`<h2>${jdhlEscape(title)}</h2>`:'<span></span>'}
 
