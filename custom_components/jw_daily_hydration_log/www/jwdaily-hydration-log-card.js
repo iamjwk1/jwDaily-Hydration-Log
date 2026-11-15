@@ -827,9 +827,14 @@ class JwDailyHydrationLogCard extends HTMLElement {
   else if(page==='transfer')body=this._transferHTML();
   else if(page==='cups'){
    const cups=this._cupDefs();body=`<div class="settings-section"><p class="settings-note">Only unused cup types can be deleted. Used cup types can be hidden to retain historical data and exports.</p><div class="cup-table-head"><span>Cup type</span><span>Default volume</span><span>Times used</span></div>
-    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}<label class="span-2 cup-name-field">Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
-      <label class="cup-volume-field">Default volume (${this._unitLabel()})<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label>
-      <div class="icon-edit-row span-2"><ha-icon icon="${E(draft.icon_mdi||'mdi:cup')}"></ha-icon><div><strong>Icon</strong><small>${E(draft.icon_mdi||'mdi:cup')}</small></div><button class="secondary small" data-action="icon-pick-open" data-value="cup">Choose icon</button></div></div>
+    ${draft?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Cup editor"><div class="settings-head"><h3>${this._settingsEditId?'Edit cup type':'Add cup type'}</h3><button class="secondary small" data-action="settings-discard" aria-label="Close">✕</button></div><div class="settings-edit editor-body cup-editor-body">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
+      <div class="icon-edit-row span-2">
+       ${this._liquidIcon({icon_mdi:draft.icon_mdi||'',icon_svg:draft.icon_svg||'',icon_color:draft.icon_color||''},true)}
+       <div><strong>Icon</strong><small>${E(draft.icon_svg?'Custom SVG':draft.icon_mdi||'mdi:cup')}</small></div>
+       <button class="secondary small" data-action="icon-pick-open" data-value="cup">Choose icon</button>
+      </div>
+      <label class="cup-name-field">Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
+      <label class="cup-volume-field">Default volume (${this._unitLabel()})<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-cup-save">Save cup</button></div></section></div>`:''}
     ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><ha-icon class="cup-row-icon" icon="${E(c.icon_mdi||'mdi:cup')}"></ha-icon><div class="row-title"><span>${E(c.name)}</span>${c.hidden?'<small>Hidden</small>':''}</div><span class="cup-volume-value">${this._fmt(Number(c.default_volume_ml))}</span>
      <span class="used-count" title="Recorded drink moments across all profiles">${Number(c.drink_count_all_profiles)||0}</span>
