@@ -721,53 +721,79 @@ class JwDailyHydrationLogCard extends HTMLElement {
    </div>`;
  }
  _transferHTML(){
-  const E=jdhlEscape,p=this._settingsImportPreview;
-  return `<div class="settings-section"><h3>Import & Export</h3>
-   <div class="settings-row"><ha-icon icon="mdi:file-excel"></ha-icon><div class="row-title"><strong>Excel export</strong><small>Download all profiles or a selected profile</small></div><button data-action="export-open">Export to Excel</button></div>
-   <p class="settings-note">Profile: <strong>${E(this._history?.profile_settings?.name||this._config.profile)}</strong>. Settings JSON contains no drink records, timestamps, consumption totals, entity IDs or sensor readings.</p>
-   <div class="settings-row"><ha-icon icon="mdi:download"></ha-icon><div class="row-title"><strong>Export settings</strong><small>Current profile · JSON with SHA-256</small></div><button data-action="settings-export-json">Export JSON</button></div>
-   <details class="transfer-details"><summary>Import settings JSON</summary><div class="settings-edit"><h4>Import settings</h4><label>Choose a settings JSON file<input type="file" accept=".json,application/json" data-field="settings_import_file"/></label>
-    ${this._settingsImportFilename?`<p>Selected: ${E(this._settingsImportFilename)}</p>`:''}
+  const E=jdhlEscape,p=this._fullRestorePreview,mode=this._fullRestoreScope||'all';
+  const sub=(this._transferTab||'excel');
+  return `<div class="settings-section beta40-transfer">
+    <div class="transfer-tabs" role="tablist" aria-label="Data and backup">
+      ${[['excel','Export to Excel','mdi:file-excel'],['backup','Backup','mdi:archive-arrow-down-outline'],['restore','Restore','mdi:backup-restore']]
+       .map(([id,name,icon])=>`<button role="tab" aria-selected="${sub===id}" class="${sub===id?'active':''}" data-action="transfer-tab" data-value="${id}"><ha-icon icon="${icon}"></ha-icon>${name}</button>`).join('')}
+    </div>
+    ${sub==='excel'?`<div class="transfer-panel"><strong>Export to Excel</strong><p>Export drink history and reports for one or all profiles.</p><button data-action="export-open">Export to Excel</button></div>`:''}
+    ${sub==='backup'?`<div class="transfer-panel"><strong>Backup settings + data</strong><p>Create a verified ZIP with settings, drink history and snapshots for the current profile.</p><button data-action="full-backup-export">Create backup ZIP</button></div>`:''}
+    ${sub==='restore'?`<div class="transfer-panel"><strong>Restore backup</strong>
+      <p>Choose a full backup ZIP and decide what to restore. Settings and drink history can be restored separately.</p>
+      <label>Restore scope<select data-field="full_restore_scope">
+       ${[['all','Everything — settings + data'],['settings','Settings only'],['data','Drink history only']].map(([v,t])=>`<option value="${v}" ${mode===v?'selected':''}>${t}</option>`).join('')}
+      </select></label>
+      <label>Choose backup ZIP<input type="file" accept=".zip,application/zip" data-field="full_restore_file"/></label>
+      ${this._fullRestoreFilename?`<p class="settings-note">Selected: ${E(this._fullRestoreFilename)}</p>`:''}
+      <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I have saved a separate current backup for recovery.</label>
+      <button class="secondary" data-action="full-restore-preview" ${!this._fullRestoreContent?'disabled':''}>Preview restore</button>
+      ${p?`<div class="migration-summary"><strong>Restore preview — ${E(mode)}</strong>
+        <p>Existing drinks: ${p.counts.current_records}; incoming: ${p.counts.records}</p>
+        <p>Included cups: ${p.counts.cups}; Quick buttons: ${p.counts.quick_buttons}</p>
+        <p class="delete-warning">Only the selected scope will be replaced. Verify the profile and counts before continuing.</p>
+        <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm restore</button>
+       </div>`:''}
+     </div>`:''}
+    <details class="beta40-advanced"><summary>Advanced — individual JSON files</summary>
+      <p class="settings-note">Optional: transfer settings or drink history as separate JSON files. Full backup ZIP is recommended for recovery.</p>
+      <div class="settings-row"><div class="row-title"><strong>Settings JSON</strong></div><button data-action="settings-export-json">Export JSON</button></div>
+      <div class="settings-row"><div class="row-title"><strong>Data JSON</strong></div><button data-action="data-export-json">Export JSON</button></div>
+      <details class="transfer-details"><summary>Import settings JSON</summary><div class="settings-edit"><h4>Import settings</h4><label>Choose a settings JSON file<input type="file" accept=".json,application/json" data-field="settings_import_file"/></label>
+    \${this._settingsImportFilename?\`<p>Selected: \${E(this._settingsImportFilename)}</p>\`:''}
     <p class="settings-note">Import overwrites only configuration fields after validation and your explicit approval. Your drink history is never part of the file.</p>
-    <button class="secondary" data-action="settings-import-preview" ${!this._settingsImportContent?'disabled':''}>Preview import</button>
-    ${p?`<div class="migration-summary"><strong>Preview for ${E(p.profile)}</strong><p>Source: ${E(p.source_profile)}</p><p>${p.counts.liquids} liquid definitions · ${p.counts.cups} cups · ${p.counts.quick_buttons} Quick buttons</p>
-       <p>Settings to replace: ${E(p.changes.join(', ')||'None')}</p>
-       <p>Drink history: unchanged (${p.drink_count} existing records)</p>
+    <button class="secondary" data-action="settings-import-preview" \${!this._settingsImportContent?'disabled':''}>Preview import</button>
+    \${p?\`<div class="migration-summary"><strong>Preview for \${E(p.profile)}</strong><p>Source: \${E(p.source_profile)}</p><p>\${p.counts.liquids} liquid definitions · \${p.counts.cups} cups · \${p.counts.quick_buttons} Quick buttons</p>
+       <p>Settings to replace: \${E(p.changes.join(', ')||'None')}</p>
+       <p>Drink history: unchanged (\${p.drink_count} existing records)</p>
        <p class="settings-note">Save an export of your current settings before importing. The import is blocked if settings changed after preview.</p>
-       <div class="dialog-actions"><button data-action="settings-import-apply" class="danger">Confirm and import settings</button></div></div>`:''}
+       <div class="dialog-actions"><button data-action="settings-import-apply" class="danger">Confirm and import settings</button></div></div>\`:''}
    </div></details>
    <div class="settings-edit"><h4>Data — drink history and snapshots</h4>
      <p class="settings-note">Data JSON contains the original record IDs, drink entries, source measurements and day archives. Settings are never overwritten by Data import.</p>
      <div class="dialog-actions"><button data-action="data-export-json">Export Data JSON</button></div>
      <details class="transfer-details"><summary>Import drink history JSON</summary><label>Choose Data JSON<input type="file" accept=".json,application/json" data-field="data_import_file"/></label>
-     ${this._dataImportFilename?`<p>Selected: ${E(this._dataImportFilename)}</p>`:''}
+     \${this._dataImportFilename?\`<p>Selected: \${E(this._dataImportFilename)}</p>\`:''}
      <label>Import mode<select data-field="data_import_mode">
-      ${[['merge','Merge — add missing IDs only'],['update','Update existing — update matching IDs'],['replace','Replace all — remove all existing Data first']]
-       .map(([v,t])=>`<option value="${v}" ${this._dataImportMode===v?'selected':''}>${t}</option>`).join('')}</select></label>
-     <button class="secondary" data-action="data-import-preview" ${!this._dataImportContent?'disabled':''}>Preview Data import</button>
-     ${this._dataImportPreview?`<div class="migration-summary"><strong>Data preview — ${E(this._dataImportPreview.mode)}</strong>
-      <p>Existing ${this._dataImportPreview.counts.existing_drinks} · Incoming ${this._dataImportPreview.counts.incoming_drinks} · New ${this._dataImportPreview.counts.new_ids} · Matching ${this._dataImportPreview.counts.matching_ids}</p>
-      <p>Changed IDs ${this._dataImportPreview.counts.changed_matching_ids} · Final drinks ${this._dataImportPreview.counts.total_result_drinks}</p>
-      <p>${E(this._dataImportPreview.warning)}</p>
-      ${this._dataImportMode==='replace'?'<p class="delete-warning">REPLACE ALL deletes the current profile Data before restoring the chosen file; this cannot be undone without a backup.</p>':''}
+      \${[['merge','Merge — add missing IDs only'],['update','Update existing — update matching IDs'],['replace','Replace all — remove all existing Data first']]
+       .map(([v,t])=>\`<option value="\${v}" \${this._dataImportMode===v?'selected':''}>\${t}</option>\`).join('')}</select></label>
+     <button class="secondary" data-action="data-import-preview" \${!this._dataImportContent?'disabled':''}>Preview Data import</button>
+     \${this._dataImportPreview?\`<div class="migration-summary"><strong>Data preview — \${E(this._dataImportPreview.mode)}</strong>
+      <p>Existing \${this._dataImportPreview.counts.existing_drinks} · Incoming \${this._dataImportPreview.counts.incoming_drinks} · New \${this._dataImportPreview.counts.new_ids} · Matching \${this._dataImportPreview.counts.matching_ids}</p>
+      <p>Changed IDs \${this._dataImportPreview.counts.changed_matching_ids} · Final drinks \${this._dataImportPreview.counts.total_result_drinks}</p>
+      <p>\${E(this._dataImportPreview.warning)}</p>
+      \${this._dataImportMode==='replace'?'<p class="delete-warning">REPLACE ALL deletes the current profile Data before restoring the chosen file; this cannot be undone without a backup.</p>':''}
       <p class="settings-note">Download and verify a current Full Backup ZIP before confirming. The saved file must be accessible outside Home Assistant.</p>
-      <button data-action="data-import-apply" class="danger" ${!this._fullBackupSaved?'disabled':''}>Confirm Data import</button></div>`:''}
+      <button data-action="data-import-apply" class="danger" \${!this._fullBackupSaved?'disabled':''}>Confirm Data import</button></div>\`:''}
      </details></div>
    <div class="settings-edit"><h4>Full backup / restore</h4>
     <p class="settings-note">ZIP containing settings.json, data.json and a checksummed manifest. Restore requires the original profile ID and replaces both Settings and Data together.</p>
     <div class="dialog-actions"><button data-action="full-backup-export">Export Full Backup ZIP</button></div>
-    <details class="transfer-details"><summary>Restore a Full Backup ZIP</summary><label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> I verified that the Full Backup ZIP is saved and opens correctly.</label>
+    <details class="transfer-details"><summary>Restore a Full Backup ZIP</summary><label class="check-label"><input type="checkbox" data-field="full_backup_verified" \${this._fullBackupSaved?'checked':''}/> I verified that the Full Backup ZIP is saved and opens correctly.</label>
     <label>Choose Full Backup ZIP<input type="file" accept=".zip,application/zip" data-field="full_restore_file"/></label>
-    ${this._fullRestoreFilename?`<p>Selected: ${E(this._fullRestoreFilename)}</p>`:''}
-    <button class="secondary" data-action="full-restore-preview" ${!this._fullRestoreContent?'disabled':''}>Preview Full restore</button>
-    ${this._fullRestorePreview?`<div class="migration-summary"><strong>Full restore preview</strong>
-      <p>Existing drinks ${this._fullRestorePreview.counts.current_records} → Restore ${this._fullRestorePreview.counts.records}</p>
-      <p>Cups ${this._fullRestorePreview.counts.cups} · Quick buttons ${this._fullRestorePreview.counts.quick_buttons}</p>
+    \${this._fullRestoreFilename?\`<p>Selected: \${E(this._fullRestoreFilename)}</p>\`:''}
+    <button class="secondary" data-action="full-restore-preview" \${!this._fullRestoreContent?'disabled':''}>Preview Full restore</button>
+    \${this._fullRestorePreview?\`<div class="migration-summary"><strong>Full restore preview</strong>
+      <p>Existing drinks \${this._fullRestorePreview.counts.current_records} → Restore \${this._fullRestorePreview.counts.records}</p>
+      <p>Cups \${this._fullRestorePreview.counts.cups} · Quick buttons \${this._fullRestorePreview.counts.quick_buttons}</p>
       <p class="delete-warning">This overwrites the entire current profile. Review your backup and explicitly confirm.</p>
-      <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm and restore Full Backup</button></div>`:''}
+      <button class="danger" data-action="full-restore-apply" \${!this._fullBackupSaved?'disabled':''}>Confirm and restore Full Backup</button></div>\`:''}
     </details></div>
-   </div>`;
+
+    </details></div>`;
  }
+
  _settingsHTML(){const page=this._settingsSection;const draft=this._settingsDraft;
    const nested=(page==='profile'&&!!this._profileDraft)||(page==='cups'&&!!(this._settingsDraft||this._settingsDeleteCupId))||(page==='quick'&&!!(this._settingsDraft||this._settingsDeleteQuickId))||(page==='liquids'&&!!(this._customDraft||this._managePendingDelete));
   const nav=[['profile','Manage profiles','Personal targets, units and Quick buttons','mdi:account-multiple'],
