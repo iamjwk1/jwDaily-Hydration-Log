@@ -177,6 +177,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   if(field==='full_backup_verified'){this._fullBackupSaved=!!e.target.checked;this._render(true);return;}
   if(field==='migration_backup_verified'){this._migrationBackupVerified=!!e.target.checked;this._render(true);return;}
+  if(field==='full_restore_scope'){this._fullRestoreScope=e.target.value;this._fullRestorePreview=null;this._render(true);return;}
   if(field==='model_unknown_confirmed'){
    this._modelUnknownConfirmed=!!e.target.checked;return;
   }
@@ -403,6 +404,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  async _click(e){const el=e.target?.closest?.('[data-action]');if(!el||this._busy)return;
    const action=el.dataset.action;
+  if(action==='transfer-tab'){this._transferTab=el.dataset.value;this._fullRestorePreview=null;this._error='';this._render(true);return;}
   if(action==='icon-pick-open'){
    const scope=el.dataset.value;
    const current=scope==='liquid'?this._customDraft?.icon_mdi:scope==='cup'?this._settingsDraft?.icon_mdi:this._settingsDraft?.icon_mdi;
@@ -908,15 +910,15 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   if(action==='full-restore-preview'){
    try{this._fullRestorePreview=await this._hass.callWS({type:'jw_daily_hydration_log/full_restore_preview',
-     profile:this._config.profile,content_base64:this._fullRestoreContent});this._error='';this._render(true);
+     profile:this._config.profile,content_base64:this._fullRestoreContent,scope:this._fullRestoreScope||'all'});this._error='';this._render(true);
    }catch(e){this._fullRestorePreview=null;this._alert(e);}return;
   }
   if(action==='full-restore-apply'){
    if(!this._fullBackupSaved||!this._fullRestorePreview)return;
-   if(!window.confirm('Replace this entire profile — Settings AND Data?'))return;
-   if(!window.confirm('FINAL CONFIRMATION: restore this full backup over the current profile?'))return;
+   if(!window.confirm('Restore '+(this._fullRestoreScope||'all')+' from backup to this profile?'))return;
+   if(!window.confirm('FINAL CONFIRMATION: replace only the selected restore scope?'))return;
    try{await this._hass.callWS({type:'jw_daily_hydration_log/full_restore_apply',profile:this._config.profile,
-     content_base64:this._fullRestoreContent,preview:this._fullRestorePreview,confirm:true});
+     content_base64:this._fullRestoreContent,preview:this._fullRestorePreview,scope:this._fullRestoreScope||'all',confirm:true});
     this._fullRestorePreview=null;this._fullRestoreContent='';this._fullRestoreFilename='';this._history=null;
     this._status='Full Backup restored';await this._fetchHistory();this._render(true);
    }catch(e){this._alert(e);}return;
