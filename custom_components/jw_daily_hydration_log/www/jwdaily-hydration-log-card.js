@@ -2047,9 +2047,9 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 
 /* beta.42 acceptance: compact content-driven dialogs and shared column geometry.
    Overrides older beta.37-41 rules without modifying data or action handlers. */
-.dialog.dialog-settings.dialog-page-liquids{width:min(505px,calc(100vw - 18px))!important}
-.dialog.dialog-settings.dialog-page-cups{width:min(635px,calc(100vw - 18px))!important}
-.dialog.dialog-settings.dialog-page-quick{width:min(690px,calc(100vw - 18px))!important}
+.dialog.dialog-settings.dialog-page-liquids{width:min(480px,calc(100vw - 18px))!important}
+.dialog.dialog-settings.dialog-page-cups{width:min(600px,calc(100vw - 18px))!important}
+.dialog.dialog-settings.dialog-page-quick{width:min(650px,calc(100vw - 18px))!important}
 .dialog-page-liquids .liquid-list-header,.dialog-page-liquids .saved-liquid{
   display:grid!important;grid-template-columns:28px minmax(116px,1fr) 80px 176px!important;
   column-gap:8px!important;row-gap:4px!important;align-items:center!important;
@@ -2103,10 +2103,10 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .dialog-page-quick .quick-settings-row .settings-row-actions button ha-icon{--mdc-icon-size:19px}
 .dialog-page-quick .settings-row{border:0!important;border-bottom:0!important;box-shadow:none!important}
 .dialog-page-quick .main-dialog-footer{border-top:0!important}
-.dialog-editor[aria-label="Profile editor"]{width:min(860px,calc(100vw - 18px))!important}
+.dialog-editor[aria-label="Profile editor"]{width:min(940px,calc(100vw - 18px))!important}
 .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit{
  display:grid!important;
- grid-template-columns:minmax(175px,1.6fr) 65px 125px 102px 142px!important;
+ grid-template-columns:210px 65px 125px 102px 142px!important;
  gap:12px 13px!important;align-items:start!important;
 }
 .dialog-editor[aria-label="Profile editor"] .editor-body.settings-edit>label.span-2{
