@@ -66,6 +66,13 @@ with sync_playwright() as p:
   assert 'Daily target (L)' in root.locator('.dialog-editor').inner_text()
   assert root.locator('[data-field="daily_target_ml"]').input_value()=='2'
   assert root.locator('.dialog-editor .settings-head h3').inner_text()=='Edit profile - Jan-Willem'
+  if width>=950:
+   box=root.locator('.dialog-editor[aria-label="Profile editor"]').bounding_box()
+   last=root.locator('.dialog-editor[aria-label="Profile editor"] [data-field="daily_target_ml"]').bounding_box()
+   assert box and 730<=box['width']<=750,('Profile dialog must hug form content',width,box)
+   assert last and last['x']+last['width']<box['x']+box['width'],('Target clipped by narrow dialog',width,last,box)
+   assert root.locator('.dialog-editor[aria-label="Profile editor"]').evaluate('(n)=>n.scrollWidth<=n.clientWidth+1'),('Horizontal overflow',width)
+
   if width==950:
    Path('qa_screenshots').mkdir(exist_ok=True)
    root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_profile.png')
