@@ -233,6 +233,22 @@ class JwDailyHydrationLogCard extends HTMLElement {
    if(field==='label_mode'&&e.type==='change')this._render(true);
    return;
   }
+  if(this._manageOpen&&this._customDraft&&field==='custom_name'&&e.type==='input'){
+   this._customDraft.custom_name=e.target.value;
+   const n=this.shadowRoot.querySelector('.liquid-live-label');if(n)n.textContent=e.target.value||'Liquid type';
+   return;
+  }
+  if(this._manageOpen&&this._customDraft&&(field==='liquid_icon_color_hex'||field==='liquid_icon_color_picker')){
+   const v=e.target.value,c=jdhlHex(v);this._customDraft.icon_color=(c||v).toUpperCase();
+   if(c){
+    const input=this.shadowRoot.querySelector('[data-field="liquid_icon_color_hex"]');
+    const picker=this.shadowRoot.querySelector('[data-field="liquid_icon_color_picker"]');
+    if(input&&input!==e.target)input.value=c;
+    if(picker&&picker!==e.target)picker.value=c;
+    this.shadowRoot.querySelectorAll('.liquid-live-preview .liquid-icon, .liquid-selected-icon .liquid-icon').forEach(x=>x.style.color=c);
+   }
+   return;
+  }
   if(this._manageOpen&&this._customDraft){
    if(field==='color_picker'||field==='color_hex'){
     const draft=this._customDraft;
@@ -249,6 +265,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     }
     const preview=this.shadowRoot.querySelector('.color-preview');
     if(preview&&color)preview.style.backgroundColor=color;
+    const live=this.shadowRoot.querySelector('.liquid-live-preview');if(live&&color){live.style.backgroundColor=color;live.style.color=jdhlContrastInk(color);}
     const error=this.shadowRoot.querySelector('.color-error');
     if(error){error.textContent=color?'':'Enter a valid color in #RRGGBB format.';
               error.hidden=!!color;}
@@ -696,18 +713,24 @@ class JwDailyHydrationLogCard extends HTMLElement {
          <button class="danger" data-action="manage-delete-confirm">Confirm delete</button></div></div></section></div>`:'' }
      ${this._settingsSection?'':`<div class="dialog-actions"><button class="secondary" data-action="manage-cancel">← Back to drink</button><button data-action="manage-add">+ Add liquid type</button></div>`}`}
     ${d?`<div class="overlay editor-overlay"><section class="dialog dialog-editor" role="dialog" aria-modal="true" aria-label="Liquid editor"><div class="settings-head"><h3>${this._editingLiquidId?'Edit liquid type':'Add liquid type'}</h3><button class="secondary small" data-action="manage-cancel" aria-label="Close">✕</button></div><div class="manage-editor">${this._error?`<p class="error" role="alert">${jdhlEscape(this._error)}</p>`:''}
-     <div class="liquid-icon-hero">
-      <span class="liquid-icon-hero-graphic">${this._liquidIcon({id:this._editingLiquidId||'',name:d.custom_name||'',icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',color:jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)},true)}</span>
-      <div><strong>Icon</strong><small>${jdhlEscape(d.icon_svg?'Custom SVG':d.icon_mdi||'Default liquid icon')}</small><button class="secondary small" data-action="icon-pick-open" data-value="liquid">Choose icon</button></div>
+     <div class="liquid-live-section"><h4>Preview</h4>
+      <div class="liquid-live-preview" style="background:${jdhlHex(d.color_hex)||'#FFCE3E'};color:${jdhlContrastInk(jdhlHex(d.color_hex)||'#FFCE3E')}">
+       ${this._liquidIcon({id:this._editingLiquidId||'',name:d.custom_name||'',icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',icon_color:d.icon_color||'',color:jdhlHex(d.color_hex)},true)}
+       <span class="liquid-live-label">${jdhlEscape(d.custom_name||'Liquid type')}</span>
+      </div></div>
+     <div class="liquid-icon-controls">
+      <div class="liquid-icon-selection"><label class="editor-section-title">Icon</label>
+        <div class="liquid-selected-icon">
+          ${this._liquidIcon({icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',icon_color:d.icon_color||'',color:d.color_hex},true)}
+          <span>${jdhlEscape(d.icon_svg?'Custom SVG':d.icon_mdi||'mdi:glass-mug-variant')}</span>
+        </div>
+        <button class="secondary small" data-action="icon-pick-open" data-value="liquid">Choose icon</button>
+      </div>
+      <label>Color<input type="color" data-field="liquid_icon_color_picker" value="${jdhlHex(d.icon_color)||'#152936'}"/></label>
+      <label>Hex color<input type="text" data-field="liquid_icon_color_hex" maxlength="7" value="${jdhlEscape(d.icon_color||'')}" placeholder="#RRGGBB"/></label>
      </div>
-     <div class="manage-form-grid liquid-name-row"><label>Liquid name<input data-field="custom_name" maxlength="48" value="${jdhlEscape(d.custom_name||'')}" placeholder="e.g. Orange juice"/></label></div>
-    <div class="liquid-svg-section">
-     <label class="svg-field">SVG icon (.svg, max 16 KB)<input data-field="custom_svg_file" type="file" accept=".svg,image/svg+xml"/></label>
-     <div class="liquid-svg-preview" aria-label="Selected liquid icon preview" role="img">
-      ${this._liquidIcon({id:this._editingLiquidId||'',name:d.custom_name||'',icon_svg:d.icon_svg||'',icon_mdi:d.icon_mdi||'',color:jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)},true)}
-     </div>
-    </div>
-    ${d.icon_svg?`<p class="status">SVG icon preview · ${new TextEncoder().encode(d.icon_svg).length} bytes</p>`:''}
+     <div class="manage-form-grid liquid-name-row"><label class="editor-section-title">Liquid name<input data-field="custom_name" maxlength="48" value="${jdhlEscape(d.custom_name||'')}" placeholder="e.g. Orange juice"/></label></div>
+     <h4 class="editor-section-title liquid-button-color-title">Button color</h4>
     <div class="color-editor" role="group" aria-label="Liquid color">
       <label>Color <input type="color" data-field="color_picker" value="${jdhlHex(d.color_hex)||jdhlLiquidColor(this._editingLiquidId||'',d.custom_name)}" aria-label="Choose liquid color" /></label>
       <label>Hex color <input type="text" data-field="color_hex" value="${jdhlEscape(d.color_hex)}" maxlength="32" spellcheck="false" autocapitalize="characters" aria-label="Hex color code" placeholder="#RRGGBB" /></label>
