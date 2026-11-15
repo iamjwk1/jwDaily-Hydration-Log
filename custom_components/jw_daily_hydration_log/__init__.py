@@ -672,16 +672,35 @@ def ws_full_export(hass, connection, msg):
         connection.send_error(msg['id'],'full_backup_failed',str(exc))
 
 
+def _selected_restore_payload(c, source_settings: dict, source_data: dict, scope: str):
+    """Build a verified restore plan that preserves the excluded scope bit-for-bit."""
+    if scope not in ('all','settings','data'):
+        raise ValueError('Invalid restore scope')
+    if scope != 'data' and (source_settings.get('source_profile') or {}).get('slug') != c.slug:
+        raise ValueError('Backup settings belong to a different profile')
+    if scope != 'settings' and (source_data.get('source_profile') or {}).get('slug') != c.slug:
+        raise ValueError('Backup drink history belongs to a different profile')
+    # Reuse the same signed full-restore validator with unchanged current-state
+    # documents for excluded sections. Existing records and identifiers survive.
+    settings = export_payload(c) if scope == 'data' else source_settings
+    data = c.export_data() if scope == 'settings' else source_data
+    return settings, data
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required('type'):f'{DOMAIN}/full_restore_preview',
                                   probatio.Required('profile'):str,
-                                  probatio.Required('content_base64'):str})
+                                  probatio.Required('content_base64'):str,
+                                  probatio.Optional('scope',default='all'):str})
 @callback
 def ws_full_preview(hass, connection, msg):
     try:
         c=_resolve(hass,msg['profile'])
-        settings,data,checksum=data_io.parse_full(msg['content_base64'])
+        source_settings,source_data,checksum=data_io.parse_full(msg['content_base64'])
+        scope=msg.get('scope','all')
+        settings,data=_selected_restore_payload(c,source_settings,source_data,scope)
         preview=c.full_restore_preview(settings,data,checksum)
+        preview['scope']=scope
         c._pending_full_restore=data_io.sha(preview)
         connection.send_result(msg['id'],preview)
     except (ValueError,ServiceValidationError) as exc:
@@ -693,29 +712,29 @@ def ws_full_preview(hass, connection, msg):
                                   probatio.Required('profile'):str,
                                   probatio.Required('content_base64'):str,
                                   probatio.Required('preview'):dict,
-                                  probatio.Required('confirm'):bool})
+                                  probatio.Required('confirm'):bool,
+                                  probatio.Optional('scope',default='all'):str})
 @websocket_api.async_response
 async def ws_full_apply(hass, connection, msg):
     try:
         c=_resolve(hass,msg['profile'])
-        if not msg['confirm'] or c.__dict__.get('_pending_full_restore') != data_io.sha(msg['preview']):
-            raise ValueError('Preview this exact full backup before restoring')
-        settings_raw,data_raw,checksum=data_io.parse_full(msg['content_base64'])
+        scope=msg.get('scope','all')
+        if not msg['confirm'] or scope!=msg['preview'].get('scope') or c.__dict__.get('_pending_full_restore') != data_io.sha(msg['preview']):
+            raise ValueError('Preview this exact backup and restore scope before restoring')
+        source_settings,source_data,checksum=data_io.parse_full(msg['content_base64'])
+        settings_raw,data_raw=_selected_restore_payload(c,source_settings,source_data,scope)
         actual=c.full_restore_preview(settings_raw,data_raw,checksum)
+        actual['scope']=scope
         if actual != msg['preview']:
-            raise ValueError('Backup or profile changed after preview')
+            raise ValueError('Backup, restore scope or profile changed after preview')
         settings=validate_payload(settings_raw)
         data=c._validate_import_data(data_raw,settings=settings)
         prefs=c._validate_restored_preferences(settings_raw.get('profile_preferences'))
         result=await c.async_restore_full(settings,data,msg['preview'],prefs)
         c._pending_full_restore=None
-        connection.send_result(msg['id'],result)
+        connection.send_result(msg['id'],dict(result,scope=scope))
     except (ValueError,ServiceValidationError) as exc:
         connection.send_error(msg['id'],'full_restore_failed',str(exc))
-
-
-
-
 
 
 @websocket_api.require_admin
