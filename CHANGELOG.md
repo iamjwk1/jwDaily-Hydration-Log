@@ -1,3 +1,14 @@
+## v1.1.0-beta.43 (2026-11-16)
+- Accepted Edit profile dialog width reduction (PR #22).
+- Dashboard: correct hourly chart target labels for L/fl oz profiles and Home Assistant timezone-aware day selection.
+- Backup import: compare dates with HA-local profile date instead of the server's UTC day.
+- Readme current-version corrections and documented comprehensive code/dashboard technical-debt audit.
+- No storage migration; all existing history, targets, presets and ZIP restore controls preserved.
+
+## v1.1.0-beta.42 / beta.41 / beta.40 (2026-11-15)
+- Consolidated compact management dialogues, Quick Button colours/order and shared icon picker.
+- Full backup/restore redesigned as three actions with selectable restore scope.
+- See the archived corresponding release notes for version-specific details.
 ## v1.1.0-beta.39 (2026-11-14)
 - Fix Add drink moment capabilities check: beta.38 compared against a stale beta.37 backend version and displayed a false restart warning even when frontend/backend matched.
 - Synchronize frontend/backend to beta.39; extend version-parity and Chromium regressions without changing drink data or behavior.
