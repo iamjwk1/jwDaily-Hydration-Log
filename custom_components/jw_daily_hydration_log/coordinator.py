@@ -1035,6 +1035,8 @@ class HydrationCoordinator:
             if item.get('icon_svg'): _safe_svg(item['icon_svg'])
         for item in cleaned['liquid_overrides'].values():
             if item.get('icon_svg'): _safe_svg(item['icon_svg'])
+        for item in (*cleaned['cup_types'],*cleaned['quick_buttons']):
+            if item.get('icon_svg'): _safe_svg(item['icon_svg'])
         async with self._lock:
             if self.settings_revision() != expected_revision:
                 raise ValueError('Settings have changed since preview. Refresh before importing.')
@@ -1298,6 +1300,8 @@ class HydrationCoordinator:
         for item in settings['custom_liquid_types']:
             if item.get('icon_svg'):_safe_svg(item['icon_svg'])
         for item in settings['liquid_overrides'].values():
+            if item.get('icon_svg'):_safe_svg(item['icon_svg'])
+        for item in (*settings['cup_types'],*settings['quick_buttons']):
             if item.get('icon_svg'):_safe_svg(item['icon_svg'])
         preferences = self._validate_restored_preferences(raw_settings.get('profile_preferences'))
         data = self._validate_import_data(raw_data, settings=settings)
