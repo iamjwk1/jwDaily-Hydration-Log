@@ -27,8 +27,8 @@ with sync_playwright() as p:
     window.calls=[];window.downloads=[];HTMLAnchorElement.prototype.click=function(){window.downloads.push(this.download||'');};
     window.hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_one_consumed_today':{state:'0.18',attributes:{consumed_ml:180,unit_of_measurement:'L'}},'sensor.jwdhl_one_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_one_drink_count_today':{state:'1',attributes:{}},'sensor.jwdhl_one_manual_consumed':{state:'180',attributes:{manual_consumed_ml:180}}},callWS:async msg=>{
       window.calls.push(msg);
-      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.42'};
-      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.42'};
+      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.43'};
+      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.43'};
       if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'one',name:'Jan-Willem',age:58,gender:'male',unit:'L',daily_target_ml:2000},{slug:'two',name:'Second',age:30,gender:'female',unit:'fl_oz',daily_target_ml:1500}]};
       if(msg.type.endsWith('/export'))return {base64:'UEsDBBQ=',filename:'test beta38.xlsx'};
       return {};
@@ -36,7 +36,7 @@ with sync_playwright() as p:
     window.card=document.createElement('jwdaily-hydration-log-card');card.setConfig({profile:'one',title:'Vocht intake',unit:'mL'});card.hass=window.hass;document.querySelector('#mount').appendChild(card);
   }''')
   root=page.locator('jwdaily-hydration-log-card');page.wait_for_timeout(300)
-  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.42'
+  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.43'
   assert root.locator('.card-version').evaluate('(n)=>getComputedStyle(n).whiteSpace')=='nowrap'
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1
@@ -192,6 +192,28 @@ with sync_playwright() as p:
   assert page.evaluate('jdhlGlassFmt(1250, "mL")')=='1.25 L'
   assert page.evaluate('jdhlGlassFmt(2000, "mL")')=='2.0 L'
   assert page.evaluate('jdhlGlassFmt(2000, "L")')=='2 L'
+  if width==950:
+   assert page.evaluate('jdhlIsoInTimeZone("Europe/Amsterdam",new Date("2026-11-15T23:30:00Z"))')=='2026-11-16'
+   assert page.evaluate('jdhlIsoInTimeZone("Europe/London",new Date("2026-11-15T23:30:00Z"))')=='2026-11-15'
+   page.evaluate("""() => {
+    window.hass.states['sensor.jwdhl_one_hourly_intake_today']={state:1500,attributes:{buckets:[{hour:0,total_logged_ml:1500,liquids:{water:1500}}],liquid_names:{water:'Water'},liquid_colors:{}}};
+    const chart=document.createElement('jwdaily-hydration-hourly-card');
+    chart.setConfig({profile:'one',title:'Today by hour'});document.body.appendChild(chart);chart.hass=window.hass;window.qaChart=chart;
+   }""")
+   chart=page.locator('jwdaily-hydration-hourly-card ha-card')
+   assert 'Target: 2 L' in chart.inner_text(),('Chart target double-converted to L',chart.inner_text())
+   page.evaluate("""() => {
+    const target=window.hass.states['sensor.jwdhl_one_daily_target'];delete target.attributes.target_ml;
+    window.qaChart.hass=window.hass;
+   }""")
+   assert 'Target: 2 L' in chart.inner_text(),('Chart unit fallback conversion',chart.inner_text())
+   page.evaluate("""() => {
+    window.hass.states['sensor.jwdhl_one_daily_target']={state:'67.63',attributes:{unit_of_measurement:'fl oz',target_ml:2000}};
+    window.hass.states['sensor.jwdhl_one_consumed_today'].attributes.unit_of_measurement='fl oz';
+    window.qaChart.hass=window.hass;
+   }""")
+   assert 'Target: 67.63 fl oz' in chart.inner_text(),('Chart fl oz target display',chart.inner_text())
+   print('BETA43_CHART_UNITS_AND_TIMEZONE_PASS')
   print('BETA38_CHROMIUM_PASS',width)
   page.close()
  browser.close()
