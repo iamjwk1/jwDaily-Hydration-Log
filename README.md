@@ -1,12 +1,31 @@
-# jwDaily Hydration Log v1.1.0-beta.31
+# jwDaily Hydration Log v1.1.0-beta.43
 
-**Home Assistant custom integration — HACS pre-release.** Stable production release is still `v1.0.2`.
+**Home Assistant custom integration (HACS prerelease).** Stable production release remains `v1.0.2`.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
-Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager), copyright 2026 Loryan Strant. Original MIT notice retained verbatim in `LICENSE-UPSTREAM-MIT`.
+Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); original upstream MIT notice retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current release: v1.1.0-beta.31
+## Current release: v1.1.0-beta.43
+
+- Install with **HACS → jwDaily Hydration Log → Redownload → Need a different version? → v1.1.0-beta.43**, then restart Home Assistant Core and reload the browser.
+- Native hydration profile/ledger history, 4-sheet Excel export, Quick buttons, separately editable Liquid/Cup catalog, and full ZIP backup with **Everything / Settings only / Data only** restore remain supported.
+- Lovelace cards: `custom:jwdaily-hydration-log-card`, `custom:jwdaily-hydration-hourly-card` and `custom:jwdaily-hydration-weekly-card`.
+- Dashboard bug fix: chart target labels respect `mL`, `L`, and `fl oz` without double conversion; chart history requests use the configured Home Assistant timezone.
+- Imported backup archives use the Home Assistant profile-local calendar day when checking dates, preventing valid post-midnight records being treated as tomorrow.
+- Edit Profile dialogue uses the accepted narrower width (PR #22).
+- See `RELEASE_NOTES_v1.1.0-beta.43.md` and `AUDIT_v1.1.0-beta.43.md` for release QA and remaining cleanup items.
+
+**Before upgrading:** create a full ZIP backup and a Home Assistant backup. Do not replace or delete existing profile storage files manually. Live acceptance and historic-data checks are separate from automated CI.
+
+---
+
+## Historical release information (archive only)
+
+Earlier notes below document past versions. **Do not use their migration steps, dashboards, or instructions as current beta.43 installation guidance.**
+
+### beta.31 release notes
+
 
 **Quick button controls:** Settings → Quick buttons now includes **Hide / Restore → Edit → Delete** in the compact row actions. Hide is a smaller, reversible visibility control. Delete is permanent and requires explicit confirmation. Deleting a Quick button never deletes a drink or changes its Liquid, Cup, timestamp or recorded volume. Its historical label remains in the drink record and the Excel export, even if the button catalog entry is removed. Both Cup types and Quick buttons have a single popup title, not duplicate headings.
 

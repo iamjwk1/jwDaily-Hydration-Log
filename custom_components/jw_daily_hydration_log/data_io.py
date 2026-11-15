@@ -65,7 +65,7 @@ def _number(value, title, *, zero=True):
     return float(value)
 
 
-def _iso(value):
+def _iso(value, *, today=None):
     if not isinstance(value, str) or len(value) > 40:
         raise ValueError('Invalid timestamp')
     try:
@@ -74,19 +74,19 @@ def _iso(value):
         raise ValueError('Invalid timestamp') from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError('Timestamp must include an offset')
-    if parsed.year < 2000 or parsed.date() > date.today():
+    if parsed.year < 2000 or parsed.date() > (today or date.today()):
         raise ValueError('Historical timestamp outside supported dates')
     return value
 
 
-def _date(value):
+def _date(value, *, today=None):
     if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d\d-\d\d', value):
         raise ValueError('Invalid calendar date')
     try:
         day = date.fromisoformat(value)
     except ValueError as exc:
         raise ValueError('Invalid calendar date') from exc
-    if day.year < 2000 or day > date.today():
+    if day.year < 2000 or day > (today or date.today()):
         raise ValueError('Future calendar dates are not accepted')
     return value
 
@@ -102,7 +102,7 @@ def export_payload(coordinator):
             'data': extract(coordinator)}
 
 
-def validate(raw, *, liquids, cups):
+def validate(raw, *, liquids, cups, today=None):
     """Strictly validate an independent data exchange against the selected settings."""
     if not isinstance(raw, dict) or raw.get('format') != DATA_FORMAT or raw.get('schema') != DATA_SCHEMA:
         raise ValueError('Unsupported data file; use a schema-v2 export')
@@ -127,7 +127,7 @@ def validate(raw, *, liquids, cups):
         kind = item.get('kind')
         if kind not in RECORD_TYPES:
             raise ValueError('Unsupported ledger event: ' + str(kind)[:24])
-        _iso(item.get('timestamp'))
+        _iso(item.get('timestamp'), today=today)
         _number(item.get('volume_ml'), 'logged volume')
         if kind == 'drink':
             if item['volume_ml'] <= 0 or item['volume_ml'] > 100_000:
@@ -159,7 +159,7 @@ def validate(raw, *, liquids, cups):
     if not isinstance(daily, dict) or len(daily) > 7000:
         raise ValueError('Invalid daily archive')
     for day, snapshot in daily.items():
-        _date(day)
+        _date(day, today=today)
         if not isinstance(snapshot, dict) or len(canonical(snapshot)) > 4096:
             raise ValueError('Invalid daily snapshot')
         for field in ('manual_ml', 'source_ml', 'consumed_ml', 'target_ml'):
@@ -177,7 +177,7 @@ def validate(raw, *, liquids, cups):
         _number(clean[field], field)
     if clean['last_source_value'] is not None:
         _number(clean['last_source_value'], 'last source value')
-    _date(clean['last_reset_date'])
+    _date(clean['last_reset_date'], today=today)
     return clean
 
 

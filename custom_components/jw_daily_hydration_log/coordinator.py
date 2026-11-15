@@ -1241,7 +1241,7 @@ class HydrationCoordinator:
         catalog = settings or extract(self)
         liquid_ids = set(BUILTINS) | {t['id'] for t in catalog['custom_liquid_types']}
         cup_ids = {c['id'] for c in catalog['cup_types']}
-        return data_io.validate(raw, liquids=liquid_ids, cups=cup_ids)
+        return data_io.validate(raw, liquids=liquid_ids, cups=cup_ids, today=self._now().date())
 
     def data_import_preview(self, raw: dict, mode: str) -> dict:
         if mode == 'replace' and (raw.get('source_profile') or {}).get('slug') != self.slug:

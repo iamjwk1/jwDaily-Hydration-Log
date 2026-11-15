@@ -25,6 +25,7 @@ jobs:
           python tests/beta37_excel_units_qa.py
           python tests/beta39_version_guard_qa.py
           python tests/beta40_restore_scope_qa.py
+          python tests/beta43_data_timezone_qa.py
           node --check custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js
       - name: Actual Chromium settings and Delete/Cancel regression
         run: |
@@ -36,7 +37,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: beta42-chromium-ui-screenshots
+          name: beta43-chromium-ui-screenshots
           path: qa_screenshots/*.png
           if-no-files-found: warn
           retention-days: 7
