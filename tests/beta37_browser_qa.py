@@ -116,7 +116,7 @@ with sync_playwright() as p:
   if width>=720:
    head=root.locator('.liquid-list-header span')
    row=root.locator('.saved-liquid').first
-   assert abs(head.nth(0).bounding_box()['x']-row.locator('.saved-liquid-icon').bounding_box()['x'])<8
+   assert abs(head.nth(0).bounding_box()['x']-row.locator('.liquid-type-name').bounding_box()['x'])<8
    assert abs(head.nth(1).bounding_box()['x']-row.locator('.used-count').bounding_box()['x'])<8
 
   assert root.locator('.saved-liquid').count()==3
