@@ -50,10 +50,10 @@ with sync_playwright() as p:
   assert root.locator('[data-value="advanced"]').count()==0
   assert root.locator('[data-value="transfer"]').count()==1
   root.locator('button[data-action="settings-page"][data-value="transfer"]').click()
-  assert root.locator('.transfer-tabs button').count()==3
-  root.locator('[data-action="transfer-tab"][data-value="restore"]').click()
-  assert root.locator('[data-field="full_restore_scope"]').count()==1
-  root.locator('[data-action="transfer-tab"][data-value="excel"]').click()
+  assert root.locator('.beta40-transfer .transfer-action-row').count()>=3
+  assert root.locator('[data-action="transfer-scope"]').count()==3
+  root.locator('[data-action="transfer-scope"][data-value="settings"]').click()
+  assert root.locator('[data-action="transfer-scope"][data-value="settings"]').get_attribute("aria-pressed")=="true"
   assert 'Migration v3' not in root.locator('.dialog-settings').inner_text()
   assert root.locator('button[data-action="migration-rollback"]').count()==0
   root.locator('button[data-action="settings-home"]').click()
