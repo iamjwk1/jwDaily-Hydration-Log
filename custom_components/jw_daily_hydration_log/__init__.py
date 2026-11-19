@@ -210,7 +210,9 @@ def ws_history(hass:HomeAssistant,connection:websocket_api.ActiveConnection,msg:
         'today_breakdown':c.today_breakdown(),
         'cup_types':c.get_cup_types(), 'quick_buttons':c.get_quick_buttons(),
         'profile_settings':dict(name=c.name,age=c.age,gender=c.gender,unit=c.unit,
-                                daily_target_ml=c.target_ml),
+                                daily_target_ml=c.target_ml,
+                                show_add_quick_buttons=c.show_add_quick_buttons,
+                                show_add_liquid_cup_types=c.show_add_liquid_cup_types),
         'data_model_version':c.data_model_version, 
         'backend_version':VERSION,
     })
@@ -525,7 +527,9 @@ async def ws_settings_apply(hass, connection, msg):
 def ws_profiles_list(hass, connection, msg):
     connection.send_result(msg['id'],{'profiles':[dict(entry_id=c.entry_id,slug=c.slug,
             name=c.name,age=c.age,gender=c.gender,unit=c.unit,
-            daily_target_ml=c.target_ml) for c in _profiles(hass).values()]})
+            daily_target_ml=c.target_ml,
+            show_add_quick_buttons=c.show_add_quick_buttons,
+            show_add_liquid_cup_types=c.show_add_liquid_cup_types) for c in _profiles(hass).values()]})
 
 
 @websocket_api.require_admin
@@ -535,7 +539,9 @@ def ws_profiles_list(hass, connection, msg):
                                   probatio.Required('age'):int,
                                   probatio.Required('gender'):str,
                                   probatio.Required('unit'):str,
-                                  probatio.Optional('daily_target_ml'):float})
+                                  probatio.Optional('daily_target_ml'):float,
+                                  probatio.Optional('show_add_quick_buttons'):bool,
+                                  probatio.Optional('show_add_liquid_cup_types'):bool})
 @websocket_api.async_response
 async def ws_profile_edit(hass, connection, msg):
     try:
@@ -549,10 +555,17 @@ async def ws_profile_edit(hass, connection, msg):
         # Home Assistant options are updated only after one successful
         # transactional target/name save; no partially persisted goal event.
         old_options=dict(c.entry.options)
-        opts={**c.entry.options,**{k:msg[k] for k in ('age','gender','unit')}}
+        quick=msg.get('show_add_quick_buttons',c.show_add_quick_buttons)
+        selectors=msg.get('show_add_liquid_cup_types',c.show_add_liquid_cup_types)
+        if not quick and not selectors:
+            raise ValueError('Enable Quick buttons or Liquid/Cup selectors')
+        opts={**c.entry.options,**{k:msg[k] for k in ('age','gender','unit')},
+              'show_add_quick_buttons':quick,'show_add_liquid_cup_types':selectors}
         await c.async_update_profile_identity_target(name,goal)
         if opts!=old_options or c.entry.title!=name:
             hass.config_entries.async_update_entry(c.entry,options=opts,title=name)
+        c.show_add_quick_buttons=quick
+        c.show_add_liquid_cup_types=selectors
         connection.send_result(msg['id'],dict(updated=True,name=name,slug=c.slug,
                                                 daily_target_ml=c.target_ml,
                                                 stable_entry_id=c.entry_id))
@@ -567,7 +580,9 @@ async def ws_profile_edit(hass, connection, msg):
                                   probatio.Required('gender'):str,
                                   probatio.Required('unit'):str,
                                   probatio.Optional('copy_from'):str,
-                                  probatio.Optional('daily_target_ml'):float})
+                                  probatio.Optional('daily_target_ml'):float,
+                                  probatio.Optional('show_add_quick_buttons'):bool,
+                                  probatio.Optional('show_add_liquid_cup_types'):bool})
 @websocket_api.async_response
 async def ws_profile_create(hass, connection, msg):
     try:
@@ -581,12 +596,20 @@ async def ws_profile_create(hass, connection, msg):
         if not math.isfinite(goal) or not 1<=goal<=100000:
             raise ValueError('Daily target must be between 1 and 100000 mL')
         template=_resolve(hass,msg['copy_from']) if msg.get('copy_from') else None
+        quick=msg.get('show_add_quick_buttons',template.show_add_quick_buttons if template else True)
+        selectors=msg.get('show_add_liquid_cup_types',template.show_add_liquid_cup_types if template else True)
+        if not quick and not selectors:
+            raise ValueError('Enable Quick buttons or Liquid/Cup selectors')
         data=dict(name=name,age=msg['age'],gender=msg['gender'],unit=msg['unit'])
         result=await hass.config_entries.flow.async_init(DOMAIN,
                     context={'source':'user'},data=data)
         if result.get('type')!='create_entry' or not result.get('result'):
             raise ValueError('Could not create profile through Home Assistant config flow')
         entry=result['result']
+        hass.config_entries.async_update_entry(
+            entry,options={**entry.options,
+                           'show_add_quick_buttons':quick,
+                           'show_add_liquid_cup_types':selectors})
         # Keep profile history separate, even when catalog definitions are copied.
         store=Store(hass,1,f'{DOMAIN}.{entry.entry_id}')
         current=await store.async_load() or {}
