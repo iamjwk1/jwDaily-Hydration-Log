@@ -2261,7 +2261,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
  .dialog-drink .fields{grid-template-columns:230px 270px!important;}
  .dialog-drink .fields>label:last-child{grid-column:1/-1!important}
 }
-@media(max-width:570px){
+@media(max-width:650px){
  .dialog-drink .fields{grid-template-columns:minmax(0,1fr)!important}
  .dialog-drink .fields>label:last-child{grid-column:auto!important}
  .dialog-drink .fields input[data-field="volume_ml"],
