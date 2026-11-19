@@ -41,6 +41,40 @@ with sync_playwright() as p:
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1
   assert 'L' in root.locator('.taken').inner_text() and 'mL' not in root.locator('.taken').inner_text(),root.locator('.taken').inner_text()
+  page.evaluate('card._openNew()')
+  assert root.locator('.dialog-drink .quick-choices .quick-choice').count()==1
+  assert root.locator('.dialog-drink .liquid-choices').count()==1
+  assert root.locator('.dialog-drink .cup-choices').count()==1
+  if width>=950:
+   fields=root.locator('.dialog-drink .fields')
+   boxes=[fields.locator('[data-field="volume_ml"]').bounding_box(),fields.locator('.date-trigger').bounding_box(),fields.locator('[data-field="time"]').bounding_box()]
+   assert all(boxes),(width,boxes)
+   assert max(b['y'] for b in boxes)-min(b['y'] for b in boxes)<2,('Manual fields not aligned',width,boxes)
+   assert max(b['height'] for b in boxes)-min(b['height'] for b in boxes)<2,('Different heights',width,boxes)
+   assert root.locator('.fields label').first.evaluate('(x)=>getComputedStyle(x).whiteSpace')=='nowrap'
+  page.evaluate("""() => {
+   card._modal=null;card._history.profile_settings.show_add_quick_buttons=false;
+   card._history.profile_settings.show_add_liquid_cup_types=true;card._openNew();
+  }""")
+  assert root.locator('.dialog-drink .quick-choices').count()==0
+  assert root.locator('.dialog-drink .liquid-choices').count()==1
+  assert root.locator('.dialog-drink .cup-choices').count()==1
+  page.evaluate("""() => {
+   card._modal=null;card._history.profile_settings.show_add_quick_buttons=true;
+   card._history.profile_settings.show_add_liquid_cup_types=false;card._openNew();
+  }""")
+  assert root.locator('.dialog-drink .quick-choices').count()==1
+  assert root.locator('.dialog-drink .liquid-choices').count()==0
+  assert root.locator('.dialog-drink .cup-choices').count()==0
+  page.evaluate("""() => {card._history.quick_buttons[0].available=false;card._openNew();}""")
+  assert root.locator('.dialog-drink .liquid-choices').count()==1
+  page.evaluate("""() => {
+   card._history.quick_buttons[0].available=true;
+   card._history.profile_settings.show_add_quick_buttons=true;
+   card._history.profile_settings.show_add_liquid_cup_types=true;
+   card._modal=null;card._render(true);
+  }""")
+  assert root.locator('.dialog-drink').count()==0
   root.locator('button[data-action="export-open"]').click();assert root.locator('.dialog-excel').count()==1
   assert root.locator('select[data-field="export_profile"]').input_value()=='all'
   assert root.locator('select[data-field="export_profile"] option').all_text_contents()==['All profiles','Jan-Willem','Second']
@@ -76,6 +110,13 @@ with sync_playwright() as p:
   if width==950:
    Path('qa_screenshots').mkdir(exist_ok=True)
    root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_profile.png')
+  assert root.locator('.profile-add-drink-settings input[type="checkbox"]').count()==2
+  assert root.locator('[data-field="show_add_quick_buttons"]').is_checked()
+  assert root.locator('[data-field="show_add_liquid_cup_types"]').is_checked()
+  root.locator('[data-field="show_add_quick_buttons"]').uncheck()
+  assert page.evaluate('card._profileDraft.show_add_quick_buttons') is False
+  root.locator('[data-field="show_add_quick_buttons"]').check()
+  assert page.evaluate('card._profileDraft.show_add_quick_buttons') is True
   assert root.locator('.profile-quick-section').count()==1
   assert 'Quick buttons' in root.locator('.profile-quick-header').inner_text()
   assert root.locator('[data-action="settings-profile-quick"] ha-icon').count()==1
