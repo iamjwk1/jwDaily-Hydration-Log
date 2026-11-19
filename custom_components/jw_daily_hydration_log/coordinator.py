@@ -142,6 +142,9 @@ class HydrationCoordinator:
         self.source_sensor = None
         self.source_mode = 'delta'
         self.unit = cfg.get('unit', 'mL')
+        # Both groups remain visible for older profiles without these settings.
+        self.show_add_quick_buttons = cfg.get('show_add_quick_buttons') is not False
+        self.show_add_liquid_cup_types = cfg.get('show_add_liquid_cup_types') is not False
         self.target_override_ml = 0.0
         self._target_v3_initialized = False
         self.consumed_ml = 0.0
@@ -1286,6 +1289,13 @@ class HydrationCoordinator:
         if not isinstance(raw, dict):
             raise ValueError('Full backup is missing profile preferences')
         value = {key: raw.get(key) for key in ('age','gender','unit')}
+        for key in ('show_add_quick_buttons','show_add_liquid_cup_types'):
+            flag = raw.get(key, True)  # Legacy ZIPs did not include display preferences.
+            if type(flag) is not bool:
+                raise ValueError('Invalid Add drink display preference')
+            value[key] = flag
+        if not (value['show_add_quick_buttons'] or value['show_add_liquid_cup_types']):
+            raise ValueError('At least one Add drink selector group must remain enabled')
         if type(value['age']) is not int or not 1 <= value['age'] <= 120:
             raise ValueError('Invalid profile age')
         if value['gender'] not in ('male', 'female') or value['unit'] not in ('mL','L','fl_oz'):
@@ -1323,7 +1333,7 @@ class HydrationCoordinator:
                 raise ValueError('Full backup or profile changed since preview')
             old_settings, old_data = extract(self), data_io.extract(self)
             old_version = self.data_model_version
-            old_pref = {k:getattr(self,k) for k in ('age','gender','unit')}
+            old_pref = {k:getattr(self,k) for k in ('age','gender','unit','show_add_quick_buttons','show_add_liquid_cup_types')}
             old_options = dict(self.entry.options)
             try:
                 for k,v in preferences.items():setattr(self,k,v)
@@ -1352,7 +1362,7 @@ class HydrationCoordinator:
                         settings_revision=self.settings_revision(), data_revision=self.data_revision())
 
     def export_snapshot(self) -> dict:
-        cfg = {key: getattr(self,key) for key in ('name','age','gender','unit')}
+        cfg = {key: getattr(self,key) for key in ('name','age','gender','unit','show_add_quick_buttons','show_add_liquid_cup_types')}
         return dict(entry_id=self.entry_id,slug=self.slug,config=cfg,date=self.last_reset_date,
                     consumed_ml=self.consumed_ml,manual_consumed_ml=self.manual_consumed_ml,
                     target_ml=self.target_ml,source_contribution_ml=self.source_contribution_ml,
