@@ -1,3 +1,11 @@
+## v1.1.0-beta.44 (2026-11-19)
+- Per-profile Add drink visibility: Quick buttons, Liquid/Cup selectors or both; default both on.
+- Persist visibility settings per profile in HA options and full ZIP backups; missing flags in older backups default to both visible.
+- Custom amount, date and time share a horizontal row and 50px field heights on desktop; responsive stacking on narrow screens.
+- Remove the redundant Hidden label for Cup Types and Quick Buttons while retaining eye/eye-off status controls.
+- Preserve ledger IDs, historical volumes, rollback/restore, existing profiles, Excel export and migration compatibility.
+- Outstanding live acceptance and maintenance debt documented in `BETA44_PENDING_ACCEPTANCE.md`.
+
 ## v1.1.0-beta.43 (2026-11-16)
 - Accepted Edit profile dialog width reduction (PR #22).
 - Dashboard: correct hourly chart target labels for L/fl oz profiles and Home Assistant timezone-aware day selection.
