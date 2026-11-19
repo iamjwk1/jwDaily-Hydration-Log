@@ -42,6 +42,7 @@ edit.decorator_list=[]
 class FakeCoordinator:
     def __init__(self):
         self.slug="one"
+        self.entry_id="entry-one"
         self.target_ml=2000
         self.show_add_quick_buttons=True
         self.show_add_liquid_cup_types=True
