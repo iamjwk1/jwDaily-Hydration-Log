@@ -33,4 +33,48 @@ for field in si.FIELDS:setattr(model,field,[] if field.endswith("_types") or fie
 backup=si.export_payload(model)
 assert backup["profile_preferences"]["show_add_quick_buttons"] is False
 assert backup["profile_preferences"]["show_add_liquid_cup_types"] is True
+# Exercise the actual profile-edit handler without importing Home Assistant.
+import asyncio
+import math
+init_ast=ast.parse((root/"__init__.py").read_text(encoding="utf-8"))
+edit=next(n for n in init_ast.body if isinstance(n,ast.AsyncFunctionDef) and n.name=="ws_profile_edit")
+edit.decorator_list=[]
+class FakeCoordinator:
+    def __init__(self):
+        self.slug="one"
+        self.target_ml=2000
+        self.show_add_quick_buttons=True
+        self.show_add_liquid_cup_types=True
+        self.entry=SimpleNamespace(options={},title="Jan-Willem",entry_id="entry-one")
+    def _catalog_name(self,name,_label):return name
+    async def async_update_profile_identity_target(self,name,goal):
+        self.target_ml=goal
+coordinator=FakeCoordinator()
+class FakeConfigEntries:
+    def async_update_entry(self,entry,options,title):
+        entry.options=options
+        entry.title=title
+hass=SimpleNamespace(config_entries=FakeConfigEntries())
+class FakeConnection:
+    def __init__(self):self.last=None;self.err=None
+    def send_result(self,mid,data):self.last=(mid,data)
+    def send_error(self,mid,code,message):self.err=(mid,code,message)
+conn=FakeConnection()
+namespace={"_resolve":lambda _h,_slug:coordinator,"math":math,
+           "UNITS":("mL","L","fl_oz"),"ServiceValidationError":ValueError}
+exec(compile(ast.Module(body=[edit],type_ignores=[]),str(root/"__init__.py"),"exec"),namespace)
+handler=namespace["ws_profile_edit"]
+def msg(**kwargs):
+    return dict(id=1,profile="one",name="Jan-Willem",age=58,gender="male",
+                unit="mL",daily_target_ml=2000,**kwargs)
+asyncio.run(handler(hass,conn,msg(show_add_quick_buttons=False,show_add_liquid_cup_types=True)))
+assert conn.last is not None and conn.err is None
+assert coordinator.entry.options["show_add_quick_buttons"] is False
+assert coordinator.show_add_quick_buttons is False
+assert coordinator.entry.options["show_add_liquid_cup_types"] is True
+conn=FakeConnection()
+asyncio.run(handler(hass,conn,msg(show_add_quick_buttons=False,show_add_liquid_cup_types=False)))
+assert conn.err is not None and conn.last is None
+assert coordinator.entry.options["show_add_liquid_cup_types"] is True
+assert coordinator.entry.options["show_add_quick_buttons"] is False
 print("PROFILE_ADD_DRINK_SETTINGS_QA_PASS")
