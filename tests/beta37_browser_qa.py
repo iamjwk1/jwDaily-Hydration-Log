@@ -130,6 +130,10 @@ with sync_playwright() as p:
   assert root.locator('.settings-head h3').first.inner_text().startswith('Edit Quick Buttons')
   if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_edit_quick.png')
   assert root.locator('.quick-settings-row [data-action="settings-quick-toggle"] ha-icon').count()==1
+  page.evaluate("""() => { card._settingsQuickHistory.quick_buttons[0].hidden=true;card._render(true); }""")
+  assert 'Hidden' not in root.locator('.quick-settings-row').first.inner_text()
+  assert root.locator('.quick-settings-row [data-action="settings-quick-toggle"] ha-icon[icon="mdi:eye-off"]').count()==1
+  page.evaluate("""() => { card._settingsQuickHistory.quick_buttons[0].hidden=false;card._render(true); }""")
   assert root.locator('.quick-settings-row [data-action="settings-quick-edit"] ha-icon').count()==1
   assert root.locator('.quick-settings-row [data-action="settings-quick-delete"] ha-icon').count()==1
   if width>720:
@@ -161,6 +165,10 @@ with sync_playwright() as p:
   assert root.locator('.cup-settings-row [data-action="settings-cup-edit"] ha-icon').count()==2
   assert root.locator('.cup-settings-row [data-action="settings-cup-delete"] ha-icon').count()==2
   assert root.locator('.cup-settings-row [data-action="settings-cup-toggle"] ha-icon').count()==2
+  page.evaluate("""() => { card._history.cup_types[0].hidden=true;card._render(true); }""")
+  assert 'Hidden' not in root.locator('.cup-settings-row').first.inner_text()
+  assert root.locator('.cup-settings-row [data-action="settings-cup-toggle"] ha-icon[icon="mdi:eye-off"]').count()==1
+  page.evaluate("""() => { card._history.cup_types[0].hidden=false;card._render(true); }""")
   assert root.locator('.cup-settings-row [data-action="settings-cup-up"]').first.get_attribute('title')=='Move cup type up'
   if width>=720:
    head=root.locator('.cup-table-head span').all()
