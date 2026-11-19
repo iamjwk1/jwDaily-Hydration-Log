@@ -15,7 +15,7 @@ SCHEMA = 2
 FIELDS = ('liquid_overrides', 'custom_liquid_types', 'liquid_colors',
           'hidden_builtin_liquids', 'liquid_order',
           'cup_types', 'quick_buttons', 'target_override_ml')
-PROFILE_FIELDS = ('age','gender','unit')
+PROFILE_FIELDS = ('age','gender','unit','show_add_quick_buttons','show_add_liquid_cup_types')
 BUILTINS = {'water','coffee','tea','milk','soup','wine','other'}
 HEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
 MDI = re.compile(r'^mdi:[a-z0-9-]{2,70}$')

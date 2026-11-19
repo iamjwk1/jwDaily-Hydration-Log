@@ -27,8 +27,8 @@ with sync_playwright() as p:
     window.calls=[];window.downloads=[];HTMLAnchorElement.prototype.click=function(){window.downloads.push(this.download||'');};
     window.hass={user:{is_admin:true},config:{time_zone:'Europe/Amsterdam'},states:{'sensor.jwdhl_one_consumed_today':{state:'0.18',attributes:{consumed_ml:180,unit_of_measurement:'L'}},'sensor.jwdhl_one_daily_target':{state:'2',attributes:{target_ml:2000,unit_of_measurement:'L'}},'sensor.jwdhl_one_drink_count_today':{state:'1',attributes:{}},'sensor.jwdhl_one_manual_consumed':{state:'180',attributes:{manual_consumed_ml:180}}},callWS:async msg=>{
       window.calls.push(msg);
-      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.43'};
-      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.43'};
+      if(msg.type.endsWith('/history'))return {profile:msg.profile,date:iso,entries,total_ml:180,count:1,consumed_ml:180,target_ml:2000,day_summary:{date:iso,drink_count:1,consumed_ml:180,target_ml:2000,liquid_breakdown:[{liquid_type:'coffee',volume_ml:180}]},liquid_types:defs,cup_types:cups,quick_buttons:quick,profile_settings:{name:'Jan-Willem',age:58,gender:'male',unit:'L'},data_model_version:2,today_breakdown:[{liquid_type:'coffee',volume_ml:180}],backend_version:'1.1.0-beta.44'};
+      if(msg.type.endsWith('/capabilities'))return {version:'1.1.0-beta.44'};
       if(msg.type.endsWith('/profiles_list'))return {profiles:[{slug:'one',name:'Jan-Willem',age:58,gender:'male',unit:'L',daily_target_ml:2000},{slug:'two',name:'Second',age:30,gender:'female',unit:'fl_oz',daily_target_ml:1500}]};
       if(msg.type.endsWith('/export'))return {base64:'UEsDBBQ=',filename:'test beta38.xlsx'};
       return {};
@@ -36,11 +36,45 @@ with sync_playwright() as p:
     window.card=document.createElement('jwdaily-hydration-log-card');card.setConfig({profile:'one',title:'Vocht intake',unit:'mL'});card.hass=window.hass;document.querySelector('#mount').appendChild(card);
   }''')
   root=page.locator('jwdaily-hydration-log-card');page.wait_for_timeout(300)
-  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.43'
+  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.44'
   assert root.locator('.card-version').evaluate('(n)=>getComputedStyle(n).whiteSpace')=='nowrap'
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1
   assert 'L' in root.locator('.taken').inner_text() and 'mL' not in root.locator('.taken').inner_text(),root.locator('.taken').inner_text()
+  page.evaluate('card._openNew()')
+  assert root.locator('.dialog-drink .quick-choices .quick-choice').count()==1
+  assert root.locator('.dialog-drink .liquid-choices').count()==1
+  assert root.locator('.dialog-drink .cup-choices').count()==1
+  if width>=950:
+   fields=root.locator('.dialog-drink .fields')
+   boxes=[fields.locator('[data-field="volume_ml"]').bounding_box(),fields.locator('.date-trigger').bounding_box(),fields.locator('[data-field="time"]').bounding_box()]
+   assert all(boxes),(width,boxes)
+   assert max(b['y'] for b in boxes)-min(b['y'] for b in boxes)<2,('Manual fields not aligned',width,boxes)
+   assert max(b['height'] for b in boxes)-min(b['height'] for b in boxes)<2,('Different heights',width,boxes)
+   assert root.locator('.fields label').first.evaluate('(x)=>getComputedStyle(x).whiteSpace')=='nowrap'
+  page.evaluate("""() => {
+   card._modal=null;card._history.profile_settings.show_add_quick_buttons=false;
+   card._history.profile_settings.show_add_liquid_cup_types=true;card._openNew();
+  }""")
+  assert root.locator('.dialog-drink .quick-choices').count()==0
+  assert root.locator('.dialog-drink .liquid-choices').count()==1
+  assert root.locator('.dialog-drink .cup-choices').count()==1
+  page.evaluate("""() => {
+   card._modal=null;card._history.profile_settings.show_add_quick_buttons=true;
+   card._history.profile_settings.show_add_liquid_cup_types=false;card._openNew();
+  }""")
+  assert root.locator('.dialog-drink .quick-choices').count()==1
+  assert root.locator('.dialog-drink .liquid-choices').count()==0
+  assert root.locator('.dialog-drink .cup-choices').count()==0
+  page.evaluate("""() => {card._history.quick_buttons[0].available=false;card._openNew();}""")
+  assert root.locator('.dialog-drink .liquid-choices').count()==1
+  page.evaluate("""() => {
+   card._history.quick_buttons[0].available=true;
+   card._history.profile_settings.show_add_quick_buttons=true;
+   card._history.profile_settings.show_add_liquid_cup_types=true;
+   card._modal=null;card._render(true);
+  }""")
+  assert root.locator('.dialog-drink').count()==0
   root.locator('button[data-action="export-open"]').click();assert root.locator('.dialog-excel').count()==1
   assert root.locator('select[data-field="export_profile"]').input_value()=='all'
   assert root.locator('select[data-field="export_profile"] option').all_text_contents()==['All profiles','Jan-Willem','Second']
@@ -76,6 +110,13 @@ with sync_playwright() as p:
   if width==950:
    Path('qa_screenshots').mkdir(exist_ok=True)
    root.locator('.dialog-editor').screenshot(path='qa_screenshots/beta42_edit_profile.png')
+  assert root.locator('.profile-add-drink-settings input[type="checkbox"]').count()==2
+  assert root.locator('[data-field="show_add_quick_buttons"]').is_checked()
+  assert root.locator('[data-field="show_add_liquid_cup_types"]').is_checked()
+  root.locator('[data-field="show_add_quick_buttons"]').uncheck()
+  assert page.evaluate('card._profileDraft.show_add_quick_buttons') is False
+  root.locator('[data-field="show_add_quick_buttons"]').check()
+  assert page.evaluate('card._profileDraft.show_add_quick_buttons') is True
   assert root.locator('.profile-quick-section').count()==1
   assert 'Quick buttons' in root.locator('.profile-quick-header').inner_text()
   assert root.locator('[data-action="settings-profile-quick"] ha-icon').count()==1
@@ -89,6 +130,10 @@ with sync_playwright() as p:
   assert root.locator('.settings-head h3').first.inner_text().startswith('Edit Quick Buttons')
   if width==950:root.locator('.dialog-settings').screenshot(path='qa_screenshots/beta42_edit_quick.png')
   assert root.locator('.quick-settings-row [data-action="settings-quick-toggle"] ha-icon').count()==1
+  page.evaluate("""() => { card._settingsQuickHistory.quick_buttons[0].hidden=true;card._render(true); }""")
+  assert 'Hidden' not in root.locator('.quick-settings-row').first.inner_text()
+  assert root.locator('.quick-settings-row [data-action="settings-quick-toggle"] ha-icon[icon="mdi:eye-off"]').count()==1
+  page.evaluate("""() => { card._settingsQuickHistory.quick_buttons[0].hidden=false;card._render(true); }""")
   assert root.locator('.quick-settings-row [data-action="settings-quick-edit"] ha-icon').count()==1
   assert root.locator('.quick-settings-row [data-action="settings-quick-delete"] ha-icon').count()==1
   if width>720:
@@ -120,6 +165,10 @@ with sync_playwright() as p:
   assert root.locator('.cup-settings-row [data-action="settings-cup-edit"] ha-icon').count()==2
   assert root.locator('.cup-settings-row [data-action="settings-cup-delete"] ha-icon').count()==2
   assert root.locator('.cup-settings-row [data-action="settings-cup-toggle"] ha-icon').count()==2
+  page.evaluate("""() => { card._history.cup_types[0].hidden=true;card._render(true); }""")
+  assert 'Hidden' not in root.locator('.cup-settings-row').first.inner_text()
+  assert root.locator('.cup-settings-row [data-action="settings-cup-toggle"] ha-icon[icon="mdi:eye-off"]').count()==1
+  page.evaluate("""() => { card._history.cup_types[0].hidden=false;card._render(true); }""")
   assert root.locator('.cup-settings-row [data-action="settings-cup-up"]').first.get_attribute('title')=='Move cup type up'
   if width>=720:
    head=root.locator('.cup-table-head span').all()
