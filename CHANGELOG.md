@@ -1,3 +1,10 @@
+## v1.1.0-beta.45 (2026-11-19)
+- Fix Add drink horizontal scrollbar and clipped Time field when only Quick Buttons or full Liquid/Cup sections appear.
+- Reduce manual-input CSS grid to 165 / 190 / 145 px (plus gaps) within the standard 660px modal.
+- Date, time and amount retain identical 50px heights and one row on desktop; adapt to two or one column on smaller viewports.
+- Add Chromium regression for modal scrollWidth <= clientWidth and all inputs contained at 360–1400px.
+- No backend, historical drinks, profile settings, ZIP backups, Excel exports or migration changes.
+
 ## v1.1.0-beta.44 (2026-11-19)
 - Per-profile Add drink visibility: Quick buttons, Liquid/Cup selectors or both; default both on.
 - Persist visibility settings per profile in HA options and full ZIP backups; missing flags in older backups default to both visible.
