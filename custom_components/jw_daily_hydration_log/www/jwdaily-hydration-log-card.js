@@ -874,7 +874,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <label class="cup-name-field">Cup name<input data-field="name" maxlength="48" value="${E(draft.name)}"/></label>
       <label class="cup-volume-field">Default volume (${this._unitLabel()})<input data-field="volume_ml" type="number" step="any" min="0.01" max="100000" value="${E(draft.volume_ml)}"/></label></div>
       <div class="dialog-footer"><button class="secondary" data-action="settings-discard">Cancel</button><button data-action="settings-cup-save">Save cup</button></div></section></div>`:''}
-    ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><ha-icon class="cup-row-icon" icon="${E(c.icon_mdi||'mdi:cup')}"></ha-icon><div class="row-title"><span>${E(c.name)}</span>${c.hidden?'<small>Hidden</small>':''}</div><span class="cup-volume-value">${this._fmt(Number(c.default_volume_ml))}</span>
+    ${cups.map((c,i)=>`<div class="settings-row cup-settings-row"><ha-icon class="cup-row-icon" icon="${E(c.icon_mdi||'mdi:cup')}"></ha-icon><div class="row-title"><span>${E(c.name)}</span></div><span class="cup-volume-value">${this._fmt(Number(c.default_volume_ml))}</span>
      <span class="used-count" title="Recorded drink moments across all profiles">${Number(c.drink_count_all_profiles)||0}</span>
      <div class="settings-row-actions"><button class="secondary small" data-action="settings-cup-up" data-value="${E(c.id)}" ${i===0?'disabled':''} aria-label="Move cup type up" title="Move cup type up">↑</button>
      <button class="secondary small" data-action="settings-cup-down" data-value="${E(c.id)}" ${i===cups.length-1?'disabled':''} aria-label="Move cup type down" title="Move cup type down">↓</button>
@@ -899,7 +899,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
     <div class="quick-table-header"><span>Liquid type</span><span>Cup type</span><span>Cup volume</span><span class="visually-hidden">Actions</span></div>
     ${quick.map((q,i)=>`<div class="settings-row quick-settings-row">
      ${q.icon_mdi?`<ha-icon icon="${E(q.icon_mdi)}"></ha-icon>`:this._liquidIcon(this._liquidInfo(q.liquid_type_id))}
-     <span class="quick-col-name">${E(this._liquidName(q.liquid_type_id))}${q.hidden?' (Hidden)':''}</span>
+     <span class="quick-col-name">${E(this._liquidName(q.liquid_type_id))}</span>
      <span class="quick-col-cup">${E(this._cupInfo(q.cup_type_id)?.name||'Cup unavailable')}</span>
      <span class="quick-col-volume">${this._fmt(Number(q.default_volume_ml||0))}</span>
      <div class="settings-row-actions">
