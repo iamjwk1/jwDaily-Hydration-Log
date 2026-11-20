@@ -371,21 +371,24 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
         ' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','')
     match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
     original=original[:match.start()]+inject(match,('cellXfs',left_style),left_date_style_id+1)+original[match.end():]
-    # Set vertical center for every style used by header and data cells while
-    # preserving their existing font, fill, number format and horizontal alignment.
-    # Edit the raw XML to retain Office prefix declarations (mc:x14ac/etc).
+    # All exported cells must be vertically centered, including styled
+    # table-body cells, header text and the reference's date/percentage styles.
+    # Replace only <cellXfs> content so Excel's original mc/xr prefixes survive.
     match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
     if match is None:raise ValueError('Missing cell style collection')
-    def center(x):
-        if re.search(r'<alignment\\b', x):
-            return re.sub(r'<alignment\\b([^>]*)/?>',lambda m:
-                '<alignment'+re.sub(r'\\svertical="[^"]*"', '', m.group(1)).rstrip('/').rstrip()
-                +' vertical="center"/>',x,count=1)
-        return x.replace('</xf>','<alignment vertical="center"/></xf>')
-    cells=re.sub(r'<xf\\b[^>]*(?:/>|>.*?</xf>)',lambda m:center(m.group(0)),match.group(2),flags=re.S)
-    original=original[:match.start(2)]+cells+original[match.end(2):]
+    def center_xf(raw: str) -> str:
+        if raw.endswith('/>'):
+            return raw[:-2]+'><alignment vertical="center"/></xf>'
+        if '<alignment' in raw:
+            return re.sub(r'<alignment\b([^>]*?)/>',lambda m:
+                '<alignment'+re.sub(r'\svertical="[^"]*"', '', m.group(1))
+                +' vertical="center"/>',raw,count=1)
+        return raw.replace('</xf>','<alignment vertical="center"/></xf>')
+    xfs_xml=re.sub(r'<xf\b[^>]*(?:/>|>.*?</xf>)',
+                   lambda m:center_xf(m.group(0)), match.group(2),flags=re.S)
+    original=original[:match.start(2)]+xfs_xml+original[match.end(2):]
     ET.fromstring(original)
-    return original.encode('utf-8'),new_style_id,color_styles if False else color_style_ids,left_date_style_id
+    return original.encode('utf-8'),new_style_id,color_style_ids,left_date_style_id
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
