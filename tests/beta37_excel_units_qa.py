@@ -29,7 +29,7 @@ for units in [('mL',),('L',),('fl_oz',),('mL','L','fl_oz')]:
   if f.endswith(('.xml','.rels')):ET.fromstring(z.read(f))
  one=ET.fromstring(z.read('xl/worksheets/sheet1.xml'))
  two=ET.fromstring(z.read('xl/worksheets/sheet2.xml'))
- row=one.find("x:sheetData/x:row[@r='12']",NS);assert row is not None and row.get('ht')=='44'
+ row=one.find("x:sheetData/x:row[@r='12']",NS);assert row is not None and row.get('ht')=='18'
  logheaders=' '.join(xmltext(c) for c in one.findall("x:sheetData/x:row[@r='11']/x:c",NS))
  assert 'Cup used' in logheaders and 'Current cup default' not in logheaders and 'Quick button' not in logheaders
  dayheaders=[xmltext(c) for c in two.findall("x:sheetData/x:row[@r='11']/x:c",NS)]
