@@ -25,15 +25,12 @@ from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
 from .excel_icons import png_icon
 
-VERSION = '1.1.0-beta.46'
+VERSION = '1.1.0-beta.47'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
 # extracted from the supplied Excel reference. Values contain no workbook cells.
-_STYLES_Z = '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'
-_THEME_Z = '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'
-STYLES = zlib.decompress(base64.b64decode(_STYLES_Z))
-THEME = zlib.decompress(base64.b64decode(_THEME_Z))
+from .excel_reference_format import REFERENCE_STYLES as STYLES, REFERENCE_THEME as THEME, REFERENCE_COLS, REFERENCE_LIQUID_WIDTHS
 
 _BUILTIN = ('water', 'coffee', 'tea', 'milk', 'soup', 'wine', 'other')
 
@@ -149,11 +146,95 @@ def _cols(widths: list[float | tuple[float,bool]]) -> str:
     return '<cols>' + ''.join(tag(i,w) for i,w in enumerate(widths,1)) + '</cols>'
 
 def _liquid_width(name: str, unit_label: str) -> tuple[float, bool]:
-    # Excel has no stored "autofit" operation. Calculate a fitted width and
-    # mark bestFit=1 for ONLY the liquid column, never the fixed metadata columns.
-    longest=max((len(part) for part in str(name).splitlines()),default=0)
-    return (float(max(8,min(30,max(longest,len(unit_label)+2)+2))), True)
+    """Fitted columns only for Liquid types; base widths match approved workbook."""
+    canonical=str(name).strip().casefold()
+    width=(REFERENCE_LIQUID_WIDTHS.get(canonical)
+           if unit_label=='mL' else None)
+    if width is None:
+        header=f'{name}\n({unit_label})'
+        width=float(max(8, min(38,max(len(x) for x in header.splitlines())+2.25)))
+    return (float(width),True)
 
+
+def _reference_columns(index: int, widths: list[float | tuple[float,bool]]) -> str:
+    """Original exact column geometry; only Daily intake Liquid types are dynamic."""
+    if index==2:
+        # Preserve the ten fixed metadata columns byte-for-byte from the
+        # supplied reference. Dynamic Liquid columns are the ONLY fitted ones.
+        import re
+        fixed=[]
+        for col in re.findall(r'<col\b[^>]*/>', REFERENCE_COLS[2]):
+            n=re.search(r'\bmin="(\d+)"',col)
+            if n and int(n.group(1))<=10:
+                fixed.append(col)
+        variable=[]
+        for position,width in enumerate(widths[10:],11):
+            value, fit = width if isinstance(width,tuple) else (width,False)
+            variable.append(f'<col min="{position}" max="{position}" width="{value}"'
+                            + (' bestFit="1"' if fit else '') + ' customWidth="1"/>')
+        return '<cols>'+''.join(fixed)+''.join(variable)+'</cols>'
+    cols=REFERENCE_COLS[index]
+    if index==1 and len(widths)>9:
+        extras=''.join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>'
+                       for i,w in enumerate(widths[9:],10))
+        return cols.replace('</cols>',extras+'</cols>')
+    return cols
+
+
+# Indexed exactly as in the approved 20261120-1703 reference workbook.
+# Only user-requested differences: all data rows 18pt, all cells vertical center,
+# full native IDs and current data from HA, and Liquid types dynamic widths.
+_REFERENCE_HEADERS = {
+ 1:[5,6,6,6,6,8,9,9],
+ 2:[24,25,25,25,26,23,23,23,23],
+ 3:[54,48,47,47,47,47,47,47,47,47,47,49],
+ 4:[46,54,47,48,47,47,47,47,49],
+ 5:[46,47,47,47,48,47,47,47,47,47,47,47,50],
+ 6:[51,55,52,52,52,52,52,53],
+}
+_REFERENCE_BODY = {
+ 1:[10,11,11,11,11,11,12,11],
+ 2:[17,7,11,11,19,7,7,7,18],
+ 3:[30,30,11,11,11,11,11,11,20,11,11,12],
+ 4:[43,43,11,11,11,11,11,11,45],
+ 5:[43,11,11,11,11,19,11,12,11,11,11,11,11],
+ 6:[43,43,11,11,11,11,11,12],
+}
+_REFERENCE_LAST = {
+ 1:[13,14,14,14,14,14,15,14],
+ 3:[31,31,14,14,14,14,14,14,29,14,14,15],
+ 4:[44,44,14,14,14,14,14,14,45],
+ 5:[44,14,14,14,14,19,14,15,14,14,14,14,14],
+ 6:[44,44,14,14,14,14,14,15],
+}
+
+def _apply_reference_styles(index, rows):
+    """Preserve approved cell fonts, fills, borders, number formats and position."""
+    header=11 if index in (1,2) else 8 if index==6 else 9
+    data_rows=[r for r in rows if r>header and rows[r]]
+    last=max(data_rows) if data_rows else None
+    for row, items in rows.items():
+        revised=[]
+        for col,value,style,formula in items:
+            if row==2: target=1
+            elif row==4: target=(2 if col==2 else 16 if index==1 else 4)
+            elif row==7 and index in (3,4,5): target=(2 if col==2 else 3)
+            elif row in (5,6,7,8) and row!=header:
+                target=3 if col==3 and (row==6 and index>2 or row in (7,8) and index in (1,2)) else 0
+            elif row==header:
+                heads=_REFERENCE_HEADERS[index]
+                if index==2 and col>=11:
+                    target=22 if col==max(x[0] for x in rows[row]) else 21
+                else: target=heads[min(col-2,len(heads)-1)]
+            elif row>header:
+                arr=_REFERENCE_LAST.get(index) if last==row else None
+                if arr is None:arr=_REFERENCE_BODY[index]
+                target=arr[min(col-2,len(arr)-1)]
+                if index==2 and col>=11:target=11
+                if index==3 and col==11:target=style  # Dynamic HA color swatch.
+            else:target=style
+            revised.append((col,value,target,formula))
+        rows[row]=revised
 
 
 def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | None]]],
@@ -172,11 +253,11 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     if index in (1,2):
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts += ['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>',
-              _cols(widths),'<sheetData>']
+              _reference_columns(index,widths),'<sheetData>']
     for row in sorted(rows):
         if row >= header_row:
             if row == header_row:
-                height = 38 if index == 1 else (44 if index == 2 else 43.75)
+                height = 38 if index == 1 else (44.05 if index == 2 else 43.75)
             else:
                 height = 18
             rowheight = f' ht="{height}" customHeight="1"'
@@ -343,6 +424,19 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
         color = color.upper()
         if color in color_style_ids:
             continue
+        # Reuse the exact approved Excel color+border style where available.
+        # This retains the original Liquid swatches and bottom-row borders.
+        approved = None
+        for i, style in enumerate(xfs):
+            fill_at = int(style.get('fillId','0'))
+            if fill_at >= len(fills):continue
+            pigment = fills[fill_at].find('.//'+ns+'fgColor')
+            if pigment is not None and pigment.get('rgb','').upper() == 'FF'+color[1:]:
+                approved=i
+                break
+        if approved is not None:
+            color_style_ids[color]=approved
+            continue
         parsed = ET.fromstring(original)
         color_fills = parsed.find(ns + 'fills')
         color_xfs = parsed.find(ns + 'cellXfs')
@@ -351,7 +445,7 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
                 '<bgColor indexed="64"/></patternFill></fill>')
         # Sheet 3's original settings cells are style 0. Reuse its exact format,
         # changing only the fill reference.
-        template = ET.tostring(color_xfs[0], encoding='unicode')
+        template = ET.tostring(color_xfs[11], encoding='unicode')
         template = template.replace('ns0:', '').replace(' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', '')
         template = re.sub(r'\bfillId="[^"]*"', f'fillId="{fill_id}"', template)
         if 'fillId=' not in template:
@@ -445,7 +539,7 @@ def _volume(ml,unit):
     return int(result) if result.is_integer() else result
 
 def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', when: datetime | None = None) -> bytes:
-    """Match the supplied four-sheet reference, retaining ALL drink records.
+    """Match the supplied six-sheet reference, retaining ALL drink records.
 
     All native Liquid IDs receive Daily intake columns, never merged into Other.
     """
@@ -556,7 +650,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     # All three settings catalogs and profile metadata are separate sheets,
     # matching the supplied six-sheet workbook (not the older combined sheet).
     def settings_meta(title, count_label=None, count_value=None):
-        rows={2:[(2, title, 1, None)],
+        rows={2:[(2, title, 1, None),(3,None,1,None)],
               4:[(2,'Export date',2,None),(3,_serial(now),left_date_style,None)],
               5:[(2,'Integration version',0,None),(3,VERSION,0,None)],
               6:[(2,'Number of profiles',0,None),(3,len(profiles),3,None)]}
@@ -602,7 +696,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             seen.add(ident)
             unique_cups.append((p,pos,cup))
     cupsrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Cup types',
-                           'Nr of cup types',len(unique_cups))
+                           'Nr of liquid types',len(export_types))
     header(cupsrows,9,['Profile','Cup Type ID','Name','Default volume\n(mL)',
                        'MDI icon','Icon graphic','SVG Image','Order','Visible'])
     for rownum,(p,pos,cup) in enumerate(unique_cups,10):
@@ -616,7 +710,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     # Settings - Quick buttons: B9:N9; the saved per-profile order and
     # effective label are exported exactly as used by the cards.
     quick_rows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Quick buttons',
-                             'Nr of quick buttons',sum(len(p.get('quick_buttons') or []) for p in profiles))
+                             'Nr of liquid types',len(export_types))
     header(quick_rows,9,['Profile','Button ID','Effective button label','Label mode',
                          'Default volume\n(mL)','Visible','Custom label','MDI icon',
                          'Order','Liquid ID','Liquid name','Cup ID','Cup name'])
@@ -649,6 +743,8 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
               len(p.get('quick_buttons') or [])]
         profrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
     if not profiles:profrows[9]=[]
+    for sheet_index, sheet_rows in enumerate((logrows,drows,typesrows,cupsrows,quick_rows,profrows),1):
+        _apply_reference_styles(sheet_index,sheet_rows)
     rich_parts=_in_cell_image_parts(icon_images)
     content=[
       _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),

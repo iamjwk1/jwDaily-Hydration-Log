@@ -1,4 +1,4 @@
-"""Self-contained, offline XLSX liquid pictograms (PNG + DrawingML).
+"""Self-contained, offline XLSX pictograms embedded as native Excel cell images.
 
 No external fonts, URLs, Pillow, network access, or Home Assistant dependencies.
 Pictograms are intentionally simplified symbolic previews, not exact MDI artwork.
@@ -26,7 +26,7 @@ def _polygon(x, y, pts):
     return inside
 
 
-def png_icon(icon_mdi, color="#5795CE", size=48):
+def png_icon(icon_mdi, color="#5795CE", size=60):
     if not 24<=size<=128:
         raise ValueError("Invalid pictogram size")
     raw=color.lstrip("#")

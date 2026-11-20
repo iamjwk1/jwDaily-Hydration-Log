@@ -1,3 +1,10 @@
+## v1.1.0-beta.47 (2026-11-20)
+- Reference-matched Excel styles, fonts, fills, borders, theme and non-liquid column widths from approved 20261120-1703 example; data still comes from Home Assistant.
+- Data rows remain 18pt and vertically centered, Hydration log header 38pt; only Liquid columns in Daily intake fit content.
+- Native Place in Cell images and all six filterable tables retained.
+- Technical ID columns intentionally remain populated with real IDs, as explicitly confirmed by user.
+- New regression compares style definitions and column geometry directly with sanitized reference metadata. No storage, backup, import or history changes.
+
 ## v1.1.0-beta.46 (2026-11-20)
 - Excel reference workbook format updated from four to six separately filterable sheets.
 - All data rows 18pt and vertically centered; Hydration log header 38pt; Daily intake only liquid widths best fit.

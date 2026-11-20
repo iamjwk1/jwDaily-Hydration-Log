@@ -82,7 +82,7 @@ with ZipFile(BytesIO(raw)) as book:
     for media in [p for p in book.namelist() if p.startswith("xl/media/image")]:
         data=book.read(media)
         assert data[:8]==b"\x89PNG\r\n\x1a\n"
-        assert int.from_bytes(data[16:20],"big")==48 and int.from_bytes(data[20:24],"big")==48
+        assert int.from_bytes(data[16:20],"big")==60 and int.from_bytes(data[20:24],"big")==60
     assert types["B10"]=="Jan-Willem" and types["F9"]=="Icon graphic"
     assert len([v for k,v in types.items() if k.startswith("B") and k[1:].isdigit() and int(k[1:])>9])==6
     assert "Source mode" not in book.read("xl/worksheets/sheet4.xml").decode()
