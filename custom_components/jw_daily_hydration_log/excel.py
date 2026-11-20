@@ -260,31 +260,40 @@ def _in_cell_image_parts(images: list[bytes]) -> dict[str, bytes]:
     return parts
 
 
-def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None, unit: str = 'mL', mixed: bool = False) -> bytes:
-    """Structured Excel tables, including table filters and header layout."""
+def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None,
+           unit: str = 'mL', mixed: bool = False,
+           settings_headers: list[str] | None = None) -> bytes:
+    """Reference-style structured tables, usable filters on all six sheets."""
     if table_number==1:
-        label='tblHydrationLog'; right='K' if mixed else 'I'
+        label='tblHydrationLog'; right='K' if mixed else 'I'; first=11
         headers=['Date+time','Profile','Age','Gender',f'Target_x000a_({_unit_label(unit)})',
                  'Liquid name',f'Volume_x000a_({_unit_label(unit)})','Cup used']
         if mixed:headers+=['Profile unit','Volume (profile unit)']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
-    else:
-        label='tblDailyIntake'
+    elif table_number==2:
+        label='tblDailyIntake';first=11
         assert liquid_headers is not None
         right=_col(10+len(liquid_headers)+(2 if mixed else 0))
         headers=['Date','Profile','Age','Gender','Full day',f'Target_x000a_({_unit_label(unit)})','Drink_x000a_count',f'Volume_x000a_({_unit_label(unit)})','%']
         if mixed:headers+=['Profile unit','Volume (profile unit)']
         headers += [name.replace('\n','_x000a_') for name in liquid_headers]
         attrs='headerRowDxfId="0" dataDxfId="32" headerRowBorderDxfId="30" tableBorderDxfId="31" totalsRowBorderDxfId="29"'
-    # Excel tables must have at least one row below their header in the table range.
-    rng=f'B11:{right}{max(12,bottom)}'
+    elif 3<=table_number<=6:
+        label=f'Table{table_number-2}'; first=8 if table_number==6 else 9
+        if settings_headers is None:raise ValueError('Settings table headers missing')
+        headers=[str(h).replace('\n','_x000a_') for h in settings_headers]
+        right=_col(len(headers)+1)
+        attrs=''
+    else:
+        raise ValueError('Invalid table number')
+    # A table range always contains at least one data row (can be blank).
+    rng=f'B{first}:{right}{max(first+1,bottom)}'
     return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
        '<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
        f'id="{table_number}" name="{label}" displayName="{label}" ref="{rng}" totalsRowShown="0" {attrs}>'
        f'<autoFilter ref="{rng}"/>'
        f'<tableColumns count="{len(headers)}">' + ''.join(f'<tableColumn id="{i}" name="{_xml(head)}"/>' for i,head in enumerate(headers,1))
        + '</tableColumns><tableStyleInfo showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>').encode('utf-8')
-
 
 
 def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[bytes,int,dict[str,int]]:
@@ -650,13 +659,13 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                  f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',
                  max(12,11+len(days)),True),
       _worksheet(3,typesrows,[3.21,16,16,17.42,16.21,7.71,12,13,8.21,8.21,9.21,8.29,7.64],
-                 f'M{max(10,liquid_row)}',max(10,liquid_row)),
+                 f'M{max(10,liquid_row)}',max(10,liquid_row),True),
       _worksheet(4,cupsrows,[3.71,16,16,16.29,12,18.64,7.21,7.71,9.79,10.64],
-                 f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups))),
+                 f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups)),True),
       _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,9.79,22,18.07,19,13.43],
-                 f'N{max(10,rownum)}',max(10,rownum)),
+                 f'N{max(10,rownum)}',max(10,rownum),True),
       _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14],
-                 f'I{max(9,8+len(profiles))}',max(9,8+len(profiles))),
+                 f'I{max(9,8+len(profiles))}',max(9,8+len(profiles)),True),
     ]
     # Standard OOXML container. In-cell images are native rich-value metadata
     # (the same representation as in the user's six-tab reference workbook).
@@ -673,7 +682,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
           '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
           '<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
           +''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1,7))
-          +''.join(f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>' for i in range(1,3))
+          +''.join(f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>' for i in range(1,7))
         )
         if icon_images:
             parts+=(
@@ -717,13 +726,22 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
             z.writestr(path,contents)
         for i,xml in enumerate(content,1):
             z.writestr(f'xl/worksheets/sheet{i}.xml',xml)
+            z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',
+              '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+              f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+              f'<Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/>'
+              '</Relationships>')
             if i<=2:
-                z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',
-                  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                  f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                  f'<Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/>'
-                  '</Relationships>')
+                bottom=max(12,11+(len(records) if i==1 else len(days)))
                 z.writestr(f'xl/tables/table{i}.xml',
-                    _table(i,max(12,11+(len(records) if i==1 else len(days))),
-                           liquid_headers if i==2 else None,export_unit,mixed))
+                    _table(i,bottom,liquid_headers if i==2 else None,export_unit,mixed))
+            else:
+                header_row=8 if i==6 else 9
+                headers=[cell[1] for cell in sorted(({
+                    3:typesrows,4:cupsrows,5:quick_rows,6:profrows}[i])[header_row],
+                    key=lambda x:x[0])]
+                bottom={3:max(10,liquid_row),4:max(10,9+len(unique_cups)),
+                        5:max(10,rownum),6:max(9,8+len(profiles))}[i]
+                z.writestr(f'xl/tables/table{i}.xml',
+                    _table(i,bottom,settings_headers=headers))
     return buffer.getvalue()
