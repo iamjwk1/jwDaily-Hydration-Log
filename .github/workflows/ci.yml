@@ -23,6 +23,7 @@ jobs:
           python tests/legacy_cleanup_v4_qa.py
           python tests/beta32_excel_contract_qa.py
           python tests/beta37_excel_units_qa.py
+          python tests/beta46_excel_reference_qa.py
           python tests/beta39_version_guard_qa.py
           python tests/beta40_restore_scope_qa.py
           python tests/beta43_data_timezone_qa.py
