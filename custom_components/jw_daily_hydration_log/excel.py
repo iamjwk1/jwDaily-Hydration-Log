@@ -1,7 +1,8 @@
-"""Export jwDaily Hydration Log as the user's four-sheet Excel reference workbook.
+"""Export jwDaily Hydration Log in the six-sheet reference workbook layout.
 
-Four worksheets, cell layout, dates, fonts, fills, borders, tables, and frozen
-headers follow the user-supplied 20261109-1428 workbook. Profile data, drink
+Six worksheets match the user-supplied 20261120-1703 workbook: data rows
+are 18 pt and vertically centered, with the log header 38 pt, Daily intake
+liquid-only column auto sizing and fully separate Settings tabs. Profile data, drink
 history and UI settings come exclusively from Home Assistant snapshots.
 
 The generated XLSX is in memory, with no public URL, temporary files, macros,
@@ -23,8 +24,8 @@ from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
 from .excel_icons import drawing_parts
 
-VERSION = '1.1.0-beta.37'
-SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
+VERSION = '1.1.0-beta.46'
+SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
 # extracted from the supplied Excel reference. Values contain no workbook cells.
@@ -126,39 +127,59 @@ def _dataset_period(profiles: list[dict], tz: ZoneInfo, now: datetime) -> str:
     return f'{part(first)} - {part(now)}'
 
 
-def _cols(widths: list[float]) -> str:
-    return '<cols>' + ''.join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>' for i,w in enumerate(widths,1)) + '</cols>'
+def _cols(widths: list[float | tuple[float,bool]]) -> str:
+    """Fixed widths except Daily intake liquid columns flagged as best-fit."""
+    def tag(i, value):
+        width, auto = value if isinstance(value, tuple) else (value, False)
+        return (f'<col min="{i}" max="{i}" width="{width:.4f}"'
+                + (' bestFit="1"' if auto else '') + ' customWidth="1"/>')
+    return '<cols>' + ''.join(tag(i,w) for i,w in enumerate(widths,1)) + '</cols>'
+
+def _liquid_width(name: str, unit_label: str) -> tuple[float, bool]:
+    # Excel has no stored "autofit" operation. Calculate a fitted width and
+    # mark bestFit=1 for ONLY the liquid column, never the fixed metadata columns.
+    longest=max((len(part) for part in str(name).splitlines()),default=0)
+    return (float(max(8,min(30,max(longest,len(unit_label)+2)+2))), True)
+
 
 
 def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | None]]],
-               widths: list[float], last_cell: str, last_row: int,
+               widths: list[float | tuple[float,bool]], last_cell: str, last_row: int,
                table: bool = False, drawing: bool = False) -> bytes:
-    """Preformatted worksheet with reference workbook's B2 headings and B11 tables."""
+    """Reference worksheet positions B2/B4; proper 18pt body and centered text.
+
+    B11 is the header for the two data tables; settings have B9, profiles B8.
+    """
+    header_row = 11 if index in (1,2) else (8 if index == 6 else 9)
     parts=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
-     f'<dimension ref="{("B2:" if index in (1,2) else "A1:")}{last_cell}"/>',
-     '<sheetViews><sheetView workbookViewId="0"'+(' tabSelected="1"' if index==1 else '')+'>']
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+      f'<dimension ref="B2:{last_cell}"/>',
+      '<sheetViews><sheetView workbookViewId="0"'+(' tabSelected="1"' if index==1 else '')+'>']
     if index in (1,2):
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
-    parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
+    parts += ['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>',
+              _cols(widths),'<sheetData>']
     for row in sorted(rows):
-        rowheight=(' ht="44" customHeight="1"' if index==3 and row>=2 else (' ht="44" customHeight="1"' if index==1 and row>=11 else (' ht="44" customHeight="1"' if index==2 and row==11 else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else ''))))
+        if row >= header_row:
+            if row == header_row:
+                height = 38 if index == 1 else (44 if index == 2 else 43.75)
+            else:
+                height = 18
+            rowheight = f' ht="{height}" customHeight="1"'
+        elif row == 2:
+            rowheight=' ht="18.45" customHeight="1"'
+        else:
+            rowheight=''
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
         parts.append('</row>')
     parts.append('</sheetData>')
-    if index == 3:
-        # Keep the original per-liquid settings worksheet filter behavior.
-        parts.append(f'<autoFilter ref="A1:{last_cell}"/>')
-    # ECMA-376 worksheet schema: pageMargins MUST precede tableParts.
-    # beta.8 reversed these and desktop Excel removed sheets 1 and 2.
+    # Order follows ECMA-376: margins before drawing/tableParts.
     parts.append('<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>')
-    if drawing:
-        parts.append('<drawing r:id="rId1"/>')
-    if table:
-        parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
+    if drawing:parts.append('<drawing r:id="rId1"/>')
+    if table:parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
     parts.append('</worksheet>')
     return ''.join(parts).encode('utf-8')
 
@@ -274,8 +295,21 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
         ' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','')
     match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
     original=original[:match.start()]+inject(match,('cellXfs',left_style),left_date_style_id+1)+original[match.end():]
+    # Set vertical center for every style used by header and data cells while
+    # preserving their existing font, fill, number format and horizontal alignment.
+    # Edit the raw XML to retain Office prefix declarations (mc:x14ac/etc).
+    match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
+    if match is None:raise ValueError('Missing cell style collection')
+    def center(x):
+        if re.search(r'<alignment\\b', x):
+            return re.sub(r'<alignment\\b([^>]*)/?>',lambda m:
+                '<alignment'+re.sub(r'\\svertical="[^"]*"', '', m.group(1)).rstrip('/').rstrip()
+                +' vertical="center"/>',x,count=1)
+        return x.replace('</xf>','<alignment vertical="center"/></xf>')
+    cells=re.sub(r'<xf\\b[^>]*(?:/>|>.*?</xf>)',lambda m:center(m.group(0)),match.group(2),flags=re.S)
+    original=original[:match.start(2)]+cells+original[match.end(2):]
     ET.fromstring(original)
-    return original.encode('utf-8'),new_style_id,color_style_ids,left_date_style_id
+    return original.encode('utf-8'),new_style_id,color_styles if False else color_style_ids,left_date_style_id
 
 
 def _record_table(profiles: list[dict], tz: ZoneInfo):
