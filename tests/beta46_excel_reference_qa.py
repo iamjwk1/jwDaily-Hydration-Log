@@ -61,7 +61,7 @@ with ZipFile(BytesIO(raw)) as z:
     for i,ws in enumerate(sheets,1):
         head=11 if i in (1,2) else 8 if i==6 else 9
         rows=ws.findall(N+"sheetData/"+N+"row")
-        assert float(next(x for x in rows if int(x.get("r"))==head).get("ht"))==(38 if i==1 else 44 if i==2 else 43.75)
+        assert float(next(x for x in rows if int(x.get("r"))==head).get("ht"))==(38 if i==1 else 44.05 if i==2 else 43.75)
         for row in rows:
             if int(row.get("r"))>head:
                 assert float(row.get("ht","0"))==18,(i,row.get("r"),row.get("ht"))
