@@ -465,71 +465,119 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                      for col,value in enumerate(values,2)]
     if not days:drows[12]=[]
 
-    # Sheet 3: native Liquid catalogue only; no legacy default volumes or alias columns.
-    typesrows={1:[(i,h,1,None) for i,h in enumerate(
-       ['Scope','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image','Custom','Liquid order',
-        'Visible in picker','Color','Status','Drink count'],1)]}
-    icon_rows=[]
-    for p in profiles[:1]:
-        hist=collections.Counter(str(r.get('liquid_type_id') or 'unknown')
-                                 for subject in profiles for r in subject.get('records',[])
-                                 if r.get('kind')=='drink')
-        for _,position,typ,color in (item for item in export_types if item[0] is p):
-            ident=typ.get('id','')
-            row=len(typesrows)+1
-            vals=['All profiles',ident,typ.get('name',''),typ.get('icon_mdi',''),None,
-                  typ.get('icon_svg',''),bool(typ.get('custom',False)),position,
-                  not bool(typ.get('hidden',False)),color,
-                  'Hidden' if typ.get('hidden') else 'Active',hist[ident]]
-            icon_rows.append((row,typ.get('icon_mdi',''),color))
-            typesrows[row]=[(i,value,color_styles.get(color,0) if i==10 else 0,None)
-                            for i,value in enumerate(vals,1)]
+    # All three settings catalogs and profile metadata are separate sheets,
+    # matching the supplied six-sheet workbook (not the older combined sheet).
+    def settings_meta(title, count_label=None, count_value=None):
+        rows={2:[(2, title, 1, None)],
+              4:[(2,'Export date',2,None),(3,_serial(now),left_date_style,None)],
+              5:[(2,'Integration version',0,None),(3,VERSION,0,None)],
+              6:[(2,'Number of profiles',0,None),(3,len(profiles),3,None)]}
+        if count_label is not None:
+            rows[7]=[(2,count_label,2,None),(3,count_value,3,None)]
+        return rows
 
-    # Sheet 4: current Cup and Quick configuration first, old buttons last.
-    buttonsrows={1:[(1,'Cup types — current configuration',2,None)]}
-    row=2
-    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Cup ID','Name','Default volume mL','MDI icon','Order','Visible'],1)]
-    for p in profiles[:1]:
+    def header(rows, row_number, names):
+        rows[row_number]=[(i,h,6,None) for i,h in enumerate(names,2)]
+
+    # Settings - Liquid Types: B9:M9, one row per profile and type.
+    typesrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Defined liquid types',
+                            'Nr of liquid types',sum(len(p.get('liquid_definitions') or []) for p in profiles))
+    header(typesrows,9,['Profile','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image',
+                        'Custom','Liquid order','Visible in picker','Color','Status','Nr of times used'])
+    icon_rows=[]
+    used=collections.Counter((str(p.get('config',{}).get('name','')),str(rec.get('liquid_type_id','')))
+          for p in profiles for rec in p.get('records',[]) if rec.get('kind')=='drink')
+    liquid_row=9
+    for p,pos,typ,color in export_types:
+        liquid_row+=1
+        ident=str(typ.get('id') or '')
+        p_name=str(p.get('config',{}).get('name',''))
+        svg=typ.get('icon_svg') or ''
+        # An actual embedded icon is rendered in F; no error-prone IMAGE formula.
+        vals=[p_name,ident,typ.get('name',ident),typ.get('icon_mdi',''),
+              None,'Yes' if svg else '',bool(typ.get('custom',False)),pos,
+              not bool(typ.get('hidden',False)),color,
+              'Hidden' if typ.get('hidden') else 'Active',used[(p_name,ident)]]
+        typesrows[liquid_row]=[(col,val,color_styles.get(color.upper(),11) if col==11 else 11,None)
+                               for col,val in enumerate(vals,2)]
+        icon_rows.append((liquid_row,typ.get('icon_mdi',''),typ.get('icon_color') or color))
+    if liquid_row==9:typesrows[10]=[]
+
+    # Settings - Cup types: B9:J9. Shared definitions are not repeated per
+    # profile; profile-specific definitions (if any) retain their owner.
+    unique_cups=[]
+    seen=set()
+    for p in profiles:
         for pos,cup in enumerate(p.get('cup_types') or [],1):
-            row+=1
-            vals=['All profiles',cup.get('id',''),cup.get('name',''),
-                  cup.get('default_volume_ml'),cup.get('icon_mdi',''),pos,not cup.get('hidden',False)]
-            buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
-    row+=3
-    buttonsrows[row]=[(1,'Quick buttons — current configuration',2,None)]
-    row+=1
-    headers=['Profile','Button ID','Liquid ID','Liquid name','Cup ID','Cup name',
-             'Label mode','Effective button label','Order','Default volume mL','Visible','Custom label','MDI icon']
-    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(headers,1)]
+            ident=str(cup.get('id',''))
+            if ident in seen:continue
+            seen.add(ident)
+            unique_cups.append((p,pos,cup))
+    cupsrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Cup types',
+                           'Nr of cup types',len(unique_cups))
+    header(cupsrows,9,['Profile','Cup Type ID','Name','Default volume\n(mL)',
+                       'MDI icon','Icon graphic','SVG Image','Order','Visible'])
+    for rownum,(p,pos,cup) in enumerate(unique_cups,10):
+        vals=['All profiles' if len(profiles)>0 else p['config']['name'],
+              cup.get('id',''),cup.get('name',''),cup.get('default_volume_ml'),
+              cup.get('icon_mdi',''),'', 'Yes' if cup.get('icon_svg') else '',
+              pos,'No' if cup.get('hidden',False) else 'Yes']
+        cupsrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+    if not unique_cups:cupsrows[10]=[]
+
+    # Settings - Quick buttons: B9:N9; the saved per-profile order and
+    # effective label are exported exactly as used by the cards.
+    quick_rows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Quick buttons',
+                             'Nr of quick buttons',sum(len(p.get('quick_buttons') or []) for p in profiles))
+    header(quick_rows,9,['Profile','Button ID','Effective button label','Label mode',
+                         'Default volume\n(mL)','Visible','Custom label','MDI icon',
+                         'Order','Liquid ID','Liquid name','Cup ID','Cup name'])
+    rownum=9
     for p in profiles:
         cups={c.get('id'):c for c in p.get('cup_types') or []}
-        liquids={c.get('id'):c.get('name',c.get('id')) for c in p.get('liquid_definitions') or []}
+        liquids={l.get('id'):l.get('name',l.get('id')) for l in p.get('liquid_definitions') or []}
         for pos,q in enumerate(p.get('quick_buttons') or [],1):
-            row+=1
+            rownum+=1
             cid=q.get('cup_type_id','');lid=q.get('liquid_type_id','')
-            vals=[p['config']['name'],q.get('id',''),lid,liquids.get(lid,lid),cid,
-                  cups.get(cid,{}).get('name',cid),q.get('label_mode','automatic'),
-                  q.get('label',''),pos,cups.get(cid,{}).get('default_volume_ml'),
-                  not q.get('hidden',False),q.get('custom_label',''),q.get('icon_mdi','')]
-            buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
-    row+=3
-    buttonsrows[row]=[(1,'Profile settings — exported values',2,None)]
-    row+=1
-    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Age','Gender','Unit','Daily target mL','Target override mL','Quick button count'],1)]
-    for p in profiles:
-        row+=1
-        cfg=p['config']
-        values=[cfg.get('name'),cfg.get('age'),cfg.get('gender'),cfg.get('unit'),
-                p.get('target_ml'),p.get('target_override_ml'),len(p.get('quick_buttons') or [])]
-        buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
+            cup_name=cups.get(cid,{}).get('name',cid)
+            liquid_name=liquids.get(lid,lid)
+            label=q.get('label') or q.get('custom_label') or f'{liquid_name} ({cup_name})'
+            vals=[p['config'].get('name',''),q.get('id',''),label,
+                  q.get('label_mode','automatic'),cups.get(cid,{}).get('default_volume_ml'),
+                  'No' if q.get('hidden') else 'Yes',q.get('custom_label',''),
+                  q.get('icon_mdi',''),pos,lid,liquid_name,cid,cup_name]
+            quick_rows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+    if rownum==9:quick_rows[10]=[]
+
+    # Settings - Profiles: B8:I8; identities and targets from HA snapshots.
+    profrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Profiles')
+    header(profrows,8,['Profile','Profile ID','Age','Gender','Unit',
+                       'Daily target mL','Target override mL','Quick button count'])
+    for rownum,p in enumerate(profiles,9):
+        cfg=p.get('config') or {}
+        vals=[cfg.get('name'),p.get('slug') or p.get('entry_id') or cfg.get('slug') or '',
+              cfg.get('age'),cfg.get('gender'),_unit(p),
+              p.get('target_ml'),p.get('target_override_ml'),
+              len(p.get('quick_buttons') or [])]
+        profrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+    if not profiles:profrows[9]=[]
     drawing_xml,drawing_rels,icon_images=drawing_parts(icon_rows)
     content=[
-     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),f'{"K" if mixed else "I"}{max(12,11+len(records))}',max(12,11+len(records)),True),
-     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+([16,21] if mixed else [])+[10]*len(ordered_types),f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[16,24,22,23,13,18,13,19,25,15,19,21],f'L{max(1,len(typesrows))}',len(typesrows),drawing=bool(icon_images)),
-     _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24,24],f'M{max(1,max(buttonsrows))}',len(buttonsrows)),
+      _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),
+                 f'{"K" if mixed else "I"}{max(12,11+len(records))}',max(12,11+len(records)),True),
+      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+([16,21] if mixed else [])
+                 +[_liquid_width(name,_unit_label(export_unit if not mixed else 'mL'))
+                   for _,name,_ in ordered_types],
+                 f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',
+                 max(12,11+len(days)),True),
+      _worksheet(3,typesrows,[3.21,16,16,17.42,16.21,7.71,12,13,8.21,8.21,9.21,8.29,7.64],
+                 f'M{max(10,liquid_row)}',max(10,liquid_row),drawing=bool(icon_images)),
+      _worksheet(4,cupsrows,[3.71,16,16,16.29,12,18.64,7.21,7.71,9.79,10.64],
+                 f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups))),
+      _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,9.79,22,18.07,19,13.43],
+                 f'N{max(10,rownum)}',max(10,rownum)),
+      _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14],
+                 f'I{max(9,8+len(profiles))}',max(9,8+len(profiles))),
     ]
     # Standard OOXML ZIP container. Includes reference styles and native tables.
     buffer=BytesIO()
