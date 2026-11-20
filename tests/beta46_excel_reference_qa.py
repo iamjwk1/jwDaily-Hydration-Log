@@ -50,7 +50,8 @@ with ZipFile(BytesIO(raw)) as z:
     names=set(z.namelist())
     assert len([n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")])==6
     assert "xl/drawings/drawing1.xml" not in names
-    assert "xl/worksheets/_rels/sheet3.xml.rels" not in names
+    assert "xl/worksheets/_rels/sheet3.xml.rels" in names
+    assert b"drawing" not in z.read("xl/worksheets/_rels/sheet3.xml.rels")
     for n in names:
         if n.endswith((".xml",".rels")):ET.fromstring(z.read(n))
     workbook=ET.fromstring(z.read("xl/workbook.xml"))
@@ -103,6 +104,7 @@ with ZipFile(BytesIO(raw)) as z:
                 xf=xfs[int(c.get("s","0"))]
                 align=xf.find(N+"alignment")
                 assert align is not None and align.get("vertical")=="center",(i,c.get("r"),c.get("s"))
-    assert len([n for n in names if n.startswith("xl/tables/table")])==2
+    assert len([n for n in names if n.startswith("xl/tables/table")])==6
+    assert [ET.fromstring(z.read(f"xl/tables/table{i}.xml")).get("name") for i in range(3,7)]==["Table1","Table2","Table3","Table4"]
     assert len(profiles[0]["records"])==1
 print("BETA46_SIX_SHEETS_TRUE_PLACE_IN_CELL_QA_PASS",len(raw),"bytes")
