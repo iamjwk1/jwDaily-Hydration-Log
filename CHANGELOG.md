@@ -1,3 +1,9 @@
+## v1.1.0-beta.46 (2026-11-20)
+- Excel reference workbook format updated from four to six separately filterable sheets.
+- All data rows 18pt and vertically centered; Hydration log header 38pt; Daily intake only liquid widths best fit.
+- Liquid icons now use genuine Excel Place in Cell rich-value image metadata (no floating DrawingML).
+- No storage, profile data, Excel unit conversion or restore changes.
+
 ## v1.1.0-beta.45 (2026-11-19)
 - Fix Add drink horizontal scrollbar and clipped Time field when only Quick Buttons or full Liquid/Cup sections appear.
 - Reduce manual-input CSS grid to 165 / 190 / 145 px (plus gaps) within the standard 660px modal.
