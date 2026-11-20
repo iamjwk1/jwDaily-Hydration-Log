@@ -384,7 +384,7 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
                 '<alignment'+re.sub(r'\svertical="[^"]*"', '', m.group(1))
                 +' vertical="center"/>',raw,count=1)
         return raw.replace('</xf>','<alignment vertical="center"/></xf>')
-    xfs_xml=re.sub(r'<xf\b[^>]*(?:/>|>.*?</xf>)',
+    xfs_xml=re.sub(r'<xf\b[^>]*?/>|<xf\b[^>]*>.*?</xf>',
                    lambda m:center_xf(m.group(0)), match.group(2),flags=re.S)
     original=original[:match.start(2)]+xfs_xml+original[match.end(2):]
     ET.fromstring(original)
