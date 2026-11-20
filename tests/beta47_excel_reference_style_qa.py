@@ -77,7 +77,7 @@ with ZipFile(BytesIO(result)) as z:
         if i!=2:
             got=ET.tostring(ws.find(ns+"cols"))
             expected=ET.fromstring(reference.REFERENCE_COLS[i])
-            assert got==ET.tostring(expected),(i,"Reference fixed column widths changed")
+            assert [dict(c.attrib) for c in ws.find(ns+"cols")]==[dict(c.attrib) for c in expected],(i,"Reference fixed column widths changed")
         else:
             cols=list(ws.find(ns+"cols"))
             assert all(c.get("bestFit")!="1" for c in cols if int(c.get("max"))<=10)
