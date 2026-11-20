@@ -90,7 +90,7 @@ async def main():
     xlsx=excel.export_xlsx([c2.export_snapshot()], when=datetime(2026,11,12,22,0,tzinfo=timezone.utc))
     with zipfile.ZipFile(io.BytesIO(xlsx)) as z:
         assert z.testzip() is None
-        wb=z.read('xl/workbook.xml').decode();assert wb.count('<sheet name=')==4
+        wb=z.read('xl/workbook.xml').decode();assert wb.count('<sheet name=')==6
         assert b'Legacy liquid ID' in z.read('xl/worksheets/sheet1.xml') or b'Legacy' not in z.read('xl/worksheets/sheet1.xml')
         assert b'Original volume buttons' not in z.read('xl/worksheets/sheet4.xml')
         assert b'Legacy default' not in z.read('xl/worksheets/sheet3.xml')

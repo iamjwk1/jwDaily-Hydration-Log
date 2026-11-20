@@ -1,4 +1,4 @@
-# jwDaily Hydration Log v1.1.0-beta.45
+# jwDaily Hydration Log v1.1.0-beta.46
 
 **Home Assistant custom integration (HACS prerelease).** Stable production release remains `v1.0.2`.
 
@@ -6,9 +6,11 @@ Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); original upstream MIT notice retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current release: v1.1.0-beta.45
+## Current release: v1.1.0-beta.46
 
-- Install with **HACS → jwDaily Hydration Log → Redownload → Need a different version? → v1.1.0-beta.45**, then restart Home Assistant Core and reload the browser.
+**Excel export (beta.46):** six separate reference-matched worksheets, 18pt vertically centered body rows, 38pt Hydration log header, only Daily intake Liquid type columns content-fit, six filterable tables and native Excel **Place in Cell** images (requires Microsoft Excel with that feature). No historical data is embedded in release files; all exported values are read from Home Assistant. See `RELEASE_NOTES_v1.1.0-beta.46.md`.
+
+- Install with **HACS → jwDaily Hydration Log → Redownload → Need a different version? → v1.1.0-beta.46**, then restart Home Assistant Core and reload the browser.
 - Native hydration profile/ledger history, 4-sheet Excel export, Quick buttons, separately editable Liquid/Cup catalog, and full ZIP backup with **Everything / Settings only / Data only** restore remain supported.
 - Per-profile **Edit profile → Add drink moment** settings: show Quick buttons and/or Liquid/Cup types (default both visible, at least one selector must remain enabled). Date, amount and time fields have equal heights and align on desktop.
 - Beta.45 corrects horizontal Add drink modal scrolling caused by overly wide manual-entry grid tracks; field widths now fit the dialog.
@@ -17,7 +19,7 @@ Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com
 - Dashboard bug fix: chart target labels respect `mL`, `L`, and `fl oz` without double conversion; chart history requests use the configured Home Assistant timezone.
 - Imported backup archives use the Home Assistant profile-local calendar day when checking dates, preventing valid post-midnight records being treated as tomorrow.
 - Edit Profile dialogue uses the accepted narrower width (PR #22).
-- See `RELEASE_NOTES_v1.1.0-beta.45.md` and `AUDIT_v1.1.0-beta.45.md` for release QA and remaining cleanup items.
+- See `RELEASE_NOTES_v1.1.0-beta.46.md` and `AUDIT_v1.1.0-beta.46.md` for release QA and remaining cleanup items.
 
 **Before upgrading:** create a full ZIP backup and a Home Assistant backup. Do not replace or delete existing profile storage files manually. Live acceptance and historic-data checks are separate from automated CI.
 

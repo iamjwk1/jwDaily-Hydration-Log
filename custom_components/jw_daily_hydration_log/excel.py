@@ -1,7 +1,8 @@
-"""Export jwDaily Hydration Log as the user's four-sheet Excel reference workbook.
+"""Export jwDaily Hydration Log in the six-sheet reference workbook layout.
 
-Four worksheets, cell layout, dates, fonts, fills, borders, tables, and frozen
-headers follow the user-supplied 20261109-1428 workbook. Profile data, drink
+Six worksheets match the user-supplied 20261120-1703 workbook: data rows
+are 18 pt and vertically centered, with the log header 38 pt, Daily intake
+liquid-only column auto sizing and fully separate Settings tabs. Profile data, drink
 history and UI settings come exclusively from Home Assistant snapshots.
 
 The generated XLSX is in memory, with no public URL, temporary files, macros,
@@ -13,6 +14,7 @@ import base64
 import collections
 import copy
 from datetime import datetime, date, timezone
+from dataclasses import dataclass
 from io import BytesIO
 import math
 import xml.etree.ElementTree as ET
@@ -21,10 +23,10 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
-from .excel_icons import drawing_parts
+from .excel_icons import png_icon
 
-VERSION = '1.1.0-beta.37'
-SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cups and Quick']
+VERSION = '1.1.0-beta.46'
+SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
 # extracted from the supplied Excel reference. Values contain no workbook cells.
@@ -75,8 +77,20 @@ def _col(index: int) -> str:
     return letters
 
 
+@dataclass(frozen=True)
+class InCellImage:
+    """Native Excel Place in Cell image, referenced via rich value metadata."""
+    number: int
+
+
 def _cell(address: str, value, style: int = 0, formula: str | None = None) -> str:
     attrs = f' r="{address}" s="{style}"'
+    if isinstance(value, InCellImage):
+        if value.number < 1:raise ValueError('Invalid Place in Cell image index')
+        # Excel's own saved Place in Cell representation uses a cached #VALUE!
+        # and vm=index. The rich-value metadata supplies the actual image and
+        # Excel displays the image, not the cached fallback error.
+        return f'<c{attrs} t="e" vm="{value.number}"><v>#VALUE!</v></c>'
     if value is None:
         return f'<c{attrs}/>'
     if isinstance(value, bool):
@@ -126,68 +140,160 @@ def _dataset_period(profiles: list[dict], tz: ZoneInfo, now: datetime) -> str:
     return f'{part(first)} - {part(now)}'
 
 
-def _cols(widths: list[float]) -> str:
-    return '<cols>' + ''.join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>' for i,w in enumerate(widths,1)) + '</cols>'
+def _cols(widths: list[float | tuple[float,bool]]) -> str:
+    """Fixed widths except Daily intake liquid columns flagged as best-fit."""
+    def tag(i, value):
+        width, auto = value if isinstance(value, tuple) else (value, False)
+        return (f'<col min="{i}" max="{i}" width="{width:.4f}"'
+                + (' bestFit="1"' if auto else '') + ' customWidth="1"/>')
+    return '<cols>' + ''.join(tag(i,w) for i,w in enumerate(widths,1)) + '</cols>'
+
+def _liquid_width(name: str, unit_label: str) -> tuple[float, bool]:
+    # Excel has no stored "autofit" operation. Calculate a fitted width and
+    # mark bestFit=1 for ONLY the liquid column, never the fixed metadata columns.
+    longest=max((len(part) for part in str(name).splitlines()),default=0)
+    return (float(max(8,min(30,max(longest,len(unit_label)+2)+2))), True)
+
 
 
 def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | None]]],
-               widths: list[float], last_cell: str, last_row: int,
+               widths: list[float | tuple[float,bool]], last_cell: str, last_row: int,
                table: bool = False, drawing: bool = False) -> bytes:
-    """Preformatted worksheet with reference workbook's B2 headings and B11 tables."""
+    """Reference worksheet positions B2/B4; proper 18pt body and centered text.
+
+    B11 is the header for the two data tables; settings have B9, profiles B8.
+    """
+    header_row = 11 if index in (1,2) else (8 if index == 6 else 9)
     parts=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
-     f'<dimension ref="{("B2:" if index in (1,2) else "A1:")}{last_cell}"/>',
-     '<sheetViews><sheetView workbookViewId="0"'+(' tabSelected="1"' if index==1 else '')+'>']
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+      f'<dimension ref="B2:{last_cell}"/>',
+      '<sheetViews><sheetView workbookViewId="0"'+(' tabSelected="1"' if index==1 else '')+'>']
     if index in (1,2):
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
-    parts+=['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>', _cols(widths), '<sheetData>']
+    parts += ['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>',
+              _cols(widths),'<sheetData>']
     for row in sorted(rows):
-        rowheight=(' ht="44" customHeight="1"' if index==3 and row>=2 else (' ht="44" customHeight="1"' if index==1 and row>=11 else (' ht="44" customHeight="1"' if index==2 and row==11 else (' ht="18.45" customHeight="1"' if row==2 and index in (1,2) else ''))))
+        if row >= header_row:
+            if row == header_row:
+                height = 38 if index == 1 else (44 if index == 2 else 43.75)
+            else:
+                height = 18
+            rowheight = f' ht="{height}" customHeight="1"'
+        elif row == 2:
+            rowheight=' ht="18.45" customHeight="1"'
+        else:
+            rowheight=''
         parts.append(f'<row r="{row}"{rowheight}>')
         for col,value,style,formula in sorted(rows[row],key=lambda x:x[0]):
             parts.append(_cell(f'{_col(col)}{row}',value,style,formula))
         parts.append('</row>')
     parts.append('</sheetData>')
-    if index == 3:
-        # Keep the original per-liquid settings worksheet filter behavior.
-        parts.append(f'<autoFilter ref="A1:{last_cell}"/>')
-    # ECMA-376 worksheet schema: pageMargins MUST precede tableParts.
-    # beta.8 reversed these and desktop Excel removed sheets 1 and 2.
+    # Order follows ECMA-376: margins before drawing/tableParts.
     parts.append('<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>')
-    if drawing:
-        parts.append('<drawing r:id="rId1"/>')
-    if table:
-        parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
+    if drawing:parts.append('<drawing r:id="rId1"/>')
+    if table:parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
     parts.append('</worksheet>')
     return ''.join(parts).encode('utf-8')
 
 
-def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None, unit: str = 'mL', mixed: bool = False) -> bytes:
-    """Structured Excel tables, including table filters and header layout."""
+def _in_cell_image_parts(images: list[bytes]) -> dict[str, bytes]:
+    """OOXML native *Place in Cell*, not a floating DrawingML shape.
+
+    Schema and relationships mirror a Microsoft Excel 365 workbook saved with
+    Insert → Pictures → Place in Cell (rich value / XLRICHVALUE metadata).
+    """
+    count=len(images)
+    if not count:return {}
+    def xml(text):return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+text).encode('utf-8')
+    metadata=(''
+      '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:xlrd="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata">'
+      '<metadataTypes count="1"><metadataType name="XLRICHVALUE" minSupportedVersion="120000" '
+      'copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" '
+      'rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1"/></metadataTypes>'
+      f'<futureMetadata name="XLRICHVALUE" count="{count}">'
+      +''.join('<bk><extLst><ext uri="{3e2802c4-a4d2-4d8b-9148-e3be6c30e623}">'
+               f'<xlrd:rvb i="{i}"/></ext></extLst></bk>' for i in range(count))
+      +f'</futureMetadata><valueMetadata count="{count}">'
+      +''.join(f'<bk><rc t="1" v="{i}"/></bk>' for i in range(count))
+      +'</valueMetadata></metadata>')
+    rv_structure=(''
+      '<rvStructures xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="1">'
+      '<s t="_localImage"><k n="_rvRel:LocalImageIdentifier" t="i"/>'
+      '<k n="CalcOrigin" t="i"/></s></rvStructures>')
+    rv_data=(''
+      f'<rvData xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="{count}">'
+      +''.join(f'<rv s="0"><v>{i}</v><v>5</v></rv>' for i in range(count))
+      +'</rvData>')
+    types=(''
+      '<rvTypesInfo xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2" '
+      'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+      'mc:Ignorable="x" xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '<global><keyFlags>'
+      +''.join(f'<key name="{name}"><flag name="ExcludeFromCalcComparison" value="1"/></key>'
+               for name in ('_DisplayString','_Flags','_Format','_SubLabel','_Attribution',
+                            '_Icon','_Display','_CanonicalPropertyNames','_ClassificationId'))
+      +'<key name="_Self"><flag name="ExcludeFromFile" value="1"/>'
+      '<flag name="ExcludeFromCalcComparison" value="1"/></key>'
+      '</keyFlags></global></rvTypesInfo>')
+    rel_list=(''
+      '<richValueRels xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/richvaluerel" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      +''.join(f'<rel r:id="rId{i+1}"/>' for i in range(count))
+      +'</richValueRels>')
+    rels=(''
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      +''.join(f'<Relationship Id="rId{i+1}" '
+               'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+               f'Target="../media/image{i+1}.png"/>' for i in range(count))
+      +'</Relationships>')
+    parts={
+      'xl/metadata.xml':xml(metadata),
+      'xl/richData/rdrichvaluestructure.xml':xml(rv_structure),
+      'xl/richData/rdrichvalue.xml':xml(rv_data),
+      'xl/richData/rdRichValueTypes.xml':xml(types),
+      'xl/richData/richValueRel.xml':xml(rel_list),
+      'xl/richData/_rels/richValueRel.xml.rels':xml(rels),
+    }
+    parts.update({f'xl/media/image{i+1}.png':png for i,png in enumerate(images)})
+    return parts
+
+
+def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None,
+           unit: str = 'mL', mixed: bool = False,
+           settings_headers: list[str] | None = None) -> bytes:
+    """Reference-style structured tables, usable filters on all six sheets."""
     if table_number==1:
-        label='tblHydrationLog'; right='K' if mixed else 'I'
+        label='tblHydrationLog'; right='K' if mixed else 'I'; first=11
         headers=['Date+time','Profile','Age','Gender',f'Target_x000a_({_unit_label(unit)})',
                  'Liquid name',f'Volume_x000a_({_unit_label(unit)})','Cup used']
         if mixed:headers+=['Profile unit','Volume (profile unit)']
         attrs='headerRowDxfId="15" dataDxfId="26" headerRowBorderDxfId="24" tableBorderDxfId="25" totalsRowBorderDxfId="23"'
-    else:
-        label='tblDailyIntake'
+    elif table_number==2:
+        label='tblDailyIntake';first=11
         assert liquid_headers is not None
         right=_col(10+len(liquid_headers)+(2 if mixed else 0))
         headers=['Date','Profile','Age','Gender','Full day',f'Target_x000a_({_unit_label(unit)})','Drink_x000a_count',f'Volume_x000a_({_unit_label(unit)})','%']
         if mixed:headers+=['Profile unit','Volume (profile unit)']
         headers += [name.replace('\n','_x000a_') for name in liquid_headers]
         attrs='headerRowDxfId="0" dataDxfId="32" headerRowBorderDxfId="30" tableBorderDxfId="31" totalsRowBorderDxfId="29"'
-    # Excel tables must have at least one row below their header in the table range.
-    rng=f'B11:{right}{max(12,bottom)}'
+    elif 3<=table_number<=6:
+        label=f'Table{table_number-2}'; first=8 if table_number==6 else 9
+        if settings_headers is None:raise ValueError('Settings table headers missing')
+        headers=[str(h).replace('\n','_x000a_') for h in settings_headers]
+        right=_col(len(headers)+1)
+        attrs=''
+    else:
+        raise ValueError('Invalid table number')
+    # A table range always contains at least one data row (can be blank).
+    rng=f'B{first}:{right}{max(first+1,bottom)}'
     return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
        '<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
        f'id="{table_number}" name="{label}" displayName="{label}" ref="{rng}" totalsRowShown="0" {attrs}>'
        f'<autoFilter ref="{rng}"/>'
        f'<tableColumns count="{len(headers)}">' + ''.join(f'<tableColumn id="{i}" name="{_xml(head)}"/>' for i,head in enumerate(headers,1))
        + '</tableColumns><tableStyleInfo showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>').encode('utf-8')
-
 
 
 def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[bytes,int,dict[str,int]]:
@@ -274,6 +380,22 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
         ' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','')
     match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
     original=original[:match.start()]+inject(match,('cellXfs',left_style),left_date_style_id+1)+original[match.end():]
+    # All exported cells must be vertically centered, including styled
+    # table-body cells, header text and the reference's date/percentage styles.
+    # Replace only <cellXfs> content so Excel's original mc/xr prefixes survive.
+    match=re.search(r'<cellXfs([^>]*)>(.*?)</cellXfs>', original, re.S)
+    if match is None:raise ValueError('Missing cell style collection')
+    def center_xf(raw: str) -> str:
+        if raw.endswith('/>'):
+            return raw[:-2]+'><alignment vertical="center"/></xf>'
+        if '<alignment' in raw:
+            return re.sub(r'<alignment\b([^>]*?)/>',lambda m:
+                '<alignment'+re.sub(r'\svertical="[^"]*"', '', m.group(1))
+                +' vertical="center"/>',raw,count=1)
+        return raw.replace('</xf>','<alignment vertical="center"/></xf>')
+    xfs_xml=re.sub(r'<xf\b[^>]*?/>|<xf\b[^>]*>.*?</xf>',
+                   lambda m:center_xf(m.group(0)), match.group(2),flags=re.S)
+    original=original[:match.start(2)]+xfs_xml+original[match.end(2):]
     ET.fromstring(original)
     return original.encode('utf-8'),new_style_id,color_style_ids,left_date_style_id
 
@@ -431,107 +553,195 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                      for col,value in enumerate(values,2)]
     if not days:drows[12]=[]
 
-    # Sheet 3: native Liquid catalogue only; no legacy default volumes or alias columns.
-    typesrows={1:[(i,h,1,None) for i,h in enumerate(
-       ['Scope','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image','Custom','Liquid order',
-        'Visible in picker','Color','Status','Drink count'],1)]}
-    icon_rows=[]
-    for p in profiles[:1]:
-        hist=collections.Counter(str(r.get('liquid_type_id') or 'unknown')
-                                 for subject in profiles for r in subject.get('records',[])
-                                 if r.get('kind')=='drink')
-        for _,position,typ,color in (item for item in export_types if item[0] is p):
-            ident=typ.get('id','')
-            row=len(typesrows)+1
-            vals=['All profiles',ident,typ.get('name',''),typ.get('icon_mdi',''),None,
-                  typ.get('icon_svg',''),bool(typ.get('custom',False)),position,
-                  not bool(typ.get('hidden',False)),color,
-                  'Hidden' if typ.get('hidden') else 'Active',hist[ident]]
-            icon_rows.append((row,typ.get('icon_mdi',''),color))
-            typesrows[row]=[(i,value,color_styles.get(color,0) if i==10 else 0,None)
-                            for i,value in enumerate(vals,1)]
+    # All three settings catalogs and profile metadata are separate sheets,
+    # matching the supplied six-sheet workbook (not the older combined sheet).
+    def settings_meta(title, count_label=None, count_value=None):
+        rows={2:[(2, title, 1, None)],
+              4:[(2,'Export date',2,None),(3,_serial(now),left_date_style,None)],
+              5:[(2,'Integration version',0,None),(3,VERSION,0,None)],
+              6:[(2,'Number of profiles',0,None),(3,len(profiles),3,None)]}
+        if count_label is not None:
+            rows[7]=[(2,count_label,2,None),(3,count_value,3,None)]
+        return rows
 
-    # Sheet 4: current Cup and Quick configuration first, old buttons last.
-    buttonsrows={1:[(1,'Cup types — current configuration',2,None)]}
-    row=2
-    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Cup ID','Name','Default volume mL','MDI icon','Order','Visible'],1)]
-    for p in profiles[:1]:
+    def header(rows, row_number, names):
+        rows[row_number]=[(i,h,6,None) for i,h in enumerate(names,2)]
+
+    # Settings - Liquid Types: B9:M9, one row per profile and type.
+    typesrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Defined liquid types',
+                            'Nr of liquid types',sum(len(p.get('liquid_definitions') or []) for p in profiles))
+    header(typesrows,9,['Profile','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image',
+                        'Custom','Liquid order','Visible in picker','Color','Status','Nr of times used'])
+    icon_images=[]
+    used=collections.Counter((str(p.get('config',{}).get('name','')),str(rec.get('liquid_type_id','')))
+          for p in profiles for rec in p.get('records',[]) if rec.get('kind')=='drink')
+    liquid_row=9
+    for p,pos,typ,color in export_types:
+        liquid_row+=1
+        ident=str(typ.get('id') or '')
+        p_name=str(p.get('config',{}).get('name',''))
+        svg=typ.get('icon_svg') or ''
+        # An actual embedded icon is rendered in F; no error-prone IMAGE formula.
+        vals=[p_name,ident,typ.get('name',ident),typ.get('icon_mdi',''),
+              InCellImage(len(icon_images)+1),'Yes' if svg else '',bool(typ.get('custom',False)),pos,
+              not bool(typ.get('hidden',False)),color,
+              'Hidden' if typ.get('hidden') else 'Active',used[(p_name,ident)]]
+        typesrows[liquid_row]=[(col,val,color_styles.get(color.upper(),11) if col==11 else 11,None)
+                               for col,val in enumerate(vals,2)]
+        icon_images.append(png_icon(typ.get('icon_mdi',''),typ.get('icon_color') or color))
+    if liquid_row==9:typesrows[10]=[]
+
+    # Settings - Cup types: B9:J9. Shared definitions are not repeated per
+    # profile; profile-specific definitions (if any) retain their owner.
+    unique_cups=[]
+    seen=set()
+    for p in profiles:
         for pos,cup in enumerate(p.get('cup_types') or [],1):
-            row+=1
-            vals=['All profiles',cup.get('id',''),cup.get('name',''),
-                  cup.get('default_volume_ml'),cup.get('icon_mdi',''),pos,not cup.get('hidden',False)]
-            buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
-    row+=3
-    buttonsrows[row]=[(1,'Quick buttons — current configuration',2,None)]
-    row+=1
-    headers=['Profile','Button ID','Liquid ID','Liquid name','Cup ID','Cup name',
-             'Label mode','Effective button label','Order','Default volume mL','Visible','Custom label','MDI icon']
-    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(headers,1)]
+            ident=str(cup.get('id',''))
+            if ident in seen:continue
+            seen.add(ident)
+            unique_cups.append((p,pos,cup))
+    cupsrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Cup types',
+                           'Nr of cup types',len(unique_cups))
+    header(cupsrows,9,['Profile','Cup Type ID','Name','Default volume\n(mL)',
+                       'MDI icon','Icon graphic','SVG Image','Order','Visible'])
+    for rownum,(p,pos,cup) in enumerate(unique_cups,10):
+        vals=['All profiles' if len(profiles)>0 else p['config']['name'],
+              cup.get('id',''),cup.get('name',''),cup.get('default_volume_ml'),
+              cup.get('icon_mdi',''),'', 'Yes' if cup.get('icon_svg') else '',
+              pos,'No' if cup.get('hidden',False) else 'Yes']
+        cupsrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+    if not unique_cups:cupsrows[10]=[]
+
+    # Settings - Quick buttons: B9:N9; the saved per-profile order and
+    # effective label are exported exactly as used by the cards.
+    quick_rows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Quick buttons',
+                             'Nr of quick buttons',sum(len(p.get('quick_buttons') or []) for p in profiles))
+    header(quick_rows,9,['Profile','Button ID','Effective button label','Label mode',
+                         'Default volume\n(mL)','Visible','Custom label','MDI icon',
+                         'Order','Liquid ID','Liquid name','Cup ID','Cup name'])
+    rownum=9
     for p in profiles:
         cups={c.get('id'):c for c in p.get('cup_types') or []}
-        liquids={c.get('id'):c.get('name',c.get('id')) for c in p.get('liquid_definitions') or []}
+        liquids={l.get('id'):l.get('name',l.get('id')) for l in p.get('liquid_definitions') or []}
         for pos,q in enumerate(p.get('quick_buttons') or [],1):
-            row+=1
+            rownum+=1
             cid=q.get('cup_type_id','');lid=q.get('liquid_type_id','')
-            vals=[p['config']['name'],q.get('id',''),lid,liquids.get(lid,lid),cid,
-                  cups.get(cid,{}).get('name',cid),q.get('label_mode','automatic'),
-                  q.get('label',''),pos,cups.get(cid,{}).get('default_volume_ml'),
-                  not q.get('hidden',False),q.get('custom_label',''),q.get('icon_mdi','')]
-            buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(vals,1)]
-    row+=3
-    buttonsrows[row]=[(1,'Profile settings — exported values',2,None)]
-    row+=1
-    buttonsrows[row]=[(i,h,1,None) for i,h in enumerate(
-       ['Profile','Age','Gender','Unit','Daily target mL','Target override mL','Quick button count'],1)]
-    for p in profiles:
-        row+=1
-        cfg=p['config']
-        values=[cfg.get('name'),cfg.get('age'),cfg.get('gender'),cfg.get('unit'),
-                p.get('target_ml'),p.get('target_override_ml'),len(p.get('quick_buttons') or [])]
-        buttonsrows[row]=[(i,v,0,None) for i,v in enumerate(values,1)]
-    drawing_xml,drawing_rels,icon_images=drawing_parts(icon_rows)
+            cup_name=cups.get(cid,{}).get('name',cid)
+            liquid_name=liquids.get(lid,lid)
+            label=q.get('label') or q.get('custom_label') or f'{liquid_name} ({cup_name})'
+            vals=[p['config'].get('name',''),q.get('id',''),label,
+                  q.get('label_mode','automatic'),cups.get(cid,{}).get('default_volume_ml'),
+                  'No' if q.get('hidden') else 'Yes',q.get('custom_label',''),
+                  q.get('icon_mdi',''),pos,lid,liquid_name,cid,cup_name]
+            quick_rows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+    if rownum==9:quick_rows[10]=[]
+
+    # Settings - Profiles: B8:I8; identities and targets from HA snapshots.
+    profrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Profiles')
+    header(profrows,8,['Profile','Profile ID','Age','Gender','Unit',
+                       'Daily target mL','Target override mL','Quick button count'])
+    for rownum,p in enumerate(profiles,9):
+        cfg=p.get('config') or {}
+        vals=[cfg.get('name'),p.get('slug') or p.get('entry_id') or cfg.get('slug') or '',
+              cfg.get('age'),cfg.get('gender'),_unit(p),
+              p.get('target_ml'),p.get('target_override_ml'),
+              len(p.get('quick_buttons') or [])]
+        profrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+    if not profiles:profrows[9]=[]
+    rich_parts=_in_cell_image_parts(icon_images)
     content=[
-     _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),f'{"K" if mixed else "I"}{max(12,11+len(records))}',max(12,11+len(records)),True),
-     _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+([16,21] if mixed else [])+[10]*len(ordered_types),f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',max(12,11+len(days)),True),
-     _worksheet(3,typesrows,[16,24,22,23,13,18,13,19,25,15,19,21],f'L{max(1,len(typesrows))}',len(typesrows),drawing=bool(icon_images)),
-     _worksheet(4,buttonsrows,[16,24,22,22,19,25,17,25,20,24,15,24,24],f'M{max(1,max(buttonsrows))}',len(buttonsrows)),
+      _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),
+                 f'{"K" if mixed else "I"}{max(12,11+len(records))}',max(12,11+len(records)),True),
+      _worksheet(2,drows,[4.285,16,15,7,9,6,10,9,11,6]+([16,21] if mixed else [])
+                 +[_liquid_width(name,_unit_label(export_unit if not mixed else 'mL'))
+                   for _,name,_ in ordered_types],
+                 f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',
+                 max(12,11+len(days)),True),
+      _worksheet(3,typesrows,[3.21,16,16,17.42,16.21,7.71,12,13,8.21,8.21,9.21,8.29,7.64],
+                 f'M{max(10,liquid_row)}',max(10,liquid_row),True),
+      _worksheet(4,cupsrows,[3.71,16,16,16.29,12,18.64,7.21,7.71,9.79,10.64],
+                 f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups)),True),
+      _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,9.79,22,18.07,19,13.43],
+                 f'N{max(10,rownum)}',max(10,rownum),True),
+      _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14],
+                 f'I{max(9,8+len(profiles))}',max(9,8+len(profiles)),True),
     ]
-    # Standard OOXML ZIP container. Includes reference styles and native tables.
+    # Standard OOXML container. In-cell images are native rich-value metadata
+    # (the same representation as in the user's six-tab reference workbook).
     buffer=BytesIO()
     with ZipFile(buffer,'w',ZIP_DEFLATED,compresslevel=6) as z:
         main='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
         relbase='http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
-        contenttypes=('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        parts=(
           '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="xml" ContentType="application/xml"/>'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-          +( '<Default Extension="png" ContentType="image/png"/>' if icon_images else '' )
-          +( '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' if icon_images else '' )
+          +('<Default Extension="png" ContentType="image/png"/>' if icon_images else '')
           +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
           '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
           '<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
-          +''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1,5))
-          +''.join(f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>' for i in range(1,3))+'</Types>')
-        z.writestr('[Content_Types].xml',contenttypes)
-        z.writestr('_rels/.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}officeDocument" Target="xl/workbook.xml"/></Relationships>')
-        z.writestr('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="'+main+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>'+''.join(f'<sheet name="{_xml(n)}" sheetId="{i}" r:id="rId{i}"/>' for i,n in enumerate(SHEETS,1))+'</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>')
-        z.writestr('xl/_rels/workbook.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,5))+f'<Relationship Id="rId5" Type="{relbase}styles" Target="styles.xml"/><Relationship Id="rId6" Type="{relbase}theme" Target="theme/theme1.xml"/></Relationships>')
+          +''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1,7))
+          +''.join(f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>' for i in range(1,7))
+        )
+        if icon_images:
+            parts+=(
+              '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>'
+              '<Override PartName="/xl/richData/richValueRel.xml" ContentType="application/vnd.ms-excel.richvaluerel+xml"/>'
+              '<Override PartName="/xl/richData/rdrichvalue.xml" ContentType="application/vnd.ms-excel.rdrichvalue+xml"/>'
+              '<Override PartName="/xl/richData/rdrichvaluestructure.xml" ContentType="application/vnd.ms-excel.rdrichvaluestructure+xml"/>'
+              '<Override PartName="/xl/richData/rdRichValueTypes.xml" ContentType="application/vnd.ms-excel.rdrichvaluetypes+xml"/>'
+            )
+        z.writestr('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+parts+'</Types>')
+        z.writestr('_rels/.rels',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          f'<Relationship Id="rId1" Type="{relbase}officeDocument" Target="xl/workbook.xml"/>'
+          '</Relationships>')
+        z.writestr('xl/workbook.xml',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          f'<workbook xmlns="{main}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+          '<bookViews><workbookView activeTab="0"/></bookViews><sheets>'
+          +''.join(f'<sheet name="{_xml(name)}" sheetId="{i}" r:id="rId{i}"/>' for i,name in enumerate(SHEETS,1))
+          +'</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>')
+        relation=(
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          +''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,7))
+          +f'<Relationship Id="rId7" Type="{relbase}styles" Target="styles.xml"/>'
+          +f'<Relationship Id="rId8" Type="{relbase}theme" Target="theme/theme1.xml"/>'
+        )
+        if icon_images:
+            relation+=(
+              '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/>'
+              '<Relationship Id="rId10" Type="http://schemas.microsoft.com/office/2022/10/relationships/richValueRel" Target="richData/richValueRel.xml"/>'
+              '<Relationship Id="rId11" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue" Target="richData/rdrichvalue.xml"/>'
+              '<Relationship Id="rId12" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" Target="richData/rdrichvaluestructure.xml"/>'
+              '<Relationship Id="rId13" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes" Target="richData/rdRichValueTypes.xml"/>'
+            )
+        z.writestr('xl/_rels/workbook.xml.rels',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+relation+'</Relationships>')
         z.writestr('xl/styles.xml',styles_xml)
         z.writestr('xl/theme/theme1.xml',THEME)
-        if icon_images:
-            z.writestr('xl/drawings/drawing1.xml',drawing_xml)
-            z.writestr('xl/drawings/_rels/drawing1.xml.rels',drawing_rels)
-            for icon_number,png in enumerate(icon_images,1):
-                z.writestr(f'xl/media/liquid{icon_number}.png',png)
-            z.writestr('xl/worksheets/_rels/sheet3.xml.rels',
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
-                '</Relationships>')
-        for i,s in enumerate(content,1):
-            z.writestr(f'xl/worksheets/sheet{i}.xml',s)
+        for path,contents in rich_parts.items():
+            z.writestr(path,contents)
+        for i,xml in enumerate(content,1):
+            z.writestr(f'xl/worksheets/sheet{i}.xml',xml)
+            z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',
+              '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+              f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+              f'<Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/>'
+              '</Relationships>')
             if i<=2:
-                z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/></Relationships>')
-                z.writestr(f'xl/tables/table{i}.xml',_table(i,max(12,11+(len(records) if i==1 else len(days))),liquid_headers if i==2 else None,export_unit,mixed))
+                bottom=max(12,11+(len(records) if i==1 else len(days)))
+                z.writestr(f'xl/tables/table{i}.xml',
+                    _table(i,bottom,liquid_headers if i==2 else None,export_unit,mixed))
+            else:
+                header_row=8 if i==6 else 9
+                headers=[cell[1] for cell in sorted(({
+                    3:typesrows,4:cupsrows,5:quick_rows,6:profrows}[i])[header_row],
+                    key=lambda x:x[0])]
+                bottom={3:max(10,liquid_row),4:max(10,9+len(unique_cups)),
+                        5:max(10,rownum),6:max(9,8+len(profiles))}[i]
+                z.writestr(f'xl/tables/table{i}.xml',
+                    _table(i,bottom,settings_headers=headers))
     return buffer.getvalue()

@@ -67,7 +67,8 @@ with ZipFile(BytesIO(raw)) as book:
     assert "Quick button" not in book.read("xl/worksheets/sheet1.xml").decode()
     assert log["F12"]=="2100" and log["F13"]=="3100"
     firstrows=xmls[0].findall(".//m:sheetData/m:row",ns)
-    assert all(float(row.get("ht","0"))==44 for row in firstrows if int(row.get("r"))>=11)
+    assert all(float(row.get("ht","0"))==18 for row in firstrows if int(row.get("r"))>=12)
+    assert float(next(row for row in firstrows if int(row.get("r"))==11).get("ht"))==38
     assert xmls[0].find(".//m:c[@r='C4']",ns).get("s") != xmls[1].find(".//m:c[@r='C4']",ns).get("s")
     table=ET.fromstring(book.read("xl/tables/table1.xml"))
     assert table.attrib["ref"]=="B11:I13",table.attrib["ref"]
@@ -75,19 +76,20 @@ with ZipFile(BytesIO(raw)) as book:
     assert names[-1]=="Cup used" and len(names)==8,names
     dh=[daily[f"{col}11"] for col in ("K","L","M")]
     assert dh[-1].startswith("Other"),dh
-    assert len([p for p in book.namelist() if p.startswith("xl/media/liquid")])==3
-    assert "xl/drawings/drawing1.xml" in book.namelist()
-    for media in [p for p in book.namelist() if p.startswith("xl/media/liquid")]:
+    assert len([p for p in book.namelist() if p.startswith("xl/media/image")])==6
+    assert "xl/drawings/drawing1.xml" not in book.namelist()
+    assert "xl/richData/rdrichvalue.xml" in book.namelist()
+    for media in [p for p in book.namelist() if p.startswith("xl/media/image")]:
         data=book.read(media)
         assert data[:8]==b"\x89PNG\r\n\x1a\n"
         assert int.from_bytes(data[16:20],"big")==48 and int.from_bytes(data[20:24],"big")==48
-    assert types["A2"]=="All profiles" and types["E1"]=="Icon graphic"
-    assert len([v for k,v in types.items() if k.startswith("B") and k[1:].isdigit() and int(k[1:])>1])==3
+    assert types["B10"]=="Jan-Willem" and types["F9"]=="Icon graphic"
+    assert len([v for k,v in types.items() if k.startswith("B") and k[1:].isdigit() and int(k[1:])>9])==6
     assert "Source mode" not in book.read("xl/worksheets/sheet4.xml").decode()
     assert "Pregnancy" not in book.read("xl/worksheets/sheet4.xml").decode()
-    assert "Quick button count" in book.read("xl/worksheets/sheet4.xml").decode()
-    assert "Jan-Willem" in book.read("xl/worksheets/sheet4.xml").decode()
-    assert "Second profile" in book.read("xl/worksheets/sheet4.xml").decode()
+    assert "Quick button count" in book.read("xl/worksheets/sheet6.xml").decode()
+    assert "Jan-Willem" in book.read("xl/worksheets/sheet6.xml").decode()
+    assert "Second profile" in book.read("xl/worksheets/sheet6.xml").decode()
 
 p_only=excel.export_xlsx([p1],when=when)
 with ZipFile(BytesIO(p_only)) as book:

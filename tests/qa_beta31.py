@@ -106,7 +106,7 @@ async def main():
     assert 'Glazen beker (180 mL)' in sheet and 'Cup used' in sheet
     assert 'Quick button' not in sheet
     assert 'quick_tea' not in sheet and 'Tea before rename' not in sheet
-    assert len([n for n in z.namelist() if re.fullmatch(r'xl/worksheets/sheet\d+\.xml',n)])==4
+    assert len([n for n in z.namelist() if re.fullmatch(r'xl/worksheets/sheet\d+\.xml',n)])==6
     print('BETA32_CUP_USED_EXPORT_HISTORY_PRESERVED_PASS')
     await c.async_shutdown()
     again=coordinator.HydrationCoordinator(h,entry);await again.async_initialize()
