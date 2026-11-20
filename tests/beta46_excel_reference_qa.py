@@ -93,7 +93,7 @@ with ZipFile(BytesIO(raw)) as z:
     for i in range(1,count+1):
         image=z.read(f"xl/media/image{i}.png")
         assert image[:8]==b"\x89PNG\r\n\x1a\n"
-        assert int.from_bytes(image[16:20],"big")==48
+        assert int.from_bytes(image[16:20],"big")==60
     # Every referenced cell style must preserve horizontal properties while
     # having verticalCenter turned on, not merely the new blank default style.
     styles=ET.fromstring(z.read("xl/styles.xml"))
