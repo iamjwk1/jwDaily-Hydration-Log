@@ -14,6 +14,7 @@ import base64
 import collections
 import copy
 from datetime import datetime, date, timezone
+from dataclasses import dataclass
 from io import BytesIO
 import math
 import xml.etree.ElementTree as ET
@@ -22,7 +23,7 @@ from xml.sax.saxutils import escape
 from zipfile import ZipFile, ZIP_DEFLATED
 from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
-from .excel_icons import drawing_parts
+from .excel_icons import png_icon
 
 VERSION = '1.1.0-beta.46'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
@@ -76,8 +77,20 @@ def _col(index: int) -> str:
     return letters
 
 
+@dataclass(frozen=True)
+class InCellImage:
+    """Native Excel Place in Cell image, referenced via rich value metadata."""
+    number: int
+
+
 def _cell(address: str, value, style: int = 0, formula: str | None = None) -> str:
     attrs = f' r="{address}" s="{style}"'
+    if isinstance(value, InCellImage):
+        if value.number < 1:raise ValueError('Invalid Place in Cell image index')
+        # Excel's own saved Place in Cell representation uses a cached #VALUE!
+        # and vm=index. The rich-value metadata supplies the actual image and
+        # Excel displays the image, not the cached fallback error.
+        return f'<c{attrs} t="e" vm="{value.number}"><v>#VALUE!</v></c>'
     if value is None:
         return f'<c{attrs}/>'
     if isinstance(value, bool):
@@ -182,6 +195,69 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     if table:parts.append('<tableParts count="1"><tablePart r:id="rId1"/></tableParts>')
     parts.append('</worksheet>')
     return ''.join(parts).encode('utf-8')
+
+
+def _in_cell_image_parts(images: list[bytes]) -> dict[str, bytes]:
+    """OOXML native *Place in Cell*, not a floating DrawingML shape.
+
+    Schema and relationships mirror a Microsoft Excel 365 workbook saved with
+    Insert → Pictures → Place in Cell (rich value / XLRICHVALUE metadata).
+    """
+    count=len(images)
+    if not count:return {}
+    def xml(text):return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+text).encode('utf-8')
+    metadata=(''
+      '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:xlrd="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata">'
+      '<metadataTypes count="1"><metadataType name="XLRICHVALUE" minSupportedVersion="120000" '
+      'copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" '
+      'rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1"/></metadataTypes>'
+      f'<futureMetadata name="XLRICHVALUE" count="{count}">'
+      +''.join('<bk><extLst><ext uri="{3e2802c4-a4d2-4d8b-9148-e3be6c30e623}">'
+               f'<xlrd:rvb i="{i}"/></ext></extLst></bk>' for i in range(count))
+      +f'</futureMetadata><valueMetadata count="{count}">'
+      +''.join(f'<bk><rc t="1" v="{i}"/></bk>' for i in range(count))
+      +'</valueMetadata></metadata>')
+    rv_structure=(''
+      '<rvStructures xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="1">'
+      '<s t="_localImage"><k n="_rvRel:LocalImageIdentifier" t="i"/>'
+      '<k n="CalcOrigin" t="i"/></s></rvStructures>')
+    rv_data=(''
+      f'<rvData xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="{count}">'
+      +''.join(f'<rv s="0"><v>{i}</v><v>5</v></rv>' for i in range(count))
+      +'</rvData>')
+    types=(''
+      '<rvTypesInfo xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2" '
+      'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+      'mc:Ignorable="x" xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '<global><keyFlags>'
+      +''.join(f'<key name="{name}"><flag name="ExcludeFromCalcComparison" value="1"/></key>'
+               for name in ('_DisplayString','_Flags','_Format','_SubLabel','_Attribution',
+                            '_Icon','_Display','_CanonicalPropertyNames','_ClassificationId'))
+      +'<key name="_Self"><flag name="ExcludeFromFile" value="1"/>'
+      '<flag name="ExcludeFromCalcComparison" value="1"/></key>'
+      '</keyFlags></global></rvTypesInfo>')
+    rel_list=(''
+      '<richValueRels xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/richvaluerel" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      +''.join(f'<rel r:id="rId{i+1}"/>' for i in range(count))
+      +'</richValueRels>')
+    rels=(''
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      +''.join(f'<Relationship Id="rId{i+1}" '
+               'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+               f'Target="../media/image{i+1}.png"/>' for i in range(count))
+      +'</Relationships>')
+    parts={
+      'xl/metadata.xml':xml(metadata),
+      'xl/richData/rdrichvaluestructure.xml':xml(rv_structure),
+      'xl/richData/rdrichvalue.xml':xml(rv_data),
+      'xl/richData/rdRichValueTypes.xml':xml(types),
+      'xl/richData/richValueRel.xml':xml(rel_list),
+      'xl/richData/_rels/richValueRel.xml.rels':xml(rels),
+    }
+    parts.update({f'xl/media/image{i+1}.png':png for i,png in enumerate(images)})
+    return parts
 
 
 def _table(table_number: int, bottom: int, liquid_headers: list[str] | None = None, unit: str = 'mL', mixed: bool = False) -> bytes:
@@ -484,7 +560,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                             'Nr of liquid types',sum(len(p.get('liquid_definitions') or []) for p in profiles))
     header(typesrows,9,['Profile','Liquid ID','Name','MDI Icon','Icon graphic','SVG Image',
                         'Custom','Liquid order','Visible in picker','Color','Status','Nr of times used'])
-    icon_rows=[]
+    icon_images=[]
     used=collections.Counter((str(p.get('config',{}).get('name','')),str(rec.get('liquid_type_id','')))
           for p in profiles for rec in p.get('records',[]) if rec.get('kind')=='drink')
     liquid_row=9
@@ -495,12 +571,12 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
         svg=typ.get('icon_svg') or ''
         # An actual embedded icon is rendered in F; no error-prone IMAGE formula.
         vals=[p_name,ident,typ.get('name',ident),typ.get('icon_mdi',''),
-              None,'Yes' if svg else '',bool(typ.get('custom',False)),pos,
+              InCellImage(len(icon_images)+1),'Yes' if svg else '',bool(typ.get('custom',False)),pos,
               not bool(typ.get('hidden',False)),color,
               'Hidden' if typ.get('hidden') else 'Active',used[(p_name,ident)]]
         typesrows[liquid_row]=[(col,val,color_styles.get(color.upper(),11) if col==11 else 11,None)
                                for col,val in enumerate(vals,2)]
-        icon_rows.append((liquid_row,typ.get('icon_mdi',''),typ.get('icon_color') or color))
+        icon_images.append(png_icon(typ.get('icon_mdi',''),typ.get('icon_color') or color))
     if liquid_row==9:typesrows[10]=[]
 
     # Settings - Cup types: B9:J9. Shared definitions are not repeated per
@@ -561,7 +637,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
               len(p.get('quick_buttons') or [])]
         profrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
     if not profiles:profrows[9]=[]
-    drawing_xml,drawing_rels,icon_images=drawing_parts(icon_rows)
+    rich_parts=_in_cell_image_parts(icon_images)
     content=[
       _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),
                  f'{"K" if mixed else "I"}{max(12,11+len(records))}',max(12,11+len(records)),True),
@@ -571,7 +647,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                  f'{_col(10+len(ordered_types)+(2 if mixed else 0))}{max(12,11+len(days))}',
                  max(12,11+len(days)),True),
       _worksheet(3,typesrows,[3.21,16,16,17.42,16.21,7.71,12,13,8.21,8.21,9.21,8.29,7.64],
-                 f'M{max(10,liquid_row)}',max(10,liquid_row),drawing=bool(icon_images)),
+                 f'M{max(10,liquid_row)}',max(10,liquid_row)),
       _worksheet(4,cupsrows,[3.71,16,16,16.29,12,18.64,7.21,7.71,9.79,10.64],
                  f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups))),
       _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,9.79,22,18.07,19,13.43],
@@ -579,41 +655,72 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
       _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14],
                  f'I{max(9,8+len(profiles))}',max(9,8+len(profiles))),
     ]
-    # Standard OOXML ZIP container. Includes reference styles and native tables.
+    # Standard OOXML container. In-cell images are native rich-value metadata
+    # (the same representation as in the user's six-tab reference workbook).
     buffer=BytesIO()
     with ZipFile(buffer,'w',ZIP_DEFLATED,compresslevel=6) as z:
         main='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
         relbase='http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
-        contenttypes=('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        parts=(
           '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="xml" ContentType="application/xml"/>'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-          +( '<Default Extension="png" ContentType="image/png"/>' if icon_images else '' )
-          +( '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' if icon_images else '' )
+          +('<Default Extension="png" ContentType="image/png"/>' if icon_images else '')
           +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
           '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
           '<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
-          +''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1,5))
-          +''.join(f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>' for i in range(1,3))+'</Types>')
-        z.writestr('[Content_Types].xml',contenttypes)
-        z.writestr('_rels/.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}officeDocument" Target="xl/workbook.xml"/></Relationships>')
-        z.writestr('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="'+main+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>'+''.join(f'<sheet name="{_xml(n)}" sheetId="{i}" r:id="rId{i}"/>' for i,n in enumerate(SHEETS,1))+'</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>')
-        z.writestr('xl/_rels/workbook.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,5))+f'<Relationship Id="rId5" Type="{relbase}styles" Target="styles.xml"/><Relationship Id="rId6" Type="{relbase}theme" Target="theme/theme1.xml"/></Relationships>')
+          +''.join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' for i in range(1,7))
+          +''.join(f'<Override PartName="/xl/tables/table{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>' for i in range(1,3))
+        )
+        if icon_images:
+            parts+=(
+              '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>'
+              '<Override PartName="/xl/richData/richValueRel.xml" ContentType="application/vnd.ms-excel.richvaluerel+xml"/>'
+              '<Override PartName="/xl/richData/rdrichvalue.xml" ContentType="application/vnd.ms-excel.rdrichvalue+xml"/>'
+              '<Override PartName="/xl/richData/rdrichvaluestructure.xml" ContentType="application/vnd.ms-excel.rdrichvaluestructure+xml"/>'
+              '<Override PartName="/xl/richData/rdRichValueTypes.xml" ContentType="application/vnd.ms-excel.rdrichvaluetypes+xml"/>'
+            )
+        z.writestr('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+parts+'</Types>')
+        z.writestr('_rels/.rels',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          f'<Relationship Id="rId1" Type="{relbase}officeDocument" Target="xl/workbook.xml"/>'
+          '</Relationships>')
+        z.writestr('xl/workbook.xml',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          f'<workbook xmlns="{main}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+          '<bookViews><workbookView activeTab="0"/></bookViews><sheets>'
+          +''.join(f'<sheet name="{_xml(name)}" sheetId="{i}" r:id="rId{i}"/>' for i,name in enumerate(SHEETS,1))
+          +'</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>')
+        relation=(
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          +''.join(f'<Relationship Id="rId{i}" Type="{relbase}worksheet" Target="worksheets/sheet{i}.xml"/>' for i in range(1,7))
+          +f'<Relationship Id="rId7" Type="{relbase}styles" Target="styles.xml"/>'
+          +f'<Relationship Id="rId8" Type="{relbase}theme" Target="theme/theme1.xml"/>'
+        )
+        if icon_images:
+            relation+=(
+              '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/>'
+              '<Relationship Id="rId10" Type="http://schemas.microsoft.com/office/2022/10/relationships/richValueRel" Target="richData/richValueRel.xml"/>'
+              '<Relationship Id="rId11" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue" Target="richData/rdrichvalue.xml"/>'
+              '<Relationship Id="rId12" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" Target="richData/rdrichvaluestructure.xml"/>'
+              '<Relationship Id="rId13" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes" Target="richData/rdRichValueTypes.xml"/>'
+            )
+        z.writestr('xl/_rels/workbook.xml.rels',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+relation+'</Relationships>')
         z.writestr('xl/styles.xml',styles_xml)
         z.writestr('xl/theme/theme1.xml',THEME)
-        if icon_images:
-            z.writestr('xl/drawings/drawing1.xml',drawing_xml)
-            z.writestr('xl/drawings/_rels/drawing1.xml.rels',drawing_rels)
-            for icon_number,png in enumerate(icon_images,1):
-                z.writestr(f'xl/media/liquid{icon_number}.png',png)
-            z.writestr('xl/worksheets/_rels/sheet3.xml.rels',
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
-                '</Relationships>')
-        for i,s in enumerate(content,1):
-            z.writestr(f'xl/worksheets/sheet{i}.xml',s)
+        for path,contents in rich_parts.items():
+            z.writestr(path,contents)
+        for i,xml in enumerate(content,1):
+            z.writestr(f'xl/worksheets/sheet{i}.xml',xml)
             if i<=2:
-                z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/></Relationships>')
-                z.writestr(f'xl/tables/table{i}.xml',_table(i,max(12,11+(len(records) if i==1 else len(days))),liquid_headers if i==2 else None,export_unit,mixed))
+                z.writestr(f'xl/worksheets/_rels/sheet{i}.xml.rels',
+                  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                  f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                  f'<Relationship Id="rId1" Type="{relbase}table" Target="../tables/table{i}.xml"/>'
+                  '</Relationships>')
+                z.writestr(f'xl/tables/table{i}.xml',
+                    _table(i,max(12,11+(len(records) if i==1 else len(days))),
+                           liquid_headers if i==2 else None,export_unit,mixed))
     return buffer.getvalue()
