@@ -91,6 +91,12 @@ with ZipFile(BytesIO(result)) as z:
                     expected_shifted.append(entry)
                 expected_shifted.insert(9,{"min":"10","max":"10","width":"11.5","customWidth":"1"})
                 assert actual==expected_shifted,(i,"Quick icon column must not alter existing widths")
+            elif i==6:
+                assert actual[:len(original)]==original,(i,"Existing Profile columns moved")
+                assert actual[len(original):]==[
+                    {"min":"10","max":"10","width":"24","customWidth":"1"},
+                    {"min":"11","max":"11","width":"31","customWidth":"1"}
+                ],(i,"New Profile settings columns have incorrect widths")
             else:
                 assert actual==original,(i,"Reference fixed column widths changed")
         else:
