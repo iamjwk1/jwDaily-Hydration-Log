@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
 from .excel_icons import png_icon
 
-VERSION = '1.1.0-beta.48'
+VERSION = '1.5.0'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -189,6 +189,11 @@ def _reference_columns(index: int, widths: list[float | tuple[float,bool]]) -> s
         moved.append((10,'<col min="10" max="10" width="11.5" customWidth="1"/>'))
         return '<cols>'+''.join(raw for _,raw in sorted(moved))+'</cols>'
     cols=REFERENCE_COLS[index]
+    if index==6 and len(widths)>9:
+        # Extend the approved Profiles columns; keep all existing widths intact.
+        extras=''.join(f'<col min="{i}" max="{i}" width="{w:g}" customWidth="1"/>'
+                       for i,w in enumerate(widths[9:],10))
+        return cols.replace('</cols>',extras+'</cols>')
     if index==1 and len(widths)>9:
         extras=''.join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>'
                        for i,w in enumerate(widths[9:],10))
@@ -205,7 +210,7 @@ _REFERENCE_HEADERS = {
  3:[54,48,47,47,47,47,47,47,47,47,47,49],
  4:[46,54,47,48,47,47,47,47,49],
  5:[46,47,47,47,48,47,47,47,47,47,47,47,47,50],
- 6:[51,55,52,52,52,52,52,53],
+ 6:[51,55,52,52,52,52,52,52,52,53],
 }
 _REFERENCE_BODY = {
  1:[10,11,11,11,11,11,12,11],
@@ -213,14 +218,14 @@ _REFERENCE_BODY = {
  3:[30,30,11,11,11,11,11,11,20,11,11,12],
  4:[43,43,11,11,11,11,11,11,45],
  5:[43,11,11,11,11,19,11,12,11,11,11,11,11,11],
- 6:[43,43,11,11,11,11,11,12],
+ 6:[43,43,11,11,11,11,11,11,11,12],
 }
 _REFERENCE_LAST = {
  1:[13,14,14,14,14,14,15,14],
  3:[31,31,14,14,14,14,14,14,29,14,14,15],
  4:[44,44,14,14,14,14,14,14,45],
  5:[44,14,14,14,14,19,14,15,14,14,14,14,14,14],
- 6:[44,44,14,14,14,14,14,15],
+ 6:[44,44,14,14,14,14,14,14,14,15],
 }
 
 def _apply_reference_styles(index, rows):
@@ -824,16 +829,20 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     if rownum==9:quick_rows[10]=[]
     quick_last_row=max(10,rownum)
 
-    # Settings - Profiles: B8:I8; identities and targets from HA snapshots.
+    # Settings - Profiles: append profile-scoped Add drink visibility options.
+    # These are persisted per HA profile, unlike Lovelace card layout options.
     profrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Profiles')
     header(profrows,8,['Profile','Profile ID','Age','Gender','Unit',
-                       'Daily target mL','Target override mL','Quick button count'])
+                       'Daily target mL','Target override mL','Quick button count',
+                       'Show Quick buttons','Show Liquid types and Cup types'])
     for rownum,p in enumerate(profiles,9):
         cfg=p.get('config') or {}
         vals=[cfg.get('name'),p.get('slug') or p.get('entry_id') or cfg.get('slug') or '',
               cfg.get('age'),cfg.get('gender'),_unit(p),
               p.get('target_ml'),p.get('target_override_ml'),
-              len(p.get('quick_buttons') or [])]
+              len(p.get('quick_buttons') or []),
+              'Yes' if cfg.get('show_add_quick_buttons') is not False else 'No',
+              'Yes' if cfg.get('show_add_liquid_cup_types') is not False else 'No']
         profrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
     if not profiles:profrows[9]=[]
     all_rows=[logrows,drows,typesrows,cupsrows,quick_rows,profrows]
@@ -855,8 +864,8 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                  f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups)),True),
       _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,11.5,9.79,22,18.07,19,13.43],
                  f'O{quick_last_row}',quick_last_row,True),
-      _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14],
-                 f'I{max(9,8+len(profiles))}',max(9,8+len(profiles)),True),
+      _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14,24,31],
+                 f'K{max(9,8+len(profiles))}',max(9,8+len(profiles)),True),
     ]
     # Standard OOXML container. In-cell images are native rich-value metadata
     # (the same representation as in the user's six-tab reference workbook).

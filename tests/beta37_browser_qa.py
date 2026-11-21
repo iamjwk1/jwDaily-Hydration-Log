@@ -3,7 +3,9 @@ Use real Chromium; only HA icon picker is stubbed because this harness isn't HA 
 """
 from playwright.sync_api import sync_playwright
 from pathlib import Path
+import json
 JS=Path(__file__).resolve().parents[1]/'custom_components/jw_daily_hydration_log/www/jwdaily-hydration-log-card.js'
+VERSION=json.loads((JS.parents[1]/'manifest.json').read_text(encoding='utf-8'))['version']
 with sync_playwright() as p:
  browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox','--disable-dev-shm-usage'])
  for width in (360,390,420,540,720,950,1400):
@@ -34,9 +36,9 @@ with sync_playwright() as p:
       return {};
     }};
     window.card=document.createElement('jwdaily-hydration-log-card');card.setConfig({profile:'one',title:'Vocht intake',unit:'mL'});card.hass=window.hass;document.querySelector('#mount').appendChild(card);
-  }''')
+  }'''.replace('1.1.0-beta.48',VERSION))
   root=page.locator('jwdaily-hydration-log-card');page.wait_for_timeout(300)
-  assert root.locator('.card-version').inner_text()=='v1.1.0-beta.48'
+  assert root.locator('.card-version').inner_text()==f'v{VERSION}'
   assert root.locator('.card-version').evaluate('(n)=>getComputedStyle(n).whiteSpace')=='nowrap'
   assert root.locator('select[data-field="export_profile"]').count()==0
   assert root.locator('.card-footer button[data-action="export-open"]').count()==1

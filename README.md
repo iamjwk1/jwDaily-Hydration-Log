@@ -1,28 +1,27 @@
-# jwDaily Hydration Log v1.1.0-beta.48
+# jwDaily Hydration Log v1.5.0
 
-**Home Assistant custom integration (HACS prerelease).** Stable production release remains `v1.0.2`.
+**Home Assistant custom integration — stable release v1.5.0.**
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
-Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); original upstream MIT notice retained in `LICENSE-UPSTREAM-MIT`.
+Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); upstream MIT notice is retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current release: v1.1.0-beta.48
+## Current release: v1.5.0
 
-**Excel export (beta.48):** six separate reference-matched worksheets, 18pt vertically centered body rows, 38pt Hydration log header, only Daily intake Liquid type columns content-fit, six filterable tables and native Excel **Place in Cell** images (requires Microsoft Excel with that feature). No historical data is embedded in release files; all exported values are read from Home Assistant. See `RELEASE_NOTES_v1.1.0-beta.48.md`.
+This stable release consolidates the tested v1.1.0-beta.48 functionality and extends Excel **Settings - Profiles** with the live, profile-specific Add drink moment visibility options:
 
-- The Excel export provides thin black outside borders on every table, a native **Place in Cell** icon in Cup types, and a native Icon graphic column immediately after MDI icon in Quick buttons.
-- Install with **HACS → jwDaily Hydration Log → Redownload → Need a different version? → v1.1.0-beta.48**, then restart Home Assistant Core and reload the browser.
-- Native hydration profile/ledger history, 6-sheet Excel export, Quick buttons, separately editable Liquid/Cup catalog, and full ZIP backup with **Everything / Settings only / Data only** restore remain supported.
-- Per-profile **Edit profile → Add drink moment** settings: show Quick buttons and/or Liquid/Cup types (default both visible, at least one selector must remain enabled). Date, amount and time fields have equal heights and align on desktop.
-- Beta.45 corrects horizontal Add drink modal scrolling caused by overly wide manual-entry grid tracks; field widths now fit the dialog.
-- Maintenance dialogs use the eye/eye-off button for Hidden status without repeating a status label next to Cup/Quick names.
-- Lovelace cards: `custom:jwdaily-hydration-log-card`, `custom:jwdaily-hydration-hourly-card` and `custom:jwdaily-hydration-weekly-card`.
-- Dashboard bug fix: chart target labels respect `mL`, `L`, and `fl oz` without double conversion; chart history requests use the configured Home Assistant timezone.
-- Imported backup archives use the Home Assistant profile-local calendar day when checking dates, preventing valid post-midnight records being treated as tomorrow.
-- Edit Profile dialogue uses the accepted narrower width (PR #22).
-- See `RELEASE_NOTES_v1.1.0-beta.48.md` and `AUDIT_v1.1.0-beta.48.md` for release QA and remaining cleanup items.
+- **Show Quick buttons** — Yes/No.
+- **Show Liquid types and Cup types** — Yes/No.
 
-**Before upgrading:** create a full ZIP backup and a Home Assistant backup. Do not replace or delete existing profile storage files manually. Live acceptance and historic-data checks are separate from automated CI.
+The existing eight Profile columns and all five other Excel worksheets remain in their former positions. The sixth worksheet extends from **B8:I** to **B8:K**, with its two new columns at the end. Settings are read directly from each Home Assistant profile export snapshot; earlier profiles without stored flags display **Yes** for both, matching the application's default. The export does not change profile settings, history, targets or backup contents.
+
+All six sheets retain reference-matched formatting, filterable tables, black outlines, 18pt data rows and native Excel Place in Cell graphics. Microsoft Excel support is required to display the native embedded icon cells.
+
+**Versioning policy:** v1.5.0 is stable. Subsequent development builds use `v1.5.1-beta.1`, `v1.5.1-beta.2`, etc., until the next stable patch release.
+
+**Install:** HACS → jwDaily Hydration Log → Redownload → select `v1.5.0`; restart Home Assistant Core and refresh the Lovelace dashboard. First make a Home Assistant backup and a verified Full Backup ZIP from the integration. Do not delete or replace profile storage.
+
+Native Liquid/Cup definitions, profile Quick buttons, historical records, chart cards, export scope selection, and Everything / Settings only / Data only restore remain unchanged. See [release notes](RELEASE_NOTES_v1.5.0.md) for the detailed contract and required practical acceptance checks.
 
 ---
 
