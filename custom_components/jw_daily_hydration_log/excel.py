@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
 from .excel_icons import png_icon
 
-VERSION = '1.5.0'
+VERSION = '1.5.1-beta.1'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -91,7 +91,9 @@ def _cell(address: str, value, style: int = 0, formula: str | None = None) -> st
     if value is None:
         return f'<c{attrs}/>'
     if isinstance(value, bool):
-        return f'<c{attrs} t="b"><v>{int(value)}</v></c>'
+        # Excel's ordinary UI shows Boolean cells as TRUE/FALSE; the report
+        # contract uses Yes/No for all exported settings and Boolean data.
+        return f'<c{attrs} t="inlineStr"><is><t>{"Yes" if value else "No"}</t></is></c>'
     if isinstance(value, (int, float)) and math.isfinite(float(value)):
         v = repr(value)
         if formula:
@@ -156,7 +158,54 @@ def _liquid_width(name: str, unit_label: str) -> tuple[float, bool]:
     return (float(width),True)
 
 
-def _reference_columns(index: int, widths: list[float | tuple[float,bool]]) -> str:
+def _fit_reference_columns(index: int, source: str, rows: dict) -> str:
+    """Content-fit technical IDs and MDI paths, preserving other reference cols.
+
+    OOXML bestFit alone is not a reliable recalculation request on Excel open;
+    generate actual safe content-derived widths plus bestFit metadata.
+    """
+    import re
+    targets={3:(5,),4:(3,6),5:(9,)}.get(index,())
+    if not targets:return source
+
+    def measured_width(position):
+        values=[]
+        for row, cells in rows.items():
+            if row < 9:continue
+            for col, value, _style, _formula in cells:
+                if col==position and value is not None and isinstance(value,str):
+                    values.extend(value.splitlines())
+        longest=max((len(v) for v in values),default=0)
+        return float(max(13, min(72, longest+3)))
+
+    def boundary(tag,lo,hi):
+        tag=re.sub(r'\bmin="\d+"',f'min="{lo}"',tag,count=1)
+        return re.sub(r'\bmax="\d+"',f'max="{hi}"',tag,count=1)
+
+    result=[]
+    for original in re.findall(r'<col\b[^>]*/>',source):
+        low=int(re.search(r'\bmin="(\d+)"',original).group(1))
+        high=int(re.search(r'\bmax="(\d+)"',original).group(1))
+        affected=[p for p in targets if low<=p<=high]
+        if not affected:
+            result.append(original)
+            continue
+        start=low
+        for p in sorted(affected):
+            if start<p:result.append(boundary(original,start,p-1))
+            fitted=boundary(original,p,p)
+            fitted=re.sub(r'\bwidth="[^"]+"',f'width="{measured_width(p):g}"',fitted,count=1)
+            if 'bestFit=' in fitted:
+                fitted=re.sub(r'\bbestFit="[^"]+"','bestFit="1"',fitted,count=1)
+            else:
+                fitted=fitted.replace(' customWidth=', ' bestFit="1" customWidth=',1)
+            result.append(fitted)
+            start=p+1
+        if start<=high:result.append(boundary(original,start,high))
+    return '<cols>'+''.join(result)+'</cols>'
+
+
+def _reference_columns(index: int, widths: list[float | tuple[float,bool]], rows: dict | None = None) -> str:
     """Original exact column geometry; only Daily intake Liquid types are dynamic."""
     if index==2:
         # Preserve the ten fixed metadata columns byte-for-byte from the
@@ -187,8 +236,10 @@ def _reference_columns(index: int, widths: list[float | tuple[float,bool]]) -> s
                 raw=raw[:match.start()]+f'min="{minimum+1}" max="{maximum+1}"'+raw[match.end():]
             moved.append((minimum if minimum<10 else minimum+1,raw))
         moved.append((10,'<col min="10" max="10" width="11.5" customWidth="1"/>'))
-        return '<cols>'+''.join(raw for _,raw in sorted(moved))+'</cols>'
+        return _fit_reference_columns(index,'<cols>'+''.join(raw for _,raw in sorted(moved))+'</cols>',rows or {})
     cols=REFERENCE_COLS[index]
+    if index in (3,4):
+        return _fit_reference_columns(index,cols,rows or {})
     if index==6 and len(widths)>9:
         # Extend the approved Profiles columns; keep all existing widths intact.
         extras=''.join(f'<col min="{i}" max="{i}" width="{w:g}" customWidth="1"/>'
@@ -273,7 +324,7 @@ def _worksheet(index: int, rows: dict[int,list[tuple[int, object, int, str | Non
     if index in (1,2):
         parts.append('<pane ySplit="11" topLeftCell="A12" activePane="bottomLeft" state="frozen"/>')
     parts += ['</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.6"/>',
-              _reference_columns(index,widths),'<sheetData>']
+              _reference_columns(index,widths,rows),'<sheetData>']
     for row in sorted(rows):
         if row >= header_row:
             if row == header_row:
