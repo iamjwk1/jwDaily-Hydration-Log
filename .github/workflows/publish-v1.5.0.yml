@@ -1,13 +1,6 @@
 name: jwDaily Hydration Log v1.5.0 — stable validation and publish
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'RELEASE_NOTES_v1.5.0.md'
-      - '.github/workflows/publish-v1.5.0.yml'
+  # v1.5.0 is already published and must never auto-republish on beta commits.
   workflow_dispatch:
 permissions:
   contents: write

@@ -1,3 +1,10 @@
+## v1.5.1-beta.1 (2026-11-21) — prerelease
+- Excel: render all exported Boolean data as **Yes** / **No** instead of TRUE / FALSE, including Settings - Liquid Types.
+- Auto-fit content-aware widths for Settings - Cup types: **Cup Type ID (C)** and **MDI icon (F)**; also fit MDI columns in Settings - Liquid Types (E) and Settings - Quick buttons (I).
+- Preserve other reference column widths, structured tables, icon graphics, row heights, historical records, profile options, storage and backups.
+- Keep stable v1.5.0 unchanged; start the v1.5.1-beta.x development series.
+- Regression QA covers Yes/No cells, long IDs and MDI paths, OOXML/CRC and six-sheet integrity.
+
 ## v1.5.0 (2026-11-21) — stable
 - Promote the tested six-sheet beta.48 Excel export and current integration/card behavior to the v1.5.0 stable version.
 - Append **Show Quick buttons** and **Show Liquid types and Cup types** as Yes/No columns in Settings - Profiles, sourced from each profile's actual Home Assistant settings.

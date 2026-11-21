@@ -1,12 +1,19 @@
-# jwDaily Hydration Log v1.5.0
+# jwDaily Hydration Log v1.5.1-beta.1
 
-**Home Assistant custom integration — stable release v1.5.0.**
+**Home Assistant custom integration — prerelease v1.5.1-beta.1.** Stable production release remains **v1.5.0**.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); upstream MIT notice is retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current release: v1.5.0
+## Current beta: v1.5.1-beta.1
+
+- Excel displays exported Boolean data as **Yes / No**, including Custom and Visible in picker.
+- **Cup Type ID** and **MDI icon** columns are width-fitted from actual exported content, with bounded widths; MDI icon columns in other settings sheets are treated consistently.
+- All six sheets and the approved reference format remain intact; no storage, ledger or backup migration.
+- Install via **HACS → jwDaily Hydration Log → Redownload → Need a different version → v1.5.1-beta.1**, restart HA Core and refresh the dashboard. See `RELEASE_NOTES_v1.5.1-beta.1.md`.
+
+## Previous stable release: v1.5.0
 
 This stable release consolidates the tested v1.1.0-beta.48 functionality and extends Excel **Settings - Profiles** with the live, profile-specific Add drink moment visibility options:
 

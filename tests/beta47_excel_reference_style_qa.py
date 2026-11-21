@@ -79,26 +79,32 @@ with ZipFile(BytesIO(result)) as z:
             expected=ET.fromstring(reference.REFERENCE_COLS[i])
             actual=[dict(c.attrib) for c in ws.find(ns+"cols")]
             original=[dict(c.attrib) for c in expected]
+            def expanded(definitions):
+                result={}
+                for attrs in definitions:
+                    for pos in range(int(attrs["min"]),int(attrs["max"])+1):
+                        result[pos]={k:v for k,v in attrs.items() if k not in ("min","max")}
+                return result
+            actual_by_col=expanded(actual)
+            original_by_col=expanded(original)
+            fitted={3:{5},4:{3,6},5:{9}}.get(i,set())
             if i==5:
-                assert len(actual)==len(original)+1
-                assert actual[9]["min"]=="10" and actual[9]["max"]=="10" and actual[9]["width"]=="11.5"
-                expected_shifted=[]
-                for attrs in original:
-                    entry=dict(attrs)
-                    if int(entry["min"])>=10:
-                        entry["min"]=str(int(entry["min"])+1)
-                        entry["max"]=str(int(entry["max"])+1)
-                    expected_shifted.append(entry)
-                expected_shifted.insert(9,{"min":"10","max":"10","width":"11.5","customWidth":"1"})
-                assert actual==expected_shifted,(i,"Quick icon column must not alter existing widths")
+                original_by_col={n+1 if n>=10 else n:v for n,v in original_by_col.items()}
+                original_by_col[10]={"width":"11.5","customWidth":"1"}
             elif i==6:
-                assert actual[:len(original)]==original,(i,"Existing Profile columns moved")
-                assert actual[len(original):]==[
-                    {"min":"10","max":"10","width":"24","customWidth":"1"},
-                    {"min":"11","max":"11","width":"31","customWidth":"1"}
-                ],(i,"New Profile settings columns have incorrect widths")
-            else:
-                assert actual==original,(i,"Reference fixed column widths changed")
+                original_by_col[10]={"width":"24","customWidth":"1"}
+                original_by_col[11]={"width":"31","customWidth":"1"}
+            assert set(actual_by_col)==set(original_by_col),(i,"Column range changed")
+            for col,attrs in original_by_col.items():
+                got=actual_by_col[col]
+                if col in fitted:
+                    assert got.get("bestFit")=="1",(i,col,"Excel content fit flag missing")
+                    assert 13 <= float(got.get("width",0)) <= 72,(i,col,"Content width out of bounds")
+                    assert {k:v for k,v in got.items() if k not in ("width","bestFit")}=={
+                        k:v for k,v in attrs.items() if k not in ("width","bestFit")
+                    },(i,col,"Non-width column style changed")
+                else:
+                    assert got==attrs,(i,col,"Unrelated reference column changed")
         else:
             cols=list(ws.find(ns+"cols"))
             assert all(c.get("bestFit")!="1" for c in cols if int(c.get("max"))<=10)
