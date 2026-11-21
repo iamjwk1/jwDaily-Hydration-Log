@@ -78,11 +78,18 @@ with ZipFile(BytesIO(raw)) as z:
     assert "Coffee (Glazen beker)" in z.read("xl/worksheets/sheet5.xml").decode()
     assert "QA1" in z.read("xl/worksheets/sheet6.xml").decode()
     # Native Excel rich-value / metadata icon: F10, F11... with 1-based vm indexes.
-    icons=[c for c in sheets[2].iter(N+"c") if c.get("vm") is not None]
+    liquid_icons=[c for c in sheets[2].iter(N+"c") if c.get("vm") is not None]
+    cup_icons=[c for c in sheets[3].iter(N+"c") if c.get("vm") is not None]
+    quick_icons=[c for c in sheets[4].iter(N+"c") if c.get("vm") is not None]
+    assert len(liquid_icons)==6
+    assert len(cup_icons)==len({cup["id"] for profile in profiles for cup in profile["cup_types"]})
+    assert len(quick_icons)==sum(len(profile["quick_buttons"]) for profile in profiles)
+    assert all(c.get("r").startswith("F") for c in liquid_icons)
+    assert all(c.get("r").startswith("G") for c in cup_icons)
+    assert all(c.get("r").startswith("J") for c in quick_icons)
+    icons=liquid_icons+cup_icons+quick_icons
     count=len(icons)
-    assert count==6,count
     assert [int(c.get("vm")) for c in icons]==list(range(1,count+1))
-    assert all(c.get("r").startswith("F") for c in icons)
     assert all(c.get("t")=="e" for c in icons)
     meta=ET.fromstring(z.read("xl/metadata.xml"))
     future=meta.find(N+"futureMetadata");value=meta.find(N+"valueMetadata")
