@@ -76,7 +76,7 @@ with ZipFile(BytesIO(raw)) as book:
     assert names[-1]=="Cup used" and len(names)==8,names
     dh=[daily[f"{col}11"] for col in ("K","L","M")]
     assert dh[-1].startswith("Other"),dh
-    assert len([p for p in book.namelist() if p.startswith("xl/media/image")])==6
+    assert len([p for p in book.namelist() if p.startswith("xl/media/image")])>=6
     assert "xl/drawings/drawing1.xml" not in book.namelist()
     assert "xl/richData/rdrichvalue.xml" in book.namelist()
     for media in [p for p in book.namelist() if p.startswith("xl/media/image")]:

@@ -1,3 +1,10 @@
+## v1.1.0-beta.48 (2026-11-21)
+- Thin black outside table borders matching internal row lines on all six Excel worksheets.
+- Populate native Place in Cell graphics in Settings - Cup types.
+- Add Icon graphic after MDI icon and before Order in Settings - Quick buttons, preserving columns and effective icon colors.
+- Correct Quick Buttons filter/last-row range when the number of profile rows differs.
+- Regression tests for six outlines, rich-value icon metadata, row bounds and unchanged source records.
+
 ## v1.1.0-beta.47 (2026-11-20)
 - Reference-matched Excel styles, fonts, fills, borders, theme and non-liquid column widths from approved 20261120-1703 example; data still comes from Home Assistant.
 - Data rows remain 18pt and vertically centered, Hydration log header 38pt; only Liquid columns in Daily intake fit content.

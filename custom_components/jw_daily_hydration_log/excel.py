@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from .const import default_liquid_color, from_ml
 from .excel_icons import png_icon
 
-VERSION = '1.1.0-beta.47'
+VERSION = '1.1.0-beta.48'
 SHEETS = ['Hydration log', 'Daily intake', 'Settings - Liquid Types', 'Settings - Cup types', 'Settings - Quick buttons', 'Settings - Profiles']
 
 # Compressed styles and Office theme (visual metadata only, no user profile data)
@@ -173,6 +173,21 @@ def _reference_columns(index: int, widths: list[float | tuple[float,bool]]) -> s
             variable.append(f'<col min="{position}" max="{position}" width="{value}"'
                             + (' bestFit="1"' if fit else '') + ' customWidth="1"/>')
         return '<cols>'+''.join(fixed)+''.join(variable)+'</cols>'
+    if index==5:
+        # Keep every existing column width, shifting the Order+ columns right
+        # by one; new J holds the native Place in Cell icon graphics.
+        import re
+        original=re.findall(r'<col\b[^>]*/>', REFERENCE_COLS[5])
+        moved=[]
+        for raw in original:
+            match=re.search(r'\bmin="(\d+)"\s+max="(\d+)"',raw)
+            if match is None:raise ValueError('Malformed reference column XML')
+            minimum,maximum=int(match.group(1)),int(match.group(2))
+            if minimum>=10:
+                raw=raw[:match.start()]+f'min="{minimum+1}" max="{maximum+1}"'+raw[match.end():]
+            moved.append((minimum if minimum<10 else minimum+1,raw))
+        moved.append((10,'<col min="10" max="10" width="11.5" customWidth="1"/>'))
+        return '<cols>'+''.join(raw for _,raw in sorted(moved))+'</cols>'
     cols=REFERENCE_COLS[index]
     if index==1 and len(widths)>9:
         extras=''.join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>'
@@ -189,7 +204,7 @@ _REFERENCE_HEADERS = {
  2:[24,25,25,25,26,23,23,23,23],
  3:[54,48,47,47,47,47,47,47,47,47,47,49],
  4:[46,54,47,48,47,47,47,47,49],
- 5:[46,47,47,47,48,47,47,47,47,47,47,47,50],
+ 5:[46,47,47,47,48,47,47,47,47,47,47,47,47,50],
  6:[51,55,52,52,52,52,52,53],
 }
 _REFERENCE_BODY = {
@@ -197,14 +212,14 @@ _REFERENCE_BODY = {
  2:[17,7,11,11,19,7,7,7,18],
  3:[30,30,11,11,11,11,11,11,20,11,11,12],
  4:[43,43,11,11,11,11,11,11,45],
- 5:[43,11,11,11,11,19,11,12,11,11,11,11,11],
+ 5:[43,11,11,11,11,19,11,12,11,11,11,11,11,11],
  6:[43,43,11,11,11,11,11,12],
 }
 _REFERENCE_LAST = {
  1:[13,14,14,14,14,14,15,14],
  3:[31,31,14,14,14,14,14,14,29,14,14,15],
  4:[44,44,14,14,14,14,14,14,45],
- 5:[44,14,14,14,14,19,14,15,14,14,14,14,14],
+ 5:[44,14,14,14,14,19,14,15,14,14,14,14,14,14],
  6:[44,44,14,14,14,14,14,15],
 }
 
@@ -494,6 +509,74 @@ def _styles_with_colored_liquid_cells(colors: list[str] | None = None) -> tuple[
     return original.encode('utf-8'),new_style_id,color_style_ids,left_date_style_id
 
 
+def _outline_all_tables(styles_xml: bytes, sheet_rows: list[dict]) -> bytes:
+    """Add thin auto-black outside borders without changing internal line styles.
+
+    Every style is cloned only if an outside edge is necessary. Original
+    fonts, fills (including HA liquid colors), number formats and alignment
+    remain untouched. All table rectangles B:LastColumn get all four edges.
+    """
+    import re
+    source=styles_xml.decode('utf-8')
+    ns='{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+    tree=ET.fromstring(source)
+    borders=tree.find(ns+'borders');xfs=tree.find(ns+'cellXfs')
+    if borders is None or xfs is None:raise ValueError('Missing Excel styles')
+    border_cache={};style_cache={};extra_borders=[];extra_styles=[]
+    def raw_xml(element):
+        text=ET.tostring(element,encoding='unicode')
+        return text.replace(' xmlns:ns0="http://schemas.openxmlformats.org/spreadsheetml/2006/main"','').replace('ns0:','')
+    def new_style(base_style: int, sides: tuple[str,...]) -> int:
+        if not sides:return base_style
+        key=(base_style,sides)
+        if key in style_cache:return style_cache[key]
+        parent=xfs[base_style]
+        base_border=int(parent.get('borderId','0'))
+        borderkey=(base_border,sides)
+        if borderkey not in border_cache:
+            border=copy.deepcopy(borders[base_border])
+            for side in sides:
+                edge=border.find(ns+side)
+                if edge is None:edge=ET.SubElement(border,ns+side)
+                edge.set('style','thin')
+                for child in list(edge):edge.remove(child)
+                ET.SubElement(edge,ns+'color',{'indexed':'64'})
+            border_cache[borderkey]=len(borders)+len(extra_borders)
+            extra_borders.append(raw_xml(border))
+        style=copy.deepcopy(parent)
+        style.set('borderId',str(border_cache[borderkey]))
+        style.set('applyBorder','1')
+        index=len(xfs)+len(extra_styles)
+        extra_styles.append(raw_xml(style))
+        style_cache[key]=index
+        return index
+    for sheet_number, rows in enumerate(sheet_rows,1):
+        head=11 if sheet_number<=2 else 8 if sheet_number==6 else 9
+        last=max((r for r in rows if r>head),default=head+1)
+        end=max((x[0] for x in rows[head]),default=2)
+        # Even when there is no drink, show the complete bordered empty table.
+        if not rows.get(last):rows[last]=[(c,None,11,None) for c in range(2,end+1)]
+        for row in (r for r in sorted(rows) if head<=r<=last):
+            updated=[]
+            for col,value,style,formula in rows[row]:
+                sides=tuple(side for needed,side in (
+                    (row==head,'top'),(row==last,'bottom'),
+                    (col==2,'left'),(col==end,'right')) if needed)
+                updated.append((col,value,new_style(style,sides),formula))
+            rows[row]=updated
+    def extend(tag,body):
+        nonlocal source
+        pattern=fr'<{tag}([^>]*)>(.*?)</{tag}>'
+        match=re.search(pattern,source,re.S)
+        if match is None:raise ValueError('Could not extend '+tag)
+        attrs=re.sub(r'\bcount="[^"]+"',f'count="{len(borders)+len(extra_borders) if tag=="borders" else len(xfs)+len(extra_styles)}"',match.group(1))
+        source=source[:match.start()]+f'<{tag}{attrs}>{match.group(2)}'+''.join(body)+f'</{tag}>'+source[match.end():]
+    if extra_borders:extend('borders',extra_borders)
+    if extra_styles:extend('cellXfs',extra_styles)
+    ET.fromstring(source)
+    return source.encode('utf-8')
+
+
 def _record_table(profiles: list[dict], tz: ZoneInfo):
     """Actual logged drinks with user-editable liquid display names; no artificial records."""
     result=[]
@@ -702,34 +785,44 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
     for rownum,(p,pos,cup) in enumerate(unique_cups,10):
         vals=['All profiles' if len(profiles)>0 else p['config']['name'],
               cup.get('id',''),cup.get('name',''),cup.get('default_volume_ml'),
-              cup.get('icon_mdi',''),'', 'Yes' if cup.get('icon_svg') else '',
+              cup.get('icon_mdi',''),InCellImage(len(icon_images)+1),
+               'Yes' if cup.get('icon_svg') else '',
               pos,'No' if cup.get('hidden',False) else 'Yes']
         cupsrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+        icon_images.append(png_icon(cup.get('icon_mdi') or 'mdi:cup',
+                                    cup.get('icon_color') or '#172A35'))
     if not unique_cups:cupsrows[10]=[]
 
-    # Settings - Quick buttons: B9:N9; the saved per-profile order and
+    # Settings - Quick buttons: B9:O9, native icon in J; per-profile order and
     # effective label are exported exactly as used by the cards.
     quick_rows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Quick buttons',
                              'Nr of liquid types',len(export_types))
     header(quick_rows,9,['Profile','Button ID','Effective button label','Label mode',
                          'Default volume\n(mL)','Visible','Custom label','MDI icon',
-                         'Order','Liquid ID','Liquid name','Cup ID','Cup name'])
+                         'Icon graphic','Order','Liquid ID','Liquid name','Cup ID','Cup name'])
     rownum=9
     for p in profiles:
         cups={c.get('id'):c for c in p.get('cup_types') or []}
-        liquids={l.get('id'):l.get('name',l.get('id')) for l in p.get('liquid_definitions') or []}
+        liquid_defs={l.get('id'):l for l in p.get('liquid_definitions') or []}
+        liquids={lid:l.get('name',lid) for lid,l in liquid_defs.items()}
         for pos,q in enumerate(p.get('quick_buttons') or [],1):
             rownum+=1
             cid=q.get('cup_type_id','');lid=q.get('liquid_type_id','')
             cup_name=cups.get(cid,{}).get('name',cid)
             liquid_name=liquids.get(lid,lid)
             label=q.get('label') or q.get('custom_label') or f'{liquid_name} ({cup_name})'
+            source=liquid_defs.get(lid,{})
+            icon_mdi=(q.get('icon_mdi') or source.get('icon_mdi') or
+                      cups.get(cid,{}).get('icon_mdi') or 'mdi:cup')
+            icon_color=(q.get('icon_color') or source.get('icon_color') or '#172A35')
             vals=[p['config'].get('name',''),q.get('id',''),label,
                   q.get('label_mode','automatic'),cups.get(cid,{}).get('default_volume_ml'),
                   'No' if q.get('hidden') else 'Yes',q.get('custom_label',''),
-                  q.get('icon_mdi',''),pos,lid,liquid_name,cid,cup_name]
+                  icon_mdi,InCellImage(len(icon_images)+1),pos,lid,liquid_name,cid,cup_name]
             quick_rows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
+            icon_images.append(png_icon(icon_mdi,icon_color))
     if rownum==9:quick_rows[10]=[]
+    quick_last_row=max(10,rownum)
 
     # Settings - Profiles: B8:I8; identities and targets from HA snapshots.
     profrows=settings_meta('Home Assistant jwDaily Hydration Log  - Settings - Profiles')
@@ -743,8 +836,10 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
               len(p.get('quick_buttons') or [])]
         profrows[rownum]=[(col,val,11,None) for col,val in enumerate(vals,2)]
     if not profiles:profrows[9]=[]
-    for sheet_index, sheet_rows in enumerate((logrows,drows,typesrows,cupsrows,quick_rows,profrows),1):
+    all_rows=[logrows,drows,typesrows,cupsrows,quick_rows,profrows]
+    for sheet_index, sheet_rows in enumerate(all_rows,1):
         _apply_reference_styles(sheet_index,sheet_rows)
+    styles_xml=_outline_all_tables(styles_xml,all_rows)
     rich_parts=_in_cell_image_parts(icon_images)
     content=[
       _worksheet(1,logrows,[4,19,16,6,9,9,17,11,25]+([17,20] if mixed else []),
@@ -758,8 +853,8 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                  f'M{max(10,liquid_row)}',max(10,liquid_row),True),
       _worksheet(4,cupsrows,[3.71,16,16,16.29,12,18.64,7.21,7.71,9.79,10.64],
                  f'J{max(10,9+len(unique_cups))}',max(10,9+len(unique_cups)),True),
-      _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,9.79,22,18.07,19,13.43],
-                 f'N{max(10,rownum)}',max(10,rownum),True),
+      _worksheet(5,quick_rows,[3.71,16,21.5,23,14.64,11.21,10.64,15.64,17.42,11.5,9.79,22,18.07,19,13.43],
+                 f'O{quick_last_row}',quick_last_row,True),
       _worksheet(6,profrows,[3.71,16,16,8,11.14,8.43,17.5,20.5,21.14],
                  f'I{max(9,8+len(profiles))}',max(9,8+len(profiles)),True),
     ]
@@ -837,7 +932,7 @@ def export_xlsx(profiles: list[dict], timezone_name: str='Europe/Amsterdam', whe
                     3:typesrows,4:cupsrows,5:quick_rows,6:profrows}[i])[header_row],
                     key=lambda x:x[0])]
                 bottom={3:max(10,liquid_row),4:max(10,9+len(unique_cups)),
-                        5:max(10,rownum),6:max(9,8+len(profiles))}[i]
+                        5:quick_last_row,6:max(9,8+len(profiles))}[i]
                 z.writestr(f'xl/tables/table{i}.xml',
                     _table(i,bottom,settings_headers=headers))
     return buffer.getvalue()
