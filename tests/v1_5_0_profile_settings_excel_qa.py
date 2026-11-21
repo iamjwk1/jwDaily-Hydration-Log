@@ -80,7 +80,9 @@ with ZipFile(BytesIO(workbook)) as z, ZipFile(BytesIO(unchanged_book)) as previo
     assert len(headers) == 10, headers
     assert headers[-2:] == ["Show Quick buttons", "Show Liquid types and Cup types"], headers
     columns = [col for col in ws.find(ns + "cols")]
-    assert len(columns) == 11
+    # Reference metadata may group original columns into <col min=... max=...> ranges.
+    assert (columns[-2].get("min"), columns[-2].get("max")) == ("10", "10")
+    assert (columns[-1].get("min"), columns[-1].get("max")) == ("11", "11")
     assert (columns[-2].get("width"), columns[-1].get("width")) == ("24", "31")
     expected = {
         9: ("Legacy defaults", "Yes", "Yes"),
