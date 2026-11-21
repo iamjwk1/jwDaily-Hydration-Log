@@ -77,7 +77,22 @@ with ZipFile(BytesIO(result)) as z:
         if i!=2:
             got=ET.tostring(ws.find(ns+"cols"))
             expected=ET.fromstring(reference.REFERENCE_COLS[i])
-            assert [dict(c.attrib) for c in ws.find(ns+"cols")]==[dict(c.attrib) for c in expected],(i,"Reference fixed column widths changed")
+            actual=[dict(c.attrib) for c in ws.find(ns+"cols")]
+            original=[dict(c.attrib) for c in expected]
+            if i==5:
+                assert len(actual)==len(original)+1
+                assert actual[9]["min"]=="10" and actual[9]["max"]=="10" and actual[9]["width"]=="11.5"
+                expected_shifted=[]
+                for attrs in original:
+                    entry=dict(attrs)
+                    if int(entry["min"])>=10:
+                        entry["min"]=str(int(entry["min"])+1)
+                        entry["max"]=str(int(entry["max"])+1)
+                    expected_shifted.append(entry)
+                expected_shifted.insert(9,{"min":"10","max":"10","width":"11.5","customWidth":"1"})
+                assert actual==expected_shifted,(i,"Quick icon column must not alter existing widths")
+            else:
+                assert actual==original,(i,"Reference fixed column widths changed")
         else:
             cols=list(ws.find(ns+"cols"))
             assert all(c.get("bestFit")!="1" for c in cols if int(c.get("max"))<=10)
