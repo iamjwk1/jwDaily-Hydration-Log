@@ -5,7 +5,7 @@ from io import BytesIO
 from xml.etree import ElementTree as ET
 from datetime import datetime,timezone
 import importlib.util, types, sys,collections,hashlib,copy
-r=Path('/mnt/data/beta48_staging/custom_components/jw_daily_hydration_log');p=types.ModuleType('hydro_qa');p.__path__=[str(r)];sys.modules[p.__name__]=p
+r=Path(__file__).resolve().parents[1]/'custom_components'/'jw_daily_hydration_log';p=types.ModuleType('hydro_qa');p.__path__=[str(r)];sys.modules[p.__name__]=p
 for name in ('const','excel_reference_format','excel_icons','excel'):
  spec=importlib.util.spec_from_file_location('hydro_qa.'+name,r/(name+'.py'));mod=importlib.util.module_from_spec(spec);sys.modules[spec.name]=mod;spec.loader.exec_module(mod)
 from hydro_qa import excel
