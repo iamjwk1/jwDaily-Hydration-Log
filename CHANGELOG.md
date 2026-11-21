@@ -1,3 +1,11 @@
+## v1.5.0 (2026-11-21) — stable
+- Promote the tested six-sheet beta.48 Excel export and current integration/card behavior to the v1.5.0 stable version.
+- Append **Show Quick buttons** and **Show Liquid types and Cup types** as Yes/No columns in Settings - Profiles, sourced from each profile's actual Home Assistant settings.
+- Match the existing default-on behavior when older profile snapshots do not contain these flags. Other five sheets and all existing Profile columns remain unchanged; preserve style, column geometry, structured filters and table borders.
+- Add multi-profile, missing-default, source immutability, OOXML structure/CRC and prior-sheet byte-parity regression checks.
+- No storage schema changes, migrations, ledger edits, data imports or backup/restore changes.
+- Future development tags follow v1.5.1-beta.1, v1.5.1-beta.2, etc.
+
 ## v1.1.0-beta.48 (2026-11-21)
 - Thin black outside table borders matching internal row lines on all six Excel worksheets.
 - Populate native Place in Cell graphics in Settings - Cup types.
