@@ -1,3 +1,10 @@
+## v2.0.0 (2026-11-22) — stable
+- Promote the user-accepted v1.5.1-beta.4 implementation to a stable v2.0.0 release with no storage/backup schema changes.
+- Replace root README release-history clutter with product capabilities, HACS installation, example entities, snapshots and backup/restore guidance.
+- Move 49 older release notes, technical acceptance/audit documents and versioned examples to documentation archives; retain full previous README for historical reference.
+- Archive superseded GitHub release publishers, leaving the normal CI, HACS/hassfest validation and one v2.0.0 publisher active.
+- Rebuild a CRC/SHA-256-verified stable release ZIP with only current user documentation and integration source. Historic GitHub releases remain immutable.
+
 ## v1.5.1-beta.4 (2026-11-22) — prerelease
 - Data & Backup: replace ambiguous native file-name presentation with one stable selected ZIP filename.
 - Display the actual target profile name in Restore preview.
