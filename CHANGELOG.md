@@ -1,3 +1,10 @@
+## v1.5.1-beta.2 (2026-11-22) — prerelease
+- Fix "Unknown jwDaily Hydration Log profile: jan_willem" when saving the profile Add drink visibility switches.
+- Avoid unnecessary Home Assistant integration unload/reload when only the profile's two display-visibility options change (and redundant unchanged age/gender/unit fields are present).
+- Retain reload for changed profile identity or other substantive HA config options; keep safe historical storage semantics.
+- After a successful save, refresh profile list and history together, retrying while HA finishes any legitimate reload; do not treat temporary missing profiles as failed saves.
+- Add exact profile-save and transient missing-profile browser regressions. No drink history, storage schema, backup, Excel, card layout or graph changes.
+
 ## v1.5.1-beta.1 (2026-11-21) — prerelease
 - Excel: render all exported Boolean data as **Yes** / **No** instead of TRUE / FALSE, including Settings - Liquid Types.
 - Auto-fit content-aware widths for Settings - Cup types: **Cup Type ID (C)** and **MDI icon (F)**; also fit MDI columns in Settings - Liquid Types (E) and Settings - Quick buttons (I).
