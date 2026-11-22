@@ -1,3 +1,11 @@
+## v1.5.1-beta.4 (2026-11-22) — prerelease
+- Data & Backup: replace ambiguous native file-name presentation with one stable selected ZIP filename.
+- Display the actual target profile name in Restore preview.
+- Compare validated full settings including preferences and all drink/history/data content by content hashes, not just counts; show Identical/Different and Not included for excluded scope.
+- Use the visible scope names Everything, Settings only and Data only in the preview and confirmation.
+- Keep all existing full restore safety gates, data, storage, Excel, ZIP schema and restore logic unchanged.
+- Add native comparison and seven-width Chromium upload/preview regression coverage.
+
 ## v1.5.1-beta.3 (2026-11-22) — prerelease
 - Add an explicit bottom-right **Close** button to the main Settings dialog on all Settings pages, including Settings Home.
 - Close uses the same existing action as the top-right ✕ without changing data, settings or history.
