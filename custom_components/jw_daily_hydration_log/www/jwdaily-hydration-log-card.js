@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.5.1-beta.3 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.5.1-beta.4 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -431,7 +431,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.5.1-beta.3')throw Error(`Frontend v1.5.1-beta.3 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.5.1-beta.4')throw Error(`Frontend v1.5.1-beta.4 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -836,7 +836,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
  }
  _transferHTML(){
   const E=jdhlEscape,p=this._fullRestorePreview,mode=this._fullRestoreScope||'all';
-  const sub=(this._transferTab||'excel');
+  const modeLabel=({all:'Everything',settings:'Settings only',data:'Data only'})[mode]||'Everything';
+  const identical=flag=>flag===true?'Identical to current':flag===false?'Different from current':'Not available';
   return `<div class="settings-section beta40-transfer">
     <div class="transfer-panel transfer-action-row">
       <ha-icon icon="mdi:file-excel"></ha-icon><div class="transfer-copy"><strong>Export to Excel</strong>
@@ -855,14 +856,23 @@ class JwDailyHydrationLogCard extends HTMLElement {
       <div class="transfer-scope-buttons" role="group" aria-label="Choose restore scope">
        ${[['all','Everything'],['settings','Settings only'],['data','Data only']].map(([v,name])=>`<button type="button" class="secondary ${mode===v?'selected':''}" data-action="transfer-scope" data-value="${v}" aria-pressed="${mode===v}">${name}</button>`).join('')}
       </div>
-      <label>Choose backup ZIP<input type="file" accept=".zip,application/zip" data-field="full_restore_file"/></label>
-      ${this._fullRestoreFilename?`<p class="settings-note">Selected: ${E(this._fullRestoreFilename)}</p>`:''}
+      <div class="backup-file-title">Choose backup ZIP</div>
+      <div class="backup-file-selection">
+       <label class="backup-file-picker"><span>Choose file</span>
+        <input type="file" accept=".zip,application/zip" data-field="full_restore_file" aria-label="Choose backup ZIP"/>
+       </label>
+       <span class="backup-file-name" title="${E(this._fullRestoreFilename||'No file selected')}">${this._fullRestoreFilename?`Selected: ${E(this._fullRestoreFilename)}`:'No file selected'}</span>
+      </div>
       <label class="check-label"><input type="checkbox" data-field="full_backup_verified" ${this._fullBackupSaved?'checked':''}/> A separate current backup is saved for recovery.</label>
       <button class="secondary" data-action="full-restore-preview" ${!this._fullRestoreContent?'disabled':''}>Preview restore</button>
-      ${p?`<div class="migration-summary"><strong>Restore preview — ${E(mode)}</strong>
+      ${p?`<div class="migration-summary restore-review"><strong>Restore preview — ${E(modeLabel)}</strong>
+        <p class="restore-profile">Restore to profile: <strong>${E(p.profile_name||p.profile)}</strong></p>
         <p>Existing drinks: ${p.counts.current_records}; backup drinks: ${p.counts.records}</p>
         <p>Cups: ${p.counts.cups} · Quick buttons: ${p.counts.quick_buttons}</p>
-        <p class="delete-warning">Only the selected scope will be replaced. Verify the profile and counts.</p>
+        <p class="restore-comparison">Settings: <strong>${mode==='data'?'Not included':identical(p.comparison?.settings_identical)}</strong></p>
+        <p class="restore-comparison">Drink history &amp; data: <strong>${mode==='settings'?'Not included':identical(p.comparison?.data_identical)}</strong></p>
+        <p class="settings-note">Compared against current profile settings and complete saved data, not only drink counts.</p>
+        <p class="delete-warning">Only the selected scope will be replaced. Verify the profile and differences.</p>
         <button class="danger" data-action="full-restore-apply" ${!this._fullBackupSaved?'disabled':''}>Confirm restore</button></div>`:''}
     </div>
     </div>`;
@@ -938,7 +948,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   else if(page==='profile')body=this._profileHTML();
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
-  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.5.1-beta.3</p>
+  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.5.1-beta.4</p>
    <p class="settings-note">Each drink record stores independent Liquid and Cup IDs. Settings and Data can be backed up separately.</p></div>`;
   return `<div class="overlay" role="presentation"><section class="dialog dialog-settings dialog-page-${page}" role="dialog" aria-modal="${!nested}" aria-label="Settings">
     <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({transfer:'Import & Export',quick:'Edit Quick Buttons - '+(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}[page]||'Settings')}</h3>
@@ -1032,7 +1042,8 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   if(action==='full-restore-apply'){
    if(!this._fullBackupSaved||!this._fullRestorePreview)return;
-   if(!window.confirm('Restore '+(this._fullRestoreScope||'all')+' from backup to this profile?'))return;
+   const label=({all:'Everything',settings:'Settings only',data:'Data only'})[this._fullRestoreScope||'all']||'Everything';
+   if(!window.confirm('Restore '+label+' from backup to this profile?'))return;
    if(!window.confirm('FINAL CONFIRMATION: replace only the selected restore scope?'))return;
    try{await this._hass.callWS({type:'jw_daily_hydration_log/full_restore_apply',profile:this._config.profile,
      content_base64:this._fullRestoreContent,preview:this._fullRestorePreview,scope:this._fullRestoreScope||'all',confirm:true});
@@ -2016,6 +2027,16 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
 .beta40-transfer .transfer-action-row>button{justify-self:end;white-space:nowrap}
 .beta40-transfer .transfer-restore{gap:10px}
 .beta40-transfer .transfer-restore-head{width:100%}
+.beta40-transfer .backup-file-title{font-size:.86rem}
+.beta40-transfer .backup-file-selection{display:flex;align-items:center;gap:9px;flex-wrap:wrap;width:100%;min-width:0}
+.beta40-transfer .transfer-panel .backup-file-picker{position:relative;display:inline-flex;flex-direction:row;align-items:center;justify-content:center;flex:none;width:auto;max-width:none;min-height:34px;padding:5px 10px;border:1px solid #71b4d2;border-radius:9px;background:#B3E5FC;color:#18374b;cursor:pointer;font-size:.86rem}
+.beta40-transfer .backup-file-picker:hover{background:#95d9f9}
+.beta40-transfer .backup-file-picker:focus-within{outline:2px solid #0578b3;outline-offset:2px}
+.beta40-transfer .backup-file-picker input[type=file]{position:absolute;inset:0;width:100%;height:100%;max-width:none;opacity:0;cursor:pointer;padding:0;box-sizing:border-box}
+.beta40-transfer .backup-file-name{min-width:0;overflow-wrap:anywhere;font-size:.86rem}
+.beta40-transfer .restore-comparison{line-height:1.3}
+.beta40-transfer .restore-profile{margin-top:7px}
+
 .beta40-transfer .transfer-scope-buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;width:100%}
 .beta40-transfer .transfer-scope-buttons button{padding:7px 5px!important;font-size:.83rem}
 .beta40-transfer .transfer-scope-buttons .selected{background:#b3e5fc!important;box-shadow:inset 0 0 0 2px #057bab!important;font-weight:600}
@@ -2328,7 +2349,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._iconPickerHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<button class="secondary" data-action="export-open" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button>`:''}
-    <span class="card-version">v1.5.1-beta.3</span>
+    <span class="card-version">v1.5.1-beta.4</span>
    </footer></div></ha-card>`;
   const picker=this.shadowRoot.querySelector('[data-icon-library]');
   if(picker){picker.hass=this._hass;picker.value=this._iconPicker?.selected||'';}
@@ -2472,7 +2493,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.5.1-beta.3</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.5.1-beta.4</div></ha-card>`;return;}
   const colorSettings=entity?.attributes?.liquid_colors||{};
   const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
@@ -2529,7 +2550,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const target=Number.isFinite(attrTarget)&&attrTarget>0?attrTarget:
    Number.isFinite(nativeTarget)&&nativeTarget>0?jdhlToMl(nativeTarget,sensorUnit==='fl oz'?'fl_oz':sensorUnit==='L'?'L':'mL'):NaN;
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} ${unitLabel}${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} ${unitLabel} (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.5.1-beta.3</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.5.1-beta.4</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -2544,4 +2565,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.5.1-beta.3');
+console.info('jwDaily Hydration Log Card v1.5.1-beta.4');
