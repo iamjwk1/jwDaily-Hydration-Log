@@ -789,6 +789,28 @@ class JwDailyHydrationLogCard extends HTMLElement {
   try{this._profilesData=await this._hass.callWS({type:'jw_daily_hydration_log/profiles_list'});this._render(true);}
   catch(e){this._alert(e);}
  }
+ async _refreshSavedProfile(){
+  // A rename or other non-visibility config edit may legitimately reload HA.
+  // Save has already succeeded: never treat a brief missing coordinator
+  // during async_unload_entry/async_setup_entry as a failed profile edit.
+  const active=this._config?.profile,date=this._viewDate||this._todayISO();
+  for(let attempt=0;attempt<12;attempt++){
+   try{
+    const data=await this._hass.callWS({type:'jw_daily_hydration_log/profiles_list'});
+    if(!Array.isArray(data?.profiles)||!data.profiles.length||
+       (active&&!data.profiles.some(p=>p.slug===active)))throw Error('Profile temporarily unavailable');
+    const history=active?await this._hass.callWS({type:'jw_daily_hydration_log/history',profile:active,date}):null;
+    // Update the screen together: never show an empty list from mid-reload.
+    this._profilesData=data;
+    if(history&&this._config?.profile===active&&(this._viewDate||this._todayISO())===date)this._history=history;
+    this._error='';this._render(true);return true;
+   }catch(e){
+    if(attempt<11)await new Promise(done=>setTimeout(done,350));
+   }
+  }
+  this._error='Profile saved, but Home Assistant is still reloading profile data. Reopen Settings to refresh.';
+  this._render(true);return false;
+ }
  _profileHTML(){
   const E=jdhlEscape,profiles=this._profilesData?.profiles||[],d=this._profileDraft;
   return `<div class="settings-section"><p class="settings-note">Each profile keeps separate settings and drink history.</p>
@@ -1056,7 +1078,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
       show_add_quick_buttons:d.show_add_quick_buttons,
       show_add_liquid_cup_types:d.show_add_liquid_cup_types};
     await this._hass.callWS(req);this._profileDraft=null;this._profileEditSlug='';
-    await this._loadProfiles();await this._fetchHistory();this._render(true);
+    await this._refreshSavedProfile();
    }catch(e){this._alert(e);}return;
   }
   if(action==='settings-close'){this._settingsSection=null;this._settingsDraft=null;this._profileDraft=null;this._profileEditSlug='';this._customDraft=null;this._manageOpen=false;this._render(true);return;}
