@@ -1318,10 +1318,25 @@ class HydrationCoordinator:
         counts = dict(records=sum(r.get('kind') == 'drink' for r in data['records']),
                       cups=len(settings['cup_types']), quick_buttons=len(settings['quick_buttons']),
                       current_records=sum(r.get('kind') == 'drink' for r in self.records))
-        return dict(profile=self.slug, archive_sha256=archive_digest,
-                    settings_revision=self.settings_revision(), data_revision=self.data_revision(),
-                    counts=counts, target_settings_sha256=digest(settings),
-                    target_data_sha256=data_io.sha(data), preferences_sha256=data_io.sha(preferences))
+        # Compare the *validated restore payload* with current persisted state.
+        # This covers every setting, preference, ledger event, record ID,
+        # timestamp, volume, daily archive and sensor reading, not just counts.
+        current_preferences={key:getattr(self,key) for key in
+                             ('age','gender','unit','show_add_quick_buttons','show_add_liquid_cup_types')}
+        current_settings_sha256=self.settings_revision()
+        current_data_sha256=self.data_revision()
+        settings_sha256=digest(settings)
+        data_sha256=data_io.sha(data)
+        settings_identical=(settings_sha256==current_settings_sha256
+                            and preferences==current_preferences)
+        data_identical=(data_sha256==current_data_sha256)
+        return dict(profile=self.slug, profile_name=self.name,
+                    comparison=dict(settings_identical=settings_identical,
+                                    data_identical=data_identical),
+                    archive_sha256=archive_digest,
+                    settings_revision=current_settings_sha256, data_revision=current_data_sha256,
+                    counts=counts, target_settings_sha256=settings_sha256,
+                    target_data_sha256=data_sha256, preferences_sha256=data_io.sha(preferences))
 
     async def async_restore_full(self, settings: dict, data: dict, preview: dict, preferences: dict | None = None) -> dict:
         async with self._lock:
