@@ -112,6 +112,61 @@ with sync_playwright() as p:
   assert root.locator('[data-action="transfer-scope"]').count()==3
   root.locator('[data-action="transfer-scope"][data-value="settings"]').click()
   assert root.locator('[data-action="transfer-scope"][data-value="settings"]').get_attribute("aria-pressed")=="true"
+  # Beta.4: the native picker input resets on render but the selected
+  # filename must remain clear, with no visible "No file chosen" contradiction.
+  assert root.locator('.backup-file-name').inner_text()=='No file selected'
+  assert root.locator('.backup-file-picker input[data-field="full_restore_file"]').count()==1
+  assert root.locator('.backup-file-picker input[data-field="full_restore_file"]').evaluate(
+      "e=>getComputedStyle(e).opacity")=='0'
+  root.locator('.backup-file-picker input[data-field="full_restore_file"]').set_input_files({
+      'name':'jwDaily Hydration Log jan_willem Full Backup.zip',
+      'mimeType':'application/zip',
+      'buffer':b'qa-read-only-upload'
+  })
+  page.wait_for_function("card._fullRestoreFilename==='jwDaily Hydration Log jan_willem Full Backup.zip'")
+  assert root.locator('.backup-file-name').inner_text()=='Selected: jwDaily Hydration Log jan_willem Full Backup.zip'
+  assert 'No file chosen' not in root.locator('.dialog-settings').inner_text()
+  assert root.locator('button[data-action="full-restore-preview"]').is_enabled()
+  # In a Settings-only restore, Data is excluded and must not be reported
+  # as different; in Everything, both independently reflect actual hashes.
+  page.evaluate("""() => {
+    card._fullRestorePreview={
+      profile:'one',profile_name:'Jan-Willem',scope:'settings',
+      counts:{current_records:153,records:153,cups:5,quick_buttons:9},
+      comparison:{settings_identical:false,data_identical:true}
+    };card._render(true);
+  }""")
+  preview=root.locator('.restore-review')
+  assert 'Restore preview — Settings only' in preview.inner_text()
+  assert 'Restore to profile: Jan-Willem' in preview.inner_text()
+  assert 'Settings: Different from current' in preview.inner_text()
+  assert 'Drink history & data: Not included' in preview.inner_text()
+  assert root.locator('button[data-action="full-restore-apply"]').is_disabled()
+  root.locator('[data-action="transfer-scope"][data-value="all"]').click()
+  assert root.locator('.restore-review').count()==0,'Scope switch must invalidate old preview'
+  assert 'Selected: jwDaily Hydration Log jan_willem Full Backup.zip' in root.locator('.backup-file-name').inner_text()
+  page.evaluate("""() => {
+    card._fullRestorePreview={
+      profile:'one',profile_name:'Jan-Willem',scope:'all',
+      counts:{current_records:153,records:153,cups:5,quick_buttons:9},
+      comparison:{settings_identical:true,data_identical:false}
+    };card._render(true);
+  }""")
+  assert 'Restore preview — Everything' in root.locator('.restore-review').inner_text()
+  assert 'Settings: Identical to current' in root.locator('.restore-review').inner_text()
+  assert 'Drink history & data: Different from current' in root.locator('.restore-review').inner_text()
+  root.locator('[data-action="transfer-scope"][data-value="data"]').click()
+  page.evaluate("""() => {
+    card._fullRestorePreview={
+      profile:'one',profile_name:'Jan-Willem',scope:'data',
+      counts:{current_records:153,records:153,cups:5,quick_buttons:9},
+      comparison:{settings_identical:true,data_identical:false}
+    };card._render(true);
+  }""")
+  assert 'Restore preview — Data only' in root.locator('.restore-review').inner_text()
+  assert 'Settings: Not included' in root.locator('.restore-review').inner_text()
+  assert 'Drink history & data: Different from current' in root.locator('.restore-review').inner_text()
+  print('BETA1514_RESTORE_PREVIEW_BROWSER_QA_PASS',width)
   assert root.locator('.beta40-advanced').count()==0
   assert root.locator('[data-action="settings-export-json"]').count()==0
   assert root.locator('[data-action="data-export-json"]').count()==0

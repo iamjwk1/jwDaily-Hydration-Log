@@ -29,6 +29,7 @@ jobs:
           python tests/v1_5_0_profile_settings_excel_qa.py
           python tests/v1_5_1_beta_1_excel_yesno_autofit_qa.py
           python tests/v1_5_1_beta_2_profile_save_no_reload_qa.py
+          python tests/v1_5_1_beta_4_restore_preview_qa.py
           python tests/beta39_version_guard_qa.py
           python tests/beta40_restore_scope_qa.py
           python tests/beta43_data_timezone_qa.py

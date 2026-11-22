@@ -1,12 +1,20 @@
-# jwDaily Hydration Log v1.5.1-beta.3
+# jwDaily Hydration Log v1.5.1-beta.4
 
-**Home Assistant custom integration — prerelease v1.5.1-beta.3.** Stable production release remains **v1.5.0**.
+**Home Assistant custom integration — prerelease v1.5.1-beta.4.** Stable production release remains **v1.5.0**.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); upstream MIT notice is retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current beta: v1.5.1-beta.3
+## Current beta: v1.5.1-beta.4
+
+- Data & Backup Restore preview now shows one unambiguous selected ZIP filename, the restore target profile, and a complete content-hash comparison for both Settings and Drink history & data.
+- Differing contents are reported even when the drink counts match; excluded scope says Not included.
+- Restore scope labels are Everything, Settings only and Data only, matching the buttons.
+- Existing ZIP safety gates and confirmation steps are retained. No stored data or backup format changes.
+- For HACS installation choose `v1.5.1-beta.4`. See `RELEASE_NOTES_v1.5.1-beta.4.md`.
+
+## Previous beta: v1.5.1-beta.3
 
 - Added a visible **Close** button at the **bottom right** of the main Settings dialog (Home, Manage profiles, Liquid types, Cup types, Quick buttons and Data & Backup).
 - The new footer button uses the existing Settings close action, just like the top-right ✕. Back and Add controls are preserved.
