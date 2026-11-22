@@ -13,10 +13,14 @@ for item in ("docs/CHANGELOG.md","docs/RELEASE_NOTES.md","docs/USER_GUIDE.md",
              "docs/examples/apexcharts.md"):
     assert (root/item).is_file(),item
 readme=(root/"README.md").read_text()
-for required in ("## What can it do?","## Installation (HACS)","## Interface at a glance",
+for required in ("## Purpose and functionality","## Configurable settings","## Installation (HACS)","## Interface at a glance",
                  "## History, daily snapshots and backups","docs/RELEASE_NOTES.md",
                  "docs/USER_GUIDE.md","v2.0.0"):
     assert required in readme,required
+assert "## What can it do?" not in readme
+assert "No file chosen" not in readme
+assert "```yaml\ntype: custom:jwdaily-hydration-log-card" in readme
+assert "Data & Backup" in readme
 assert "Historical release information (archive only)" not in readme
 active=sorted(p.name for p in (root/".github/workflows").glob("*.yml"))
 assert active==["ci.yml","publish-v2.0.0.yml","validate.yml"],active

@@ -1,15 +1,6 @@
 name: jwDaily Hydration Log v2.0.0 — verify and publish stable release
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'docs/releases/v2.0.0.md'
-      - 'docs/**'
-      - 'README.md'
-      - '.github/workflows/publish-v2.0.0.yml'
+  # v2.0.0 already published; do not rerun on README/doc edits.
   workflow_dispatch:
 permissions:
   contents: write
