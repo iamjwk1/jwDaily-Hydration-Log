@@ -52,7 +52,7 @@ class FakeCoordinator:
                  "origin":"dashboard"}],
             "source_readings":[],"daily_archive":{},
             "consumed_ml":400.0,"manual_consumed_ml":400.0,
-            "last_reset_date":"2026-11-22","last_source_value":None,
+            "last_reset_date":"2026-11-22","_last_source_value":None,
             "_source_baseline_ml":0.0,
         }
         for k,v in initial.items():setattr(self,k,deepcopy(v))
