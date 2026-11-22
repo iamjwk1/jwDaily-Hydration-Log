@@ -1,12 +1,20 @@
-# jwDaily Hydration Log v1.5.1-beta.2
+# jwDaily Hydration Log v1.5.1-beta.3
 
-**Home Assistant custom integration — prerelease v1.5.1-beta.2.** Stable production release remains **v1.5.0**.
+**Home Assistant custom integration — prerelease v1.5.1-beta.3.** Stable production release remains **v1.5.0**.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); upstream MIT notice is retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current beta: v1.5.1-beta.2
+## Current beta: v1.5.1-beta.3
+
+- Added a visible **Close** button at the **bottom right** of the main Settings dialog (Home, Manage profiles, Liquid types, Cup types, Quick buttons and Data & Backup).
+- The new footer button uses the existing Settings close action, just like the top-right ✕. Back and Add controls are preserved.
+- Tested the footer location and close/reopen behavior across seven Chromium viewport widths.
+- No changes to hydration data, profile settings, Excel export, graphs, storage, backup/restore or Home Assistant integrations.
+- Choose `v1.5.1-beta.3` in HACS. Details: `RELEASE_NOTES_v1.5.1-beta.3.md`.
+
+## Previous beta: v1.5.1-beta.2
 
 - **Profile Save race fix:** Changing the Add drink visibility switches no longer unloads/reloads the entire integration just to update the choice UI.
 - After profile saves that legitimately require a restart, the Lovelace card retries the profile list and history in a coordinated way instead of falsely showing **Unknown jwDaily Hydration Log profile** during the reload window.

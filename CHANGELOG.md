@@ -1,3 +1,10 @@
+## v1.5.1-beta.3 (2026-11-22) — prerelease
+- Add an explicit bottom-right **Close** button to the main Settings dialog on all Settings pages, including Settings Home.
+- Close uses the same existing action as the top-right ✕ without changing data, settings or history.
+- Preserve existing Back and Add actions and nested editors' independent Cancel/Save buttons.
+- Test placement and click-to-close/reopen in Chromium at seven desktop/mobile widths.
+- No data model, recorder, dashboard layout, Excel export or backup/restore changes.
+
 ## v1.5.1-beta.2 (2026-11-22) — prerelease
 - Fix "Unknown jwDaily Hydration Log profile: jan_willem" when saving the profile Add drink visibility switches.
 - Avoid unnecessary Home Assistant integration unload/reload when only the profile's two display-visibility options change (and redundant unchanged age/gender/unit fields are present).
