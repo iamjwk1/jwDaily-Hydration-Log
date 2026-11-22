@@ -278,6 +278,28 @@ with sync_playwright() as p:
    }""")
    assert 'Target: 67.63 fl oz' in chart.inner_text(),('Chart fl oz target display',chart.inner_text())
    print('BETA43_CHART_UNITS_AND_TIMEZONE_PASS')
+  if width==950:
+   # Simulate exactly the reported save/reload race: first list is empty,
+   # next history request raises Unknown profile, then both recover.
+   recovered=page.evaluate("""async () => {
+     const original=card._hass.callWS.bind(card._hass);
+     let listCalls=0,historyCalls=0;
+     card._hass.callWS=async msg=>{
+       if(msg.type.endsWith('/profiles_list') && ++listCalls===1)
+         return {profiles:[]};
+       if(msg.type.endsWith('/history') && ++historyCalls===1)
+         throw Error('Unknown jwDaily Hydration Log profile: one');
+       return original(msg);
+     };
+     const ok=await card._refreshSavedProfile();
+     card._hass.callWS=original;
+     return {ok,listCalls,historyCalls,error:card._error,
+             profiles:card._profilesData?.profiles?.length||0};
+   }""")
+   assert recovered['ok'] and recovered['listCalls']>=3,recovered
+   assert recovered['historyCalls']>=2,recovered
+   assert recovered['profiles']==2 and not recovered['error'],recovered
+   print('BETA1512_TRANSIENT_UNKNOWN_PROFILE_BROWSER_RECOVERY_PASS')
   print('BETA38_CHROMIUM_PASS',width)
   page.close()
  browser.close()

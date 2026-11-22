@@ -148,6 +148,10 @@ async def async_setup_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
     await c.async_initialize()
     await manager.async_attach(c)
     _profiles(hass)[entry.entry_id]=c
+    # Track the applied options to avoid a needless unload/reload when the
+    # only edit is Add drink visibility (including unchanged identity fields).
+    c._applied_entry_options=dict(entry.options)
+    c._applied_entry_title=entry.title
     # Retire only the old v1.0.2 pace entity for this exact config entry.
     from homeassistant.helpers import entity_registry as er
     registry = er.async_get(hass)
@@ -160,6 +164,38 @@ async def async_setup_entry(hass:HomeAssistant,entry:ConfigEntry)->bool:
 
 
 async def _async_options_updated(hass:HomeAssistant,entry:ConfigEntry):
+    """Apply harmless profile visibility edits live; reload other HA options.
+
+    Home Assistant normally reloads this integration for *every* options
+    update. Profile Save then reads /history while the coordinator has been
+    temporarily removed from hass.data, producing "Unknown ... profile".
+    Visibility switches only control the Add drink chooser; they do not
+    require reinitializing storage, the global catalog or HA entities.
+    """
+    c=_profiles(hass).get(entry.entry_id)
+    if c is not None and hasattr(c,'_applied_entry_options'):
+        before=c._applied_entry_options
+        after=dict(entry.options)
+        changed={key for key in before.keys()|after.keys()
+                 if before.get(key)!=after.get(key)}
+        safe={'show_add_quick_buttons','show_add_liquid_cup_types',
+              'age','gender','unit'}
+        # profile_edit writes age/gender/unit even if they are unchanged;
+        # compare effective values so these added duplicate keys are safe.
+        cfg={**entry.data,**after}
+        unchanged_identity=(
+            entry.title==c._applied_entry_title
+            and cfg.get('name',c.name)==c.name
+            and cfg.get('age',c.age)==c.age
+            and cfg.get('gender',c.gender)==c.gender
+            and cfg.get('unit',c.unit)==c.unit
+        )
+        if changed.issubset(safe) and unchanged_identity:
+            c.show_add_quick_buttons=cfg.get('show_add_quick_buttons') is not False
+            c.show_add_liquid_cup_types=cfg.get('show_add_liquid_cup_types') is not False
+            c._applied_entry_options=after
+            c._dispatch()
+            return
     await hass.config_entries.async_reload(entry.entry_id)
 
 

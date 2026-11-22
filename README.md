@@ -1,12 +1,19 @@
-# jwDaily Hydration Log v1.5.1-beta.1
+# jwDaily Hydration Log v1.5.1-beta.2
 
-**Home Assistant custom integration — prerelease v1.5.1-beta.1.** Stable production release remains **v1.5.0**.
+**Home Assistant custom integration — prerelease v1.5.1-beta.2.** Stable production release remains **v1.5.0**.
 
 Repository: https://github.com/iamjwk1/jwDaily-Hydration-Log
 
 Independent MIT-licensed fork of [Personal Hydration Manager](https://github.com/loryanstrant/HA-Personal-Hydration-Manager); upstream MIT notice is retained in `LICENSE-UPSTREAM-MIT`.
 
-## Current beta: v1.5.1-beta.1
+## Current beta: v1.5.1-beta.2
+
+- **Profile Save race fix:** Changing the Add drink visibility switches no longer unloads/reloads the entire integration just to update the choice UI.
+- After profile saves that legitimately require a restart, the Lovelace card retries the profile list and history in a coordinated way instead of falsely showing **Unknown jwDaily Hydration Log profile** during the reload window.
+- Profile data and drink history are preserved. No storage schema or migration changes.
+- Install this beta through HACS using `v1.5.1-beta.2`. See `RELEASE_NOTES_v1.5.1-beta.2.md`.
+
+## Previous beta: v1.5.1-beta.1
 
 - Excel displays exported Boolean data as **Yes / No**, including Custom and Visible in picker.
 - **Cup Type ID** and **MDI icon** columns are width-fitted from actual exported content, with bounded widths; MDI icon columns in other settings sheets are treated consistently.
