@@ -1,13 +1,6 @@
 name: jwDaily Hydration Log v1.5.1-beta.1 — verify and publish prerelease
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'custom_components/jw_daily_hydration_log/**'
-      - 'tests/**'
-      - 'RELEASE_NOTES_v1.5.1-beta.1.md'
-      - '.github/workflows/publish-v1.5.1-beta.1.yml'
+  # Previous beta was already published; avoid rerunning its tag publisher.
   workflow_dispatch:
 permissions:
   contents: write
