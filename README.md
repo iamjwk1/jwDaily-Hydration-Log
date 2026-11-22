@@ -48,6 +48,55 @@ The **Add drink** view can show Quick buttons, separate Liquid/Cup selectors, or
 
 For a guided tour of the dialog screens, daily snapshots, chart sensors and backup/restore screens, see the [User guide](docs/USER_GUIDE.md).
 
+## Screenshots
+
+These are real screenshots from **v2.0.0**, with personal details obscured. Click any image to open it at its original size.
+
+### Main hydration dashboard
+
+The main card combines daily progress, the liquid breakdown and an editable drink history.
+
+<a href="docs/images/dashboard-main.png"><img src="docs/images/dashboard-main.png" alt="Hydration dashboard showing a fill-level glass, daily target, liquid breakdown and drink history" width="500"></a>
+
+### Add a drink — two input layouts
+
+Profiles can use Quick buttons, separate Liquid/Cup selectors, or both.
+
+<table>
+  <tr><th>Quick buttons</th><th>Liquid and Cup selection</th></tr>
+  <tr>
+    <td><a href="docs/images/add-drink-quick-buttons.png"><img src="docs/images/add-drink-quick-buttons.png" alt="Add drink dialog with coloured Quick buttons, amount, date and time" width="475"></a></td>
+    <td><a href="docs/images/add-drink-liquid-cup-types.png"><img src="docs/images/add-drink-liquid-cup-types.png" alt="Add drink dialog with separate Liquid type and Cup type choices" width="475"></a></td>
+  </tr>
+</table>
+
+### Settings and profile configuration
+
+The Settings menu organizes all configuration areas. Each profile has its own target, units and choice of Add drink controls.
+
+<table>
+  <tr><th>Settings overview</th><th>Edit profile</th></tr>
+  <tr>
+    <td><a href="docs/images/settings-overview.png"><img src="docs/images/settings-overview.png" alt="Settings menu for profiles, liquids, cups and backup" width="475"></a></td>
+    <td><a href="docs/images/profile-edit.png"><img src="docs/images/profile-edit.png" alt="Profile editor with daily target, units, Quick buttons and Add drink display settings" width="475"></a></td>
+  </tr>
+</table>
+
+### Backup and Excel export
+
+Back up individual profiles and preview selective restores; export historical drink registrations and daily summaries to Excel.
+
+<table>
+  <tr><th>Data and Backup</th><th>Excel — Daily intake</th></tr>
+  <tr>
+    <td><a href="docs/images/data-backup.png"><img src="docs/images/data-backup.png" alt="Data and Backup settings with Excel export, backup creation and restore scope choices" width="475"></a></td>
+    <td><a href="docs/images/excel-daily-totals.png"><img src="docs/images/excel-daily-totals.png" alt="Excel Daily intake worksheet showing dated totals and individual liquid volumes" width="475"></a></td>
+  </tr>
+</table>
+
+More screenshots—including configuration screens, hourly and weekly charts, and the Excel drink log—are in the [User guide](docs/USER_GUIDE.md).
+
+
 ## Installation (HACS)
 
 1. In **HACS**, add this repository as a custom repository with category **Integration** if it is not already listed:
