@@ -95,10 +95,19 @@ with sync_playwright() as p:
   assert root.locator('select[data-field="export_profile"] option').all_text_contents()==['All profiles','Jan-Willem','Second']
   root.locator('button[data-action="export-cancel"]').last.click();assert root.locator('.dialog-excel').count()==0
   root.locator('button[data-action="settings-open"]').first.click()
+  # The main Settings dialog now has a bottom-right Close button, also on Home.
+  footer_close=root.locator('.dialog-settings .main-dialog-footer .settings-footer-close')
+  assert footer_close.count()==1 and footer_close.inner_text()=='Close',(width,'Settings footer Close missing')
+  rect=footer_close.bounding_box()
+  dialog_rect=root.locator('.dialog-settings').bounding_box()
+  assert rect and dialog_rect and abs((rect['x']+rect['width'])-(dialog_rect['x']+dialog_rect['width']))<43,(width,rect,dialog_rect)
+  assert root.locator('.dialog-settings .main-dialog-footer [data-action="settings-home"]').count()==0
   assert root.locator('.settings-profile-current').count()==0
   assert root.locator('[data-value="advanced"]').count()==0
   assert root.locator('[data-value="transfer"]').count()==1
   root.locator('button[data-action="settings-page"][data-value="transfer"]').click()
+  assert root.locator('.dialog-settings .main-dialog-footer .settings-footer-close').count()==1
+  assert root.locator('.dialog-settings .main-dialog-footer [data-action="settings-home"]').count()==1
   assert root.locator('.beta40-transfer .transfer-action-row').count()>=3
   assert root.locator('[data-action="transfer-scope"]').count()==3
   root.locator('[data-action="transfer-scope"][data-value="settings"]').click()
@@ -110,6 +119,8 @@ with sync_playwright() as p:
   assert root.locator('button[data-action="migration-rollback"]').count()==0
   root.locator('button[data-action="settings-home"]').click()
   root.locator('button[data-action="settings-page"][data-value="profile"]').click()
+  assert root.locator('.dialog-settings .main-dialog-footer .settings-footer-close').count()==1
+  assert root.locator('.dialog-settings .main-dialog-footer [data-action="settings-profile-add"]').count()==1
   assert 'jan_willem' not in root.locator('.dialog-settings').inner_text().lower()
   root.locator('button[data-action="settings-profile-edit"]').first.click()
   assert 'Daily target (L)' in root.locator('.dialog-editor').inner_text()
@@ -249,6 +260,16 @@ with sync_playwright() as p:
   root.locator('button[data-action="icon-pick-cancel"]').last.click()
   root.locator('button[data-action="manage-cancel"]').first.click()
   assert root.locator('.liquid-live-section').count()==0
+  assert root.locator('.dialog-settings .main-dialog-footer .settings-footer-close').count()==1
+  root.locator('.dialog-settings .main-dialog-footer .settings-footer-close').click()
+  assert root.locator('.dialog-settings').count()==0
+  assert page.evaluate('card._settingsSection') is None
+  root.locator('button[data-action="settings-open"]').first.click()
+  assert root.locator('.dialog-settings').count()==1
+  assert root.locator('.dialog-settings .main-dialog-footer .settings-footer-close').count()==1
+  root.locator('.dialog-settings .settings-head [data-action="settings-close"]').click()
+  assert root.locator('.dialog-settings').count()==0
+  print('BETA1513_SETTINGS_BOTTOM_RIGHT_CLOSE_BROWSER_PASS',width)
   assert not errors,(width,errors)
   # Adaptive mL formatter is restricted to glass quantities; profile unit handling remains unchanged.
   assert page.evaluate('jdhlGlassFmt(999, "mL")')=='999 mL'
