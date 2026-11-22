@@ -1,4 +1,4 @@
-/* jwDaily Hydration Log v1.5.1-beta.1 - independent Home Assistant Lovelace card.
+/* jwDaily Hydration Log v1.5.1-beta.2 - independent Home Assistant Lovelace card.
  * Derived from Personal Hydration Manager (MIT), Copyright (c) 2026 Loryan Strant.
  * Copyright (c) 2026 jwDaily Hydration Log contributors (modifications).
  */
@@ -431,7 +431,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
  async _ensureBackend(){
   try{
    const info=await this._hass.callWS({type:'jw_daily_hydration_log/capabilities'});
-   if(info?.version!=='1.5.1-beta.1')throw Error(`Frontend v1.5.1-beta.1 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
+   if(info?.version!=='1.5.1-beta.2')throw Error(`Frontend v1.5.1-beta.2 is connected to backend ${info?.version||'unknown'}. Restart Home Assistant Core and refresh the dashboard.`);
    return info;
   }catch(err){
    const message=String(err?.message||err||'Unknown error');
@@ -938,7 +938,7 @@ class JwDailyHydrationLogCard extends HTMLElement {
   }
   else if(page==='profile')body=this._profileHTML();
   else if(page==='export')body=`<div class="settings-section"><h3>Export</h3><p>Export the four-sheet Excel workbook, with liquid, cup and Quick button definitions.</p><button data-action="export">Export to Excel (.xlsx)</button></div>`;
-  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.5.1-beta.1</p>
+  else body=`<div class="settings-section"><h3>About</h3><p>jwDaily Hydration Log v1.5.1-beta.2</p>
    <p class="settings-note">Each drink record stores independent Liquid and Cup IDs. Settings and Data can be backed up separately.</p></div>`;
   return `<div class="overlay" role="presentation"><section class="dialog dialog-settings dialog-page-${page}" role="dialog" aria-modal="${!nested}" aria-label="Settings">
     <div class="settings-head"><h3>${page==='home'?'Settings':nav.find(x=>x[0]===page)?.[1]||({transfer:'Import & Export',quick:'Edit Quick Buttons - '+(this._profilesData?.profiles?.find(p=>p.slug===(this._settingsScopeProfile||this._config.profile))?.name||this._config.profile)}[page]||'Settings')}</h3>
@@ -2318,7 +2318,7 @@ button.date-trigger,button.date-trigger:not(:disabled),button.date-trigger:hover
    ${this._iconPickerHTML()}
    <footer class="card-footer">
     ${this._config.show_export!==false&&this._hass?.user?.is_admin?`<button class="secondary" data-action="export-open" ${this._busy?'disabled':''}>Export to Excel (.xlsx)</button>`:''}
-    <span class="card-version">v1.5.1-beta.1</span>
+    <span class="card-version">v1.5.1-beta.2</span>
    </footer></div></ha-card>`;
   const picker=this.shadowRoot.querySelector('[data-icon-library]');
   if(picker){picker.hass=this._hass;picker.value=this._iconPicker?.selected||'';}
@@ -2462,7 +2462,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   .foot{font-size:.72rem;color:var(--secondary-text-color,#687783);margin-top:7px;padding-top:0;align-self:flex-end;text-align:right}
   </style>`;
   const title=jdhlEscape(this._config.title||this._kind.title);
-  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.5.1-beta.1</div></ha-card>`;return;}
+  if(!records.length){this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3><p class="notice">${jdhlEscape(entity?'No recorded intake for this period.':'The jwDaily chart sensor is not available for this profile.')}</p><div class="foot">v1.5.1-beta.2</div></ha-card>`;return;}
   const colorSettings=entity?.attributes?.liquid_colors||{};
   const colors=new Map(keys.map(key=>[key,jdhlHex(colorSettings[key])||jdhlLiquidColor(key,names[key])]));
   /* Explicit SVG coordinate system gives a genuine Y axis, labeled gridlines,
@@ -2519,7 +2519,7 @@ class JwDailyHydrationChartCard extends HTMLElement {
   const target=Number.isFinite(attrTarget)&&attrTarget>0?attrTarget:
    Number.isFinite(nativeTarget)&&nativeTarget>0?jdhlToMl(nativeTarget,sensorUnit==='fl oz'?'fl_oz':sensorUnit==='L'?'L':'mL'):NaN;
   const summary=this._kind.days?'':`<p class="summary">Total: ${fmt(total)} ${unitLabel}${Number.isFinite(target)&&target>0?` / Target: ${fmt(target)} ${unitLabel} (${Math.round(total/target*100)}%)`:''}</p>`;
-  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.5.1-beta.1</div></ha-card>`;
+  this.shadowRoot.innerHTML=`${style}<ha-card><h3>${title}</h3>${summary}<svg class="chart" role="img" aria-label="${jdhlEscape(this._kind.title)} chart, y-axis in ${jdhlEscape(unitLabel)}" viewBox="0 0 ${viewWidth} ${plotBottom+bottom}">${art}</svg><div class="legend">${legends}</div>${missingNote}${details}<div class="foot">v1.5.1-beta.2</div></ha-card>`;
  }
 }
 for(const kind of JDHL_CHART_KINDS){
@@ -2534,4 +2534,4 @@ if(!customElements.get(JDHL_EDITOR))customElements.define(JDHL_EDITOR,JwDailyHyd
 window.customCards=window.customCards||[];
 for(const kind of JDHL_CHART_KINDS){if(!window.customCards.some(c=>c.type===kind.tag))window.customCards.push({type:kind.tag,name:kind.name,description:'Live chart from jwDaily Hydration Log sensors',preview:true});}
 if(!window.customCards.some(c=>c.type===JDHL_TAG))window.customCards.push({type:JDHL_TAG,name:'jwDaily Hydration Log',description:'Editable individual liquid tracking with Excel export',preview:true});
-console.info('jwDaily Hydration Log Card v1.5.1-beta.1');
+console.info('jwDaily Hydration Log Card v1.5.1-beta.2');
