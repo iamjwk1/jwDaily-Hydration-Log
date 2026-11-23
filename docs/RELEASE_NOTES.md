@@ -1,12 +1,13 @@
 # Release notes
 
-**Current stable release:** [v2.0.0](releases/v2.0.0.md) · [GitHub Releases](https://github.com/iamjwk1/jwDaily-Hydration-Log/releases)
+**Current stable release:** [v2.0.1](releases/v2.0.1.md) · [GitHub Releases](https://github.com/iamjwk1/jwDaily-Hydration-Log/releases)
 
 This index is for version-by-version detail. For installation, screenshots/feature descriptions and backup usage, start at the root [README](../README.md) and the [User guide](USER_GUIDE.md).
 
 ## Stable releases
 
-- [v2.0.0 — current stable](releases/v2.0.0.md)
+- [v2.0.1 — current stable](releases/v2.0.1.md)
+- [v2.0.0 — previous stable](releases/v2.0.0.md)
 - [v1.5.0 — previous stable](archive/releases/RELEASE_NOTES_v1.5.0.md)
 
 ## Development and historical releases

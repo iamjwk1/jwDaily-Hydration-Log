@@ -1,6 +1,6 @@
 # jwDaily Hydration Log — User guide
 
-This guide describes the **v2.0.0** interface. For version-specific changes, use [Release notes](RELEASE_NOTES.md).
+This guide describes the **v2.0.1** interface (screenshots were taken from v2.0.0; the layout is unchanged). For version-specific changes, use [Release notes](RELEASE_NOTES.md).
 
 ## 1. Create and select a profile
 

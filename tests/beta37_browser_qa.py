@@ -91,6 +91,12 @@ with sync_playwright() as p:
   }""")
   assert root.locator('.dialog-drink').count()==0
   root.locator('button[data-action="export-open"]').click();assert root.locator('.dialog-excel').count()==1
+  # v2.0.1 regression: actual export UI must describe all six worksheets.
+  export_dialog=root.locator('.dialog-excel')
+  assert 'six sheets' in export_dialog.inner_text().lower(),(width,export_dialog.inner_text())
+  assert 'four sheets' not in export_dialog.inner_text().lower()
+  for caption in ('Hydration log','Daily intake','Liquid types','Cup types','Quick buttons','Profiles'):
+   assert caption in export_dialog.inner_text(),(width,caption,export_dialog.inner_text())
   assert root.locator('select[data-field="export_profile"]').input_value()=='all'
   assert root.locator('select[data-field="export_profile"] option').all_text_contents()==['All profiles','Jan-Willem','Second']
   root.locator('button[data-action="export-cancel"]').last.click();assert root.locator('.dialog-excel').count()==0

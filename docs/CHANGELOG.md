@@ -1,3 +1,9 @@
+## v2.0.1 (2026-11-23) — stable maintenance release
+- Correct two obsolete references to a four-sheet Excel workbook in the export modal and secondary Settings Export page. The current Excel export contains **six worksheets**: Hydration log, Daily intake, Settings - Liquid Types, Settings - Cup types, Settings - Quick buttons, and Settings - Profiles.
+- Add a Chromium regression that checks the actual export dialog, and a source/OOXML contract test preventing stale four-sheet descriptions.
+- Update frontend/backend/Excel version parity to v2.0.1 without changing workbook content, data, storage schema or restoration behavior.
+- Maintain v2.0.0 and the prior release history; release v2.0.1 through the existing full QA gate.
+
 ## v2.0.0 (2026-11-22) — stable
 - Promote the user-accepted v1.5.1-beta.4 implementation to a stable v2.0.0 release with no storage/backup schema changes.
 - Replace root README release-history clutter with product capabilities, HACS installation, example entities, snapshots and backup/restore guidance.
