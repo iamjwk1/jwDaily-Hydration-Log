@@ -1,6 +1,6 @@
 # jwDaily Hydration Log
 
-**Hydration tracking for Home Assistant — stable release v2.0.0**
+**Hydration tracking for Home Assistant — stable release v2.0.1**
 
 jwDaily Hydration Log is a Home Assistant integration and dashboard card for recording what you drink, monitoring your daily intake and reviewing your drinking history. It supports multiple independent profiles, configurable drink and cup types, editable history, daily and weekly charts, Excel reports and verified backups. Data is managed inside Home Assistant; no external hydration account is needed.
 
@@ -101,7 +101,7 @@ More screenshots—including configuration screens, hourly and weekly charts, an
 
 1. In **HACS**, add this repository as a custom repository with category **Integration** if it is not already listed:
    `https://github.com/iamjwk1/jwDaily-Hydration-Log`
-2. Install **jwDaily Hydration Log**, selecting the stable **v2.0.0** release.
+2. Install **jwDaily Hydration Log**, selecting the stable **v2.0.1** release.
 3. Restart **Home Assistant Core**.
 4. Open **Settings → Devices & services → Add integration**, search for **jwDaily Hydration Log**, and create a profile.
 5. Add a Manual card to your dashboard:
@@ -114,7 +114,7 @@ title: Hydration
 
 Replace `jane_doe` with the profile slug created from your profile's name. The integration registers its dashboard JavaScript resource. Refresh the browser after installation or upgrades.
 
-**Updating:** create a current Home Assistant backup and download the integration's **Full Backup ZIP** before updating in HACS. Restart Home Assistant Core and refresh the dashboard after installation. The v2.0.0 release uses the existing data format; no new data migration is required.
+**Updating:** create a current Home Assistant backup and download the integration's **Full Backup ZIP** before updating in HACS. Restart Home Assistant Core and refresh the dashboard after installation. The v2.0.1 release uses the existing data format; no new data migration is required.
 
 ## Example Home Assistant entities
 
@@ -146,7 +146,7 @@ There are also Home Assistant actions under the `jw_daily_hydration_log` domain,
 
 - [User guide and interface walkthrough](docs/USER_GUIDE.md)
 - [Release notes (current and previous versions)](docs/RELEASE_NOTES.md)
-- [Version 2.0.0 release notes](docs/releases/v2.0.0.md)
+- [Version 2.0.1 release notes](docs/releases/v2.0.1.md)
 - [Complete changelog](docs/CHANGELOG.md)
 - [Optional ApexCharts example](docs/examples/apexcharts.md)
 - [Historical documentation archive](docs/archive/INDEX.md)
